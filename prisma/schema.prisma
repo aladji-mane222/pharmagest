@@ -7,3 +7,279 @@ datasource db {
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
+
+model Pharmacie {
+  id              String    @id @default(cuid())
+  nom             String
+  adresse         String?
+  telephone       String?
+  email           String?
+  licenceActive   Boolean   @default(true)
+  licenceExpire   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  users            User[]
+  medicaments      Medicament[]
+  fournisseurs     Fournisseur[]
+  ventes           Vente[]
+  depenses         Depense[]
+  inventaires      Inventaire[]
+  sessionsCaisse   SessionCaisse[]
+  clients          Client[]
+  commandes        CommandeFournisseur[]
+  auditLogs        AuditLog[]
+}
+
+model User {
+  id          String   @id @default(cuid())
+  nom         String
+  email       String   @unique
+  password    String
+  role        Role     @default(CAISSIER)
+  actif       Boolean  @default(true)
+  pharmacieId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pharmacie      Pharmacie       @relation(fields: [pharmacieId], references: [id])
+  ventes         Vente[]
+  sessionsCaisse SessionCaisse[]
+  auditLogs      AuditLog[]
+  inventaires    Inventaire[]
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  CAISSIER
+}
+
+model Medicament {
+  id               String   @id @default(cuid())
+  nom              String
+  description      String?
+  categorie        String?
+  unite            String   @default("comprime")
+  prixVente        Float
+  prixAchat        Float?
+  stockMinimum     Int      @default(10)
+  actif            Boolean  @default(true)
+  pharmacieId      String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  pharmacie        Pharmacie         @relation(fields: [pharmacieId], references: [id])
+  lots             Lot[]
+  lignesVente      LigneVente[]
+  mouvements       MouvementStock[]
+  lignesInventaire LigneInventaire[]
+}
+
+model Lot {
+  id             String   @id @default(cuid())
+  numeroLot      String?
+  datePeremption DateTime
+  quantite       Int
+  actif          Boolean  @default(true)
+  medicamentId   String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  medicament Medicament @relation(fields: [medicamentId], references: [id])
+}
+
+model Fournisseur {
+  id             String   @id @default(cuid())
+  nom            String
+  contact        String?
+  telephone      String?
+  email          String?
+  delaiLivraison Int?
+  actif          Boolean  @default(true)
+  pharmacieId    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  pharmacie Pharmacie             @relation(fields: [pharmacieId], references: [id])
+  commandes CommandeFournisseur[]
+}
+
+model CommandeFournisseur {
+  id            String         @id @default(cuid())
+  statut        StatutCommande @default(BROUILLON)
+  montantTotal  Float          @default(0)
+  pharmacieId   String
+  fournisseurId String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  pharmacie   Pharmacie   @relation(fields: [pharmacieId], references: [id])
+  fournisseur Fournisseur @relation(fields: [fournisseurId], references: [id])
+  lignes      LigneCommande[]
+}
+
+enum StatutCommande {
+  BROUILLON
+  ENVOYEE
+  RECUE
+  ANNULEE
+}
+
+model LigneCommande {
+  id           String @id @default(cuid())
+  quantite     Int
+  prixUnitaire Float
+  commandeId   String
+
+  commande CommandeFournisseur @relation(fields: [commandeId], references: [id])
+}
+
+model Vente {
+  id              String       @id @default(cuid())
+  montantTotal    Float
+  montantPaye     Float
+  monnaie         Float        @default(0)
+  modePaiement    ModePaiement @default(ESPECES)
+  statut          StatutVente  @default(COMPLETE)
+  pharmacieId     String
+  userId          String
+  clientId        String?
+  sessionCaisseId String?
+  createdAt       DateTime     @default(now())
+
+  pharmacie     Pharmacie      @relation(fields: [pharmacieId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
+  client        Client?        @relation(fields: [clientId], references: [id])
+  sessionCaisse SessionCaisse? @relation(fields: [sessionCaisseId], references: [id])
+  lignes        LigneVente[]
+}
+
+enum ModePaiement {
+  ESPECES
+  MOBILE_MONEY
+  CARTE
+  CREDIT
+}
+
+enum StatutVente {
+  COMPLETE
+  PARTIELLE
+  ANNULEE
+}
+
+model LigneVente {
+  id           String @id @default(cuid())
+  quantite     Int
+  prixUnitaire Float
+  venteId      String
+  medicamentId String
+
+  vente      Vente      @relation(fields: [venteId], references: [id])
+  medicament Medicament @relation(fields: [medicamentId], references: [id])
+}
+
+model Client {
+  id            String   @id @default(cuid())
+  nom           String
+  telephone     String?
+  email         String?
+  soldeCredit   Float    @default(0)
+  plafondCredit Float    @default(50000)
+  actif         Boolean  @default(true)
+  pharmacieId   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  pharmacie Pharmacie @relation(fields: [pharmacieId], references: [id])
+  ventes    Vente[]
+}
+
+model SessionCaisse {
+  id               String              @id @default(cuid())
+  statut           StatutSessionCaisse @default(OUVERTE)
+  montantOuverture Float               @default(0)
+  montantCloture   Float?
+  userId           String
+  pharmacieId      String
+  ouvertureAt      DateTime            @default(now())
+  clotureAt        DateTime?
+
+  user      User      @relation(fields: [userId], references: [id])
+  pharmacie Pharmacie @relation(fields: [pharmacieId], references: [id])
+  ventes    Vente[]
+}
+
+enum StatutSessionCaisse {
+  OUVERTE
+  FERMEE
+}
+
+model Inventaire {
+  id          String           @id @default(cuid())
+  statut      StatutInventaire @default(EN_COURS)
+  pharmacieId String
+  userId      String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  pharmacie Pharmacie         @relation(fields: [pharmacieId], references: [id])
+  user      User              @relation(fields: [userId], references: [id])
+  lignes    LigneInventaire[]
+}
+
+enum StatutInventaire {
+  EN_COURS
+  VALIDE
+}
+
+model LigneInventaire {
+  id             String @id @default(cuid())
+  quantiteReelle Int
+  ecart          Int
+  inventaireId   String
+  medicamentId   String
+
+  inventaire Inventaire @relation(fields: [inventaireId], references: [id])
+  medicament Medicament @relation(fields: [medicamentId], references: [id])
+}
+
+model Depense {
+  id          String   @id @default(cuid())
+  libelle     String
+  montant     Float
+  categorie   String?
+  pharmacieId String
+  createdAt   DateTime @default(now())
+
+  pharmacie Pharmacie @relation(fields: [pharmacieId], references: [id])
+}
+
+model MouvementStock {
+  id           String        @id @default(cuid())
+  type         TypeMouvement
+  quantite     Int
+  medicamentId String
+  userId       String?
+  createdAt    DateTime      @default(now())
+
+  medicament Medicament @relation(fields: [medicamentId], references: [id])
+}
+
+enum TypeMouvement {
+  ENTREE
+  SORTIE
+  AJUSTEMENT
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  details     Json?
+  userId      String?
+  pharmacieId String?
+  createdAt   DateTime @default(now())
+
+  user      User?      @relation(fields: [userId], references: [id])
+  pharmacie Pharmacie? @relation(fields: [pharmacieId], references: [id])
+}
