@@ -137,7 +137,9 @@ export default function CaissePage() {
                     </span>
                   </div>
                   <p className="text-gray-500">{formatDateTime(s.ouvertureAt)}</p>
-                  {s.montantCloture && <p className="text-blue-600 font-medium">{formatMontant(s.montantCloture)}</p>}
+                  {s.montantCloture != null && !isNaN(s.montantCloture) && (
+                    <p className="text-blue-600 font-medium">{formatMontant(s.montantCloture)}</p>
+                  )}
                 </li>
               ))}
             </ul>
