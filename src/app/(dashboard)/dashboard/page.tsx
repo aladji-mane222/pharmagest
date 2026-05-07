@@ -19,6 +19,7 @@ export default function DashboardPage() {
   const { status } = useSession()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sseData, setSseData] = useState<{ caJour: number; nbVentes: number; stockBas: number; sessionOuverte: boolean } | null>(null)
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -28,6 +29,25 @@ export default function DashboardPage() {
           setData(json.data)
           setLoading(false)
         })
+    }
+  }, [status])
+
+  useEffect(() => {
+    if (status !== 'authenticated') return
+
+    const eventSource = new EventSource('/api/dashboard/sse')
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      setSseData(data)
+    }
+
+    eventSource.onerror = () => {
+      eventSource.close()
+    }
+
+    return () => {
+      eventSource.close()
     }
   }, [status])
 
@@ -50,7 +70,10 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow p-6">
           <p className="text-sm text-gray-500">CA du jour</p>
-          <p className="text-2xl font-bold text-green-600 mt-1">{formatMontant(data?.caJour ?? 0)}</p>
+          <p className="text-2xl font-bold text-green-600 mt-1">
+            {formatMontant(sseData?.caJour ?? data?.caJour ?? 0)}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">{sseData?.nbVentes ?? 0} ventes</p>
         </div>
         <div className="bg-white rounded-xl shadow p-6">
           <p className="text-sm text-gray-500">CA du mois</p>
@@ -64,6 +87,9 @@ export default function DashboardPage() {
           <p className="text-sm text-gray-500">Peremptions 90j</p>
           <p className="text-2xl font-bold text-red-500 mt-1">{data?.peremptions ?? 0} lots</p>
         </div>
+      </div>
+      <div className={`mb-6 px-4 py-3 rounded-lg text-sm font-medium ${sseData?.sessionOuverte ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+        {sseData?.sessionOuverte ? '🟢 Session caisse ouverte' : '🔴 Aucune session caisse ouverte'}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow p-6">
