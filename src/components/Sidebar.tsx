@@ -9,6 +9,7 @@ const menuItems = [
   { href: '/medicaments', label: 'Medicaments', icon: '💊' },
   { href: '/stock', label: 'Stock', icon: '📦' },
   { href: '/ventes', label: 'Ventes POS', icon: '🛒' },
+  { href: '/ventes/historique', label: 'Historique ventes', icon: '🧾' },
   { href: '/caisse', label: 'Caisse', icon: '💰' },
   { href: '/clients', label: 'Clients', icon: '👥' },
   { href: '/fournisseurs', label: 'Fournisseurs', icon: '🚚' },
