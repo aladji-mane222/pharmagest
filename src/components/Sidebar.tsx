@@ -13,6 +13,7 @@ const menuItems = [
   { href: '/caisse', label: 'Caisse', icon: '💰' },
   { href: '/clients', label: 'Clients', icon: '👥' },
   { href: '/fournisseurs', label: 'Fournisseurs', icon: '🚚' },
+  { href: '/fournisseurs/commandes', label: 'Commandes', icon: '📝' },
   { href: '/inventaire', label: 'Inventaire', icon: '📋' },
   { href: '/depenses', label: 'Depenses', icon: '💸' },
   { href: '/rapports', label: 'Rapports', icon: '📈' },
