@@ -37,7 +37,7 @@ export default function VentesPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (search.length >= 2) {
+      if (search.length >= 3) {
         fetch(`/api/medicaments?search=${search}`)
           .then((res) => res.json())
           .then((json) => setMedicaments(json.data?.medicaments || []))
@@ -188,7 +188,7 @@ export default function VentesPage() {
                       `- ${l.nom} x${l.quantite} = ${(l.prixUnitaire * l.quantite).toLocaleString()} GNF`
                     ).join('%0A') || ''
 
-                    const message = `*RECU - Pharmacie Centrale de Conakry*%0A%0ARecu: ${recu?.numero || ''}%0ADate: ${new Date().toLocaleString('fr-FR')}%0A%0A*Articles:*%0A${lignesTexte}%0A%0A*Total: ${recu?.montantTotal?.toLocaleString()} GNF*%0AMontant recu: ${recu?.montantPaye?.toLocaleString()} GNF%0AMonnaie: ${recu?.monnaie?.toLocaleString()} GNF%0A%0AMerci de votre confiance! 🙏`
+                    const message = `*RECU - Pharmacie Centrale de Conakry*%0A%0ARecu: ${recu?.numero || ''}%0ADate: ${new Date().toLocaleString('fr-FR')}%0A%0A*Articles:*%0A${lignesTexte}%0A%0A*Total: ${recu?.montantTotal?.toLocaleString()} GNF*%0AMontant recu: ${recu?.montantPaye?.toLocaleString()} GNF%0AMonnaie: ${recu?.monnaie?.toLocaleString()} GNF%0A%0AMerci de votre confiance!`
 
                     window.open(`https://wa.me/${numero}?text=${message}`, '_blank')
                   }}
