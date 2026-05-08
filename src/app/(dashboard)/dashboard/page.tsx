@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
+import VentesChart from '@/components/dashboard/VentesChart'
 
 interface DashboardData {
   caJour: number
@@ -91,6 +92,7 @@ export default function DashboardPage() {
       <div className={`mb-6 px-4 py-3 rounded-lg text-sm font-medium ${sseData?.sessionOuverte ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
         {sseData?.sessionOuverte ? '🟢 Session caisse ouverte' : '🔴 Aucune session caisse ouverte'}
       </div>
+      <VentesChart />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow p-6">
           <h2 className="font-semibold text-gray-700 mb-4">Alertes Stock Bas</h2>
