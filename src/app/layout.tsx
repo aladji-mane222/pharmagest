@@ -2,12 +2,25 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
+import OfflineBanner from '@/components/OfflineBanner'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'PharmaGest',
-  description: 'Pilotée par vous, où que vous soyez',
+  description: 'Pilotee par vous, ou que vous soyez',
+  manifest: '/manifest.json',
+  themeColor: '#16a34a',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'PharmaGest',
+  },
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+  },
 }
 
 export default function RootLayout({
@@ -18,7 +31,10 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className={inter.className}>
-        <Providers>{children}</Providers>
+        <Providers>
+          <OfflineBanner />
+          {children}
+        </Providers>
       </body>
     </html>
   )
