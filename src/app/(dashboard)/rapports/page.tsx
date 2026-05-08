@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
+import { exporterExcel, exporterCSV } from '@/lib/export'
 
 type TypeRapport = 'ventes' | 'stock' | 'benefice' | 'credits'
 
@@ -51,6 +52,28 @@ export default function RapportsPage() {
             {loading ? 'Chargement...' : 'Generer'}
           </button>
         </div>
+        {data && (
+          <div className="flex gap-3 mt-4">
+            <button
+              onClick={() => {
+                if (data.type === 'ventes') exporterExcel(data.ventes as Record<string, unknown>[], 'rapport-ventes')
+                if (data.type === 'stock') exporterExcel(data.stock as Record<string, unknown>[], 'rapport-stock')
+                if (data.type === 'credits') exporterExcel(data.clients as Record<string, unknown>[], 'rapport-credits')
+              }}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
+              Exporter Excel
+            </button>
+            <button
+              onClick={() => {
+                if (data.type === 'ventes') exporterCSV(data.ventes as Record<string, unknown>[], 'rapport-ventes')
+                if (data.type === 'stock') exporterCSV(data.stock as Record<string, unknown>[], 'rapport-stock')
+                if (data.type === 'credits') exporterCSV(data.clients as Record<string, unknown>[], 'rapport-credits')
+              }}
+              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 text-sm">
+              Exporter CSV
+            </button>
+          </div>
+        )}
       </div>
 
       {data && (
