@@ -62,7 +62,7 @@ export async function GET() {
     return stockTotal < med.stockMinimum
   })
 
-  return apiSuccess({
+  const response = apiSuccess({
     caJour: ventesJour._sum.montantTotal ?? 0,
     caMois: ventesMois._sum.montantTotal ?? 0,
     stockBas: medicamentsStockBas.length,
@@ -72,4 +72,6 @@ export async function GET() {
     totalMedicaments,
     ventesRecentes,
   })
+  response.headers.set('Cache-Control', 'private, max-age=60')
+  return response
 }

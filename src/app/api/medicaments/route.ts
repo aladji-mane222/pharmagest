@@ -39,7 +39,9 @@ export async function GET(request: Request) {
     stockTotal: med.lots.reduce((sum, lot) => sum + lot.quantite, 0),
   }))
 
-  return apiSuccess({ medicaments: medicamentsAvecStock, total, page, limit })
+  const response = apiSuccess({ medicaments: medicamentsAvecStock, total, page, limit })
+  response.headers.set('Cache-Control', 'private, max-age=30')
+  return response
 }
 
 export async function POST(request: Request) {
