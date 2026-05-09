@@ -29,7 +29,7 @@ export default function VentesChart() {
           <XAxis dataKey="date" tick={{ fontSize: 12 }} />
           <YAxis tick={{ fontSize: 12 }} />
           <Tooltip
-            formatter={(value: number) => [`${value.toLocaleString()} GNF`, 'CA']}
+            formatter={(value) => [`${Number(value).toLocaleString()} GNF`, 'CA']}
           />
           <Bar dataKey="ca" fill="#16a34a" radius={[4, 4, 0, 0]} />
         </BarChart>

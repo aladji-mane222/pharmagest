@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   if (!session) return apiError('Non autorise', 401)
 
   const body = await request.json()
-  const { lignes, modePaiement, montantPaye, clientId, sessionCaisseId } = body
+  const { lignes, modePaiement, montantPaye, clientId } = body
 
   if (!lignes || lignes.length === 0) return apiError('Aucun article dans la vente', 400)
 

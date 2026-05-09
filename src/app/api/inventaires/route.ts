@@ -18,7 +18,7 @@ export async function GET() {
   return apiSuccess(inventaires)
 }
 
-export async function POST(request: Request) {
+export async function POST() {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
   if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)

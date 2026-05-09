@@ -38,15 +38,17 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   if (action === 'saisir' && lignes) {
     for (const ligne of lignes) {
-      const stockTheorique = inventaire.lignes
-        .find((l) => l.id === ligne.id)
-        ?.medicament.lots?.reduce((s: number, lot: { quantite: number }) => s + lot.quantite, 0) ?? 0
+      const stockTheorique = await prisma.lot.aggregate({
+        where: { medicamentId: ligne.medicamentId, actif: true },
+        _sum: { quantite: true },
+      })
+      const stock = stockTheorique._sum.quantite ?? 0
 
       await prisma.ligneInventaire.update({
         where: { id: ligne.id },
         data: {
           quantiteReelle: parseInt(ligne.quantiteReelle),
-          ecart: parseInt(ligne.quantiteReelle) - stockTheorique,
+          ecart: parseInt(ligne.quantiteReelle) - stock,
         },
       })
     }
