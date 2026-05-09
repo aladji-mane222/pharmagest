@@ -38,10 +38,6 @@ export async function GET() {
     include: { medicament: true },
   })
 
-  const pharmacie = await prisma.pharmacie.findUnique({
-    where: { id: pharmacieId },
-  })
-
   if (stockBas.length > 0 && process.env.EMAIL_ADMIN) {
     await envoyerEmail({
       to: process.env.EMAIL_ADMIN,

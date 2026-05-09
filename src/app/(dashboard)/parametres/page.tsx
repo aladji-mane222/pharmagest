@@ -13,7 +13,7 @@ interface Pharmacie {
 
 export default function ParametresPage() {
   const { data: session } = useSession()
-  const [pharmacie, setPharmacie] = useState<Pharmacie | null>(null)
+  const [, setPharmacie] = useState<Pharmacie | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
