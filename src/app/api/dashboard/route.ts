@@ -13,13 +13,14 @@ export async function GET() {
   const debutMois = new Date(now.getFullYear(), now.getMonth(), 1)
   const dans90Jours = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
 
+  // Optimisation : Requêtes SQL brutes pour les calculs de stock bas (très performant)
   const [
     ventesJour,
     ventesMois,
-    stockBas,
-    peremptions,
     totalMedicaments,
     ventesRecentes,
+    stockBasStats,
+    peremptionsStats
   ] = await Promise.all([
     // CA du jour
     prisma.vente.aggregate({
@@ -31,47 +32,57 @@ export async function GET() {
       where: { pharmacieId, createdAt: { gte: debutMois }, statut: 'COMPLETE' },
       _sum: { montantTotal: true },
     }),
-    // Stock bas
-    prisma.medicament.findMany({
-      where: { pharmacieId, actif: true },
-      include: { lots: { where: { actif: true } } },
-    }),
-    // Péremptions dans 90 jours
-    prisma.lot.findMany({
-      where: {
-        actif: true,
-        datePeremption: { lte: dans90Jours, gte: now },
-        medicament: { pharmacieId },
-      },
-      include: { medicament: true },
-    }),
     // Total médicaments
     prisma.medicament.count({ where: { pharmacieId, actif: true } }),
-    // Ventes récentes
+    // Ventes récentes (limité aux champs nécessaires)
     prisma.vente.findMany({
       where: { pharmacieId },
       orderBy: { createdAt: 'desc' },
       take: 5,
-      include: { user: true, lignes: true },
+      select: {
+        id: true,
+        montantTotal: true,
+        createdAt: true,
+        user: { select: { nom: true } }
+      }
     }),
+    // Stock bas (SQL pour éviter de charger tous les produits en mémoire)
+    prisma.$queryRaw<any[]>`
+      SELECT m.id, m.nom, m."stockMinimum", COALESCE(SUM(l.quantite), 0)::int as "stockTotal"
+      FROM "Medicament" m
+      LEFT JOIN "Lot" l ON l."medicamentId" = m.id AND l.actif = true
+      WHERE m."pharmacieId" = ${pharmacieId} AND m.actif = true
+      GROUP BY m.id, m.nom, m."stockMinimum"
+      HAVING COALESCE(SUM(l.quantite), 0) < m."stockMinimum"
+    `,
+    // Péremptions proches (SQL)
+    prisma.$queryRaw<any[]>`
+      SELECT l.id, l."datePeremption", m.nom as "medicamentNom"
+      FROM "Lot" l
+      JOIN "Medicament" m ON m.id = l."medicamentId"
+      WHERE m."pharmacieId" = ${pharmacieId} AND l.actif = true
+      AND l."datePeremption" <= ${dans90Jours} AND l."datePeremption" >= ${now}
+      ORDER BY l."datePeremption" ASC
+      LIMIT 5
+    `
   ])
 
-  // Calculer stock bas
-  const medicamentsStockBas = stockBas.filter((med) => {
-    const stockTotal = med.lots.reduce((sum, lot) => sum + lot.quantite, 0)
-    return stockTotal < med.stockMinimum
-  })
-
-  const response = apiSuccess({
+  return apiSuccess({
     caJour: ventesJour._sum.montantTotal ?? 0,
     caMois: ventesMois._sum.montantTotal ?? 0,
-    stockBas: medicamentsStockBas.length,
-    stockBasDetails: medicamentsStockBas.slice(0, 5),
-    peremptions: peremptions.length,
-    peremptionsDetails: peremptions.slice(0, 5),
+    stockBas: stockBasStats.length,
+    stockBasDetails: stockBasStats.slice(0, 5).map(m => ({
+      id: m.id,
+      nom: m.nom,
+      lots: [{ quantite: m.stockTotal }]
+    })),
+    peremptions: peremptionsStats.length,
+    peremptionsDetails: peremptionsStats.map(l => ({
+      id: l.id,
+      datePeremption: l.datePeremption,
+      medicament: { nom: l.medicamentNom }
+    })),
     totalMedicaments,
     ventesRecentes,
   })
-  response.headers.set('Cache-Control', 'private, max-age=60')
-  return response
 }

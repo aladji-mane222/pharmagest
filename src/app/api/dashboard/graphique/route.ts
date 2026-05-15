@@ -8,36 +8,40 @@ export async function GET() {
   if (!session) return apiError('Non autorise', 401)
 
   const pharmacieId = session.user.pharmacieId
-  const now = new Date()
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
+  sevenDaysAgo.setHours(0, 0, 0, 0)
 
-  const jours = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(now)
-    date.setDate(now.getDate() - (6 - i))
-    return date
+  // Optimisation : Une seule requête pour les 7 derniers jours
+  const stats = await prisma.$queryRaw<any[]>`
+    SELECT 
+      DATE_TRUNC('day', "createdAt") as date,
+      COALESCE(SUM("montantTotal"), 0) as ca,
+      COUNT(*)::int as ventes
+    FROM "Vente"
+    WHERE "pharmacieId" = ${pharmacieId} 
+    AND "createdAt" >= ${sevenDaysAgo}
+    AND "statut" = 'COMPLETE'
+    GROUP BY DATE_TRUNC('day', "createdAt")
+    ORDER BY date ASC
+  `
+
+  // Mapper les résultats pour s'assurer que tous les jours sont présents même s'il n'y a pas de vente
+  const result = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i))
+    const dateStr = d.toISOString().split('T')[0]
+    
+    const dayStats = stats.find(s => 
+      new Date(s.date).toISOString().split('T')[0] === dateStr
+    )
+
+    return {
+      date: d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
+      ca: dayStats ? Number(dayStats.ca) : 0,
+      ventes: dayStats ? Number(dayStats.ventes) : 0,
+    }
   })
 
-  const donnees = await Promise.all(
-    jours.map(async (jour) => {
-      const debut = new Date(jour.getFullYear(), jour.getMonth(), jour.getDate())
-      const fin = new Date(jour.getFullYear(), jour.getMonth(), jour.getDate() + 1)
-
-      const result = await prisma.vente.aggregate({
-        where: {
-          pharmacieId,
-          createdAt: { gte: debut, lt: fin },
-          statut: 'COMPLETE',
-        },
-        _sum: { montantTotal: true },
-        _count: true,
-      })
-
-      return {
-        date: jour.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
-        ca: result._sum.montantTotal ?? 0,
-        ventes: result._count,
-      }
-    })
-  )
-
-  return apiSuccess(donnees)
+  return apiSuccess(result)
 }

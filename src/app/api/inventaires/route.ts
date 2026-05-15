@@ -8,12 +8,20 @@ export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
 
-  const inventaires = await prisma.inventaire.findMany({
-    where: { pharmacieId: session.user.pharmacieId },
-    include: { user: { select: { nom: true } }, lignes: true },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-  })
+  const pharmacieId = session.user.pharmacieId
+
+  // Optimisation : SQL brut pour éviter les overheads de Prisma sur les listes
+  const inventaires = await prisma.$queryRaw<any[]>`
+    SELECT 
+      i.*,
+      json_build_object('nom', u.nom) as user,
+      (SELECT COUNT(*) FROM "LigneInventaire" WHERE "inventaireId" = i.id)::int as "nbLignes"
+    FROM "Inventaire" i
+    JOIN "User" u ON u.id = i."userId"
+    WHERE i."pharmacieId" = ${pharmacieId}
+    ORDER BY i."createdAt" DESC
+    LIMIT 10
+  `
 
   return apiSuccess(inventaires)
 }

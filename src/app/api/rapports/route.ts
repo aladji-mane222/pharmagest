@@ -12,43 +12,49 @@ export async function GET(request: Request) {
   const type = searchParams.get('type') || 'ventes'
   const debut = searchParams.get('debut') ? new Date(searchParams.get('debut')!) : new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   const fin = searchParams.get('fin') ? new Date(searchParams.get('fin')!) : new Date()
+  fin.setHours(23, 59, 59, 999)
   const pharmacieId = session.user.pharmacieId
 
   if (type === 'ventes') {
-    const ventes = await prisma.vente.findMany({
-      where: { pharmacieId, createdAt: { gte: debut, lte: fin }, statut: 'COMPLETE' },
-      include: { user: { select: { nom: true } }, lignes: { include: { medicament: { select: { nom: true } } } } },
-      orderBy: { createdAt: 'desc' },
-    })
-    const total = ventes.reduce((s, v) => s + v.montantTotal, 0)
+    const ventes = await prisma.$queryRaw<any[]>`
+      SELECT 
+        v.id, v."montantTotal", v."createdAt",
+        json_build_object('nom', u.nom) as user
+      FROM "Vente" v
+      JOIN "User" u ON u.id = v."userId"
+      WHERE v."pharmacieId" = ${pharmacieId} 
+      AND v."createdAt" >= ${debut} AND v."createdAt" <= ${fin}
+      AND v."statut" = 'COMPLETE'
+      ORDER BY v."createdAt" DESC
+    `
+    const total = ventes.reduce((s, v) => s + Number(v.montantTotal), 0)
     return apiSuccess({ ventes, total, type })
   }
 
   if (type === 'stock') {
-    const medicaments = await prisma.medicament.findMany({
-      where: { pharmacieId, actif: true },
-      include: { lots: { where: { actif: true } } },
-    })
-    const stock = medicaments.map((m) => ({
-      ...m,
-      stockTotal: m.lots.reduce((s, l) => s + l.quantite, 0),
-      valeur: m.lots.reduce((s, l) => s + l.quantite, 0) * (m.prixAchat || 0),
-    }))
-    const valeurTotale = stock.reduce((s, m) => s + m.valeur, 0)
+    const stock = await prisma.$queryRaw<any[]>`
+      SELECT 
+        m.id, m.nom, m."prixAchat",
+        COALESCE(SUM(l.quantite), 0)::int as "stockTotal",
+        (COALESCE(SUM(l.quantite), 0) * COALESCE(m."prixAchat", 0)) as valeur
+      FROM "Medicament" m
+      LEFT JOIN "Lot" l ON l."medicamentId" = m.id AND l.actif = true
+      WHERE m."pharmacieId" = ${pharmacieId} AND m.actif = true
+      GROUP BY m.id, m.nom, m."prixAchat"
+      ORDER BY m.nom ASC
+    `
+    const valeurTotale = stock.reduce((s, m) => s + Number(m.valeur), 0)
     return apiSuccess({ stock, valeurTotale, type })
   }
 
   if (type === 'benefice') {
-    const ventes = await prisma.vente.aggregate({
-      where: { pharmacieId, createdAt: { gte: debut, lte: fin }, statut: 'COMPLETE' },
-      _sum: { montantTotal: true },
-    })
-    const depenses = await prisma.depense.aggregate({
-      where: { pharmacieId, createdAt: { gte: debut, lte: fin } },
-      _sum: { montant: true },
-    })
-    const ca = ventes._sum.montantTotal ?? 0
-    const totalDepenses = depenses._sum.montant ?? 0
+    const stats = await prisma.$queryRaw<any[]>`
+      SELECT 
+        (SELECT COALESCE(SUM("montantTotal"), 0) FROM "Vente" WHERE "pharmacieId" = ${pharmacieId} AND "createdAt" >= ${debut} AND "createdAt" <= ${fin} AND "statut" = 'COMPLETE') as ca,
+        (SELECT COALESCE(SUM("montant"), 0) FROM "Depense" WHERE "pharmacieId" = ${pharmacieId} AND "createdAt" >= ${debut} AND "createdAt" <= ${fin}) as depenses
+    `
+    const ca = Number(stats[0].ca)
+    const totalDepenses = Number(stats[0].depenses)
     const beneficeNet = ca - totalDepenses
     return apiSuccess({ ca, totalDepenses, beneficeNet, type })
   }
