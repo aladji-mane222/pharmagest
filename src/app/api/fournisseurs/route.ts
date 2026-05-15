@@ -13,7 +13,12 @@ export async function GET() {
     orderBy: { nom: 'asc' },
   })
 
-  return apiSuccess(fournisseurs)
+  return new Response(JSON.stringify({ success: true, data: fournisseurs }), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 's-maxage=120, stale-while-revalidate=60',
+    },
+  })
 }
 
 export async function POST(request: Request) {
