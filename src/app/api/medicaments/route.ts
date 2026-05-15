@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
 
@@ -24,8 +25,8 @@ export async function GET(request: Request) {
     FROM "Medicament" m
     LEFT JOIN "Lot" l ON l."medicamentId" = m.id AND l.actif = true
     WHERE m."pharmacieId" = ${pharmacieId} AND m.actif = true
-    ${search ? prisma.sql`AND m.nom ILIKE ${'%' + search + '%'}` : prisma.sql``}
-    ${categorie ? prisma.sql`AND m.categorie = ${categorie}` : prisma.sql``}
+    ${search ? Prisma.sql`AND m.nom ILIKE ${'%' + search + '%'}` : Prisma.sql``}
+    ${categorie ? Prisma.sql`AND m.categorie = ${categorie}` : Prisma.sql``}
     GROUP BY m.id
     ORDER BY m.nom ASC
     LIMIT ${limit} OFFSET ${offset}
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
     SELECT COUNT(*)::int as count 
     FROM "Medicament" 
     WHERE "pharmacieId" = ${pharmacieId} AND actif = true
-    ${search ? prisma.sql`AND nom ILIKE ${'%' + search + '%'}` : prisma.sql``}
+    ${search ? Prisma.sql`AND nom ILIKE ${'%' + search + '%'}` : Prisma.sql``}
   `
   const total = totalResult[0].count
 
