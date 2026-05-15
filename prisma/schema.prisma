@@ -47,6 +47,8 @@ model User {
   sessionsCaisse SessionCaisse[]
   auditLogs      AuditLog[]
   inventaires    Inventaire[]
+
+  @@index([pharmacieId])
 }
 
 enum Role {
@@ -74,6 +76,9 @@ model Medicament {
   lignesVente      LigneVente[]
   mouvements       MouvementStock[]
   lignesInventaire LigneInventaire[]
+
+  @@index([pharmacieId])
+  @@index([actif])
 }
 
 model Lot {
@@ -103,6 +108,8 @@ model Fournisseur {
 
   pharmacie Pharmacie             @relation(fields: [pharmacieId], references: [id])
   commandes CommandeFournisseur[]
+
+  @@index([pharmacieId])
 }
 
 model CommandeFournisseur {
@@ -117,6 +124,9 @@ model CommandeFournisseur {
   pharmacie   Pharmacie   @relation(fields: [pharmacieId], references: [id])
   fournisseur Fournisseur @relation(fields: [fournisseurId], references: [id])
   lignes      LigneCommande[]
+
+  @@index([pharmacieId])
+  @@index([fournisseurId])
 }
 
 enum StatutCommande {
@@ -153,6 +163,11 @@ model Vente {
   client        Client?        @relation(fields: [clientId], references: [id])
   sessionCaisse SessionCaisse? @relation(fields: [sessionCaisseId], references: [id])
   lignes        LigneVente[]
+
+  @@index([pharmacieId])
+  @@index([userId])
+  @@index([statut])
+  @@index([createdAt])
 }
 
 enum ModePaiement {
@@ -177,6 +192,9 @@ model LigneVente {
 
   vente      Vente      @relation(fields: [venteId], references: [id])
   medicament Medicament @relation(fields: [medicamentId], references: [id])
+
+  @@index([venteId])
+  @@index([medicamentId])
 }
 
 model Client {
@@ -193,21 +211,30 @@ model Client {
 
   pharmacie Pharmacie @relation(fields: [pharmacieId], references: [id])
   ventes    Vente[]
+
+  @@index([pharmacieId])
 }
 
 model SessionCaisse {
-  id               String              @id @default(cuid())
-  statut           StatutSessionCaisse @default(OUVERTE)
-  montantOuverture Float               @default(0)
+  id               String    @id @default(cuid())
+  montantOuverture Float     @default(0)
   montantCloture   Float?
+  montantAttendu   Float?
+  ecart            Float?
   userId           String
   pharmacieId      String
-  ouvertureAt      DateTime            @default(now())
-  clotureAt        DateTime?
+  dateOuverture    DateTime  @default(now())
+  dateCloture      DateTime?
+  noteCloture      String?
+  actif            Boolean   @default(true)
 
   user      User      @relation(fields: [userId], references: [id])
   pharmacie Pharmacie @relation(fields: [pharmacieId], references: [id])
   ventes    Vente[]
+
+  @@index([pharmacieId])
+  @@index([userId])
+  @@index([dateCloture])
 }
 
 enum StatutSessionCaisse {
@@ -226,6 +253,8 @@ model Inventaire {
   pharmacie Pharmacie         @relation(fields: [pharmacieId], references: [id])
   user      User              @relation(fields: [userId], references: [id])
   lignes    LigneInventaire[]
+
+  @@index([pharmacieId])
 }
 
 enum StatutInventaire {
@@ -242,6 +271,9 @@ model LigneInventaire {
 
   inventaire Inventaire @relation(fields: [inventaireId], references: [id])
   medicament Medicament @relation(fields: [medicamentId], references: [id])
+
+  @@index([inventaireId])
+  @@index([medicamentId])
 }
 
 model Depense {
@@ -253,6 +285,9 @@ model Depense {
   createdAt   DateTime @default(now())
 
   pharmacie Pharmacie @relation(fields: [pharmacieId], references: [id])
+
+  @@index([pharmacieId])
+  @@index([createdAt])
 }
 
 model MouvementStock {
@@ -282,4 +317,7 @@ model AuditLog {
 
   user      User?      @relation(fields: [userId], references: [id])
   pharmacie Pharmacie? @relation(fields: [pharmacieId], references: [id])
+
+  @@index([pharmacieId])
+  @@index([createdAt])
 }

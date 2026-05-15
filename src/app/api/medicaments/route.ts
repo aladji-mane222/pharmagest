@@ -14,34 +14,33 @@ export async function GET(request: Request) {
   const categorie = searchParams.get('categorie') || ''
   const page = parseInt(searchParams.get('page') || '1')
   const limit = parseInt(searchParams.get('limit') || '20')
-  const skip = (page - 1) * limit
+  const offset = (page - 1) * limit
 
-  const where = {
-    pharmacieId,
-    actif: true,
-    ...(search && { nom: { contains: search, mode: 'insensitive' as const } }),
-    ...(categorie && { categorie }),
-  }
+  // Optimisation SQL : Récupération des médicaments + stock total en une seule passe
+  const medicaments = await prisma.$queryRaw<any[]>`
+    SELECT 
+      m.*,
+      COALESCE(SUM(l.quantite), 0)::int as "stockTotal"
+    FROM "Medicament" m
+    LEFT JOIN "Lot" l ON l."medicamentId" = m.id AND l.actif = true
+    WHERE m."pharmacieId" = ${pharmacieId} AND m.actif = true
+    ${search ? prisma.sql`AND m.nom ILIKE ${'%' + search + '%'}` : prisma.sql``}
+    ${categorie ? prisma.sql`AND m.categorie = ${categorie}` : prisma.sql``}
+    GROUP BY m.id
+    ORDER BY m.nom ASC
+    LIMIT ${limit} OFFSET ${offset}
+  `
 
-  const [medicaments, total] = await Promise.all([
-    prisma.medicament.findMany({
-      where,
-      include: { lots: { where: { actif: true } } },
-      orderBy: { nom: 'asc' },
-      skip,
-      take: limit,
-    }),
-    prisma.medicament.count({ where }),
-  ])
+  // Requête séparée pour le total (nécessaire pour la pagination)
+  const totalResult = await prisma.$queryRaw<any[]>`
+    SELECT COUNT(*)::int as count 
+    FROM "Medicament" 
+    WHERE "pharmacieId" = ${pharmacieId} AND actif = true
+    ${search ? prisma.sql`AND nom ILIKE ${'%' + search + '%'}` : prisma.sql``}
+  `
+  const total = totalResult[0].count
 
-  const medicamentsAvecStock = medicaments.map((med) => ({
-    ...med,
-    stockTotal: med.lots.reduce((sum, lot) => sum + lot.quantite, 0),
-  }))
-
-  const response = apiSuccess({ medicaments: medicamentsAvecStock, total, page, limit })
-  response.headers.set('Cache-Control', 'private, max-age=30')
-  return response
+  return apiSuccess({ medicaments, total, page, limit })
 }
 
 export async function POST(request: Request) {

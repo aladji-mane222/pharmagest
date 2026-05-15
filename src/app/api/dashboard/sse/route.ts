@@ -8,37 +8,42 @@ export async function GET(request: Request) {
   const pharmacieId = session.user.pharmacieId
 
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
+      const { prisma } = await import('@/lib/prisma')
+
       const sendData = async () => {
         try {
-          const { prisma } = await import('@/lib/prisma')
           const now = new Date()
           const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-          const [ventesJour, stockBas, sessionCaisse] = await Promise.all([
+          // Optimisation : Utilisation de requêtes plus légères et ciblées
+          const [ventesJour, stockBasCount, sessionCaisse] = await Promise.all([
             prisma.vente.aggregate({
               where: { pharmacieId, createdAt: { gte: debutJour }, statut: 'COMPLETE' },
               _sum: { montantTotal: true },
               _count: true,
             }),
-            prisma.medicament.findMany({
-              where: { pharmacieId, actif: true },
-              include: { lots: { where: { actif: true } } },
-            }),
+            // Compter uniquement les médicaments en stock bas (SQL optimisé)
+            prisma.$queryRaw<any[]>`
+              SELECT COUNT(*)::int as count
+              FROM "Medicament" m
+              WHERE m."pharmacieId" = ${pharmacieId} AND m.actif = true
+              AND (SELECT COALESCE(SUM(l.quantite), 0) FROM "Lot" l WHERE l."medicamentId" = m.id AND l.actif = true) < m."stockMinimum"
+            `,
             prisma.sessionCaisse.findFirst({
-              where: { pharmacieId, statut: 'OUVERTE' },
+              where: {
+                pharmacieId,
+                dateCloture: null, // v2.4 logic
+                actif: true
+              },
+              select: { id: true } // On n'a besoin que de savoir si elle existe
             }),
           ])
-
-          const nbStockBas = stockBas.filter((med) => {
-            const total = med.lots.reduce((s, l) => s + l.quantite, 0)
-            return total < med.stockMinimum
-          }).length
 
           const data = {
             caJour: ventesJour._sum.montantTotal ?? 0,
             nbVentes: ventesJour._count,
-            stockBas: nbStockBas,
+            stockBas: stockBasCount[0]?.count ?? 0,
             sessionOuverte: !!sessionCaisse,
             timestamp: new Date().toISOString(),
           }
@@ -49,12 +54,19 @@ export async function GET(request: Request) {
         }
       }
 
-      sendData()
+      // Premier envoi immédiat
+      await sendData()
+
+      // Intervalle de 30s (suffisant pour le dashboard)
       const interval = setInterval(sendData, 30000)
 
       request.signal.addEventListener('abort', () => {
         clearInterval(interval)
-        controller.close()
+        try {
+          controller.close()
+        } catch (e) {
+          // Déjà fermé
+        }
       })
     },
   })

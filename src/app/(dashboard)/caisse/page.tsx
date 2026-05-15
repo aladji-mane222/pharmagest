@@ -5,11 +5,11 @@ import { formatMontant, formatDateTime } from '@/lib/utils'
 
 interface SessionCaisse {
   id: string
-  statut: string
   montantOuverture: number
   montantCloture: number | null
-  ouvertureAt: string
-  clotureAt: string | null
+  dateOuverture: string
+  dateCloture: string | null
+  actif: boolean
   user: { nom: string }
 }
 
@@ -59,7 +59,10 @@ export default function CaissePage() {
     const json = await res.json()
     if (res.ok) {
       setSessionActive(null)
-      setHistorique([{ ...sessionActive!, statut: 'FERMEE', montantCloture: parseFloat(montantCloture) }, ...historique])
+      // Recharger l'historique pour inclure la session fermée
+      const resHist = await fetch('/api/caisse')
+      const jsonHist = await resHist.json()
+      setHistorique(jsonHist.data?.historique || [])
       setMontantCloture('')
     } else {
       alert(json.error)
@@ -83,7 +86,7 @@ export default function CaissePage() {
                 <span className="text-green-600 font-medium">Session ouverte</span>
               </div>
               <p className="text-sm text-gray-500">Ouverte par : <span className="font-medium">{sessionActive.user.nom}</span></p>
-              <p className="text-sm text-gray-500">Depuis : <span className="font-medium">{formatDateTime(sessionActive.ouvertureAt)}</span></p>
+              <p className="text-sm text-gray-500">Depuis : <span className="font-medium">{formatDateTime(sessionActive.dateOuverture)}</span></p>
               <p className="text-sm text-gray-500 mb-4">Montant ouverture : <span className="font-medium">{formatMontant(sessionActive.montantOuverture)}</span></p>
               <div className="flex gap-3">
                 <input
@@ -108,7 +111,7 @@ export default function CaissePage() {
               <div className="flex gap-3">
                 <input
                   type="number"
-                  placeholder="Montant d ouverture"
+                  placeholder="Montant d'ouverture"
                   value={montantOuverture}
                   onChange={(e) => setMontantOuverture(e.target.value)}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -132,12 +135,12 @@ export default function CaissePage() {
                 <li key={s.id} className="border rounded-lg p-3 text-sm">
                   <div className="flex justify-between mb-1">
                     <span className="font-medium">{s.user.nom}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs ${s.statut === 'OUVERTE' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                      {s.statut}
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${!s.dateCloture ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                      {!s.dateCloture ? 'OUVERTE' : 'FERMEE'}
                     </span>
                   </div>
-                  <p className="text-gray-500">{formatDateTime(s.ouvertureAt)}</p>
-                  {s.montantCloture != null && !isNaN(s.montantCloture) && (
+                  <p className="text-gray-500">{formatDateTime(s.dateOuverture)}</p>
+                  {s.montantCloture != null && (
                     <p className="text-blue-600 font-medium">{formatMontant(s.montantCloture)}</p>
                   )}
                 </li>

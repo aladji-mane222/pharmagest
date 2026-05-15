@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma'
 
-export async function getLotFifo(medicamentId: string, pharmacieId: string) {
-  const lot = await prisma.lot.findFirst({
+export async function getLotFifo(medicamentId: string, pharmacieId: string, tx?: any) {
+  const p = tx || prisma
+  const lot = await p.lot.findFirst({
     where: {
       medicamentId,
       actif: true,
@@ -16,11 +17,13 @@ export async function getLotFifo(medicamentId: string, pharmacieId: string) {
 export async function decrementerLotFifo(
   medicamentId: string,
   pharmacieId: string,
-  quantite: number
+  quantite: number,
+  tx?: any
 ) {
+  const p = tx || prisma
   let quantiteRestante = quantite
 
-  const lots = await prisma.lot.findMany({
+  const lots = await p.lot.findMany({
     where: {
       medicamentId,
       actif: true,
@@ -36,7 +39,7 @@ export async function decrementerLotFifo(
     const aDeduire = Math.min(lot.quantite, quantiteRestante)
     const nouvelleQuantite = lot.quantite - aDeduire
 
-    await prisma.lot.update({
+    await p.lot.update({
       where: { id: lot.id },
       data: {
         quantite: nouvelleQuantite,

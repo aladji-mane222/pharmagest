@@ -7,32 +7,27 @@ export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
 
-  const medicaments = await prisma.medicament.findMany({
-    where: { pharmacieId: session.user.pharmacieId, actif: true },
-    include: {
-      lots: {
-        where: { actif: true },
-        orderBy: { datePeremption: 'asc' },
-      },
-    },
-    orderBy: { nom: 'asc' },
-  })
+  const pharmacieId = session.user.pharmacieId
 
-  const stock = medicaments.map((med) => {
-    const stockTotal = med.lots.reduce((sum, lot) => sum + lot.quantite, 0)
-    const lotsCritiques = med.lots.filter((lot) => {
-      const jours = Math.ceil((new Date(lot.datePeremption).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-      return jours <= 90
-    })
-    return {
-      ...med,
-      stockTotal,
-      stockBas: stockTotal < med.stockMinimum,
-      lotsCritiques: lotsCritiques.length,
-    }
-  })
+  // Optimisation SQL : Calculs de stock directement en base pour éviter les allers-retours
+  const stock = await prisma.$queryRaw<any[]>`
+    SELECT 
+      m.*,
+      COALESCE(SUM(l.quantite), 0)::int as "stockTotal",
+      COUNT(l.id) FILTER (WHERE l."datePeremption" <= (CURRENT_DATE + INTERVAL '90 days'))::int as "lotsCritiques"
+    FROM "Medicament" m
+    LEFT JOIN "Lot" l ON l."medicamentId" = m.id AND l.actif = true
+    WHERE m."pharmacieId" = ${pharmacieId} AND m.actif = true
+    GROUP BY m.id
+    ORDER BY m.nom ASC
+  `
 
-  const valeurTotale = stock.reduce((sum, med) => sum + med.stockTotal * med.prixAchat!, 0)
+  const stockFormatte = stock.map(med => ({
+    ...med,
+    stockBas: med.stockTotal < med.stockMinimum
+  }))
 
-  return apiSuccess({ stock, valeurTotale })
+  const valeurTotale = stockFormatte.reduce((sum, med) => sum + (med.stockTotal * (med.prixAchat || 0)), 0)
+
+  return apiSuccess({ stock: stockFormatte, valeurTotale })
 }

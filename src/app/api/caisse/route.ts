@@ -8,15 +8,21 @@ export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
 
+  const pharmacieId = session.user.pharmacieId
+
   const sessionActive = await prisma.sessionCaisse.findFirst({
-    where: { pharmacieId: session.user.pharmacieId, statut: 'OUVERTE' },
+    where: { 
+      pharmacieId, 
+      dateCloture: null,
+      actif: true 
+    },
     include: { user: { select: { nom: true } } },
   })
 
   const historique = await prisma.sessionCaisse.findMany({
-    where: { pharmacieId: session.user.pharmacieId },
+    where: { pharmacieId },
     include: { user: { select: { nom: true } } },
-    orderBy: { ouvertureAt: 'desc' },
+    orderBy: { dateOuverture: 'desc' },
     take: 10,
   })
 
@@ -27,12 +33,17 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
 
+  const pharmacieId = session.user.pharmacieId
   const body = await request.json()
-  const { action, montantOuverture, montantCloture } = body
+  const { action, montantOuverture, montantCloture, noteCloture } = body
 
   if (action === 'ouvrir') {
     const existante = await prisma.sessionCaisse.findFirst({
-      where: { pharmacieId: session.user.pharmacieId, statut: 'OUVERTE' },
+      where: { 
+        pharmacieId, 
+        dateCloture: null,
+        actif: true 
+      },
     })
     if (existante) return apiError('Une session est deja ouverte', 400)
 
@@ -40,7 +51,8 @@ export async function POST(request: Request) {
       data: {
         montantOuverture: parseFloat(montantOuverture) || 0,
         userId: session.user.id,
-        pharmacieId: session.user.pharmacieId,
+        pharmacieId,
+        actif: true
       },
     })
 
@@ -48,7 +60,7 @@ export async function POST(request: Request) {
       action: 'CAISSE_OUVERTE',
       details: { sessionId: nouvelleSession.id, montantOuverture },
       userId: session.user.id,
-      pharmacieId: session.user.pharmacieId,
+      pharmacieId,
     })
 
     return apiSuccess(nouvelleSession, 201)
@@ -56,7 +68,11 @@ export async function POST(request: Request) {
 
   if (action === 'fermer') {
     const sessionOuverte = await prisma.sessionCaisse.findFirst({
-      where: { pharmacieId: session.user.pharmacieId, statut: 'OUVERTE' },
+      where: { 
+        pharmacieId, 
+        dateCloture: null,
+        actif: true 
+      },
     })
     if (!sessionOuverte) return apiError('Aucune session ouverte', 400)
 
@@ -71,9 +87,10 @@ export async function POST(request: Request) {
     const sessionFermee = await prisma.sessionCaisse.update({
       where: { id: sessionOuverte.id },
       data: {
-        statut: 'FERMEE',
         montantCloture: montantFinal,
-        clotureAt: new Date(),
+        dateCloture: new Date(),
+        noteCloture,
+        actif: false // v2.4 logic: once closed, it's not "actif" for being open
       },
     })
 
@@ -81,7 +98,7 @@ export async function POST(request: Request) {
       action: 'CAISSE_FERMEE',
       details: { sessionId: sessionOuverte.id, totalVentes, montantCloture },
       userId: session.user.id,
-      pharmacieId: session.user.pharmacieId,
+      pharmacieId,
     })
 
     return apiSuccess({ session: sessionFermee, totalVentes })
