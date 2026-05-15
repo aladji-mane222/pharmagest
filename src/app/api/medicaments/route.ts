@@ -39,9 +39,12 @@ export async function GET(request: Request) {
     stockTotal: med.lots.reduce((sum, lot) => sum + lot.quantite, 0),
   }))
 
-  const response = apiSuccess({ medicaments: medicamentsAvecStock, total, page, limit })
-  response.headers.set('Cache-Control', 'private, max-age=30')
-  return response
+  return new Response(JSON.stringify({ success: true, data: { medicaments: medicamentsAvecStock, total, page, limit } }), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 's-maxage=60, stale-while-revalidate=60',
+    },
+  })
 }
 
 export async function POST(request: Request) {

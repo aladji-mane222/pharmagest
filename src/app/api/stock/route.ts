@@ -34,5 +34,10 @@ export async function GET() {
 
   const valeurTotale = stock.reduce((sum, med) => sum + med.stockTotal * med.prixAchat!, 0)
 
-  return apiSuccess({ stock, valeurTotale })
+  return new Response(JSON.stringify({ success: true, data: { stock, valeurTotale } }), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 's-maxage=60, stale-while-revalidate=60',
+    },
+  })
 }
