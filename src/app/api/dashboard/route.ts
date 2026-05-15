@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { apiError, apiSuccess } from '@/lib/utils'
+import { apiError } from '@/lib/utils'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -62,7 +62,7 @@ export async function GET() {
     return stockTotal < med.stockMinimum
   })
 
-  const response = apiSuccess({
+  return new Response(JSON.stringify({ success: true, data: {
     caJour: ventesJour._sum.montantTotal ?? 0,
     caMois: ventesMois._sum.montantTotal ?? 0,
     stockBas: medicamentsStockBas.length,
@@ -71,7 +71,10 @@ export async function GET() {
     peremptionsDetails: peremptions.slice(0, 5),
     totalMedicaments,
     ventesRecentes,
+  }}), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 's-maxage=30, stale-while-revalidate=60',
+    },
   })
-  response.headers.set('Cache-Control', 'private, max-age=60')
-  return response
 }

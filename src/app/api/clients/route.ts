@@ -20,7 +20,12 @@ export async function GET(request: Request) {
     orderBy: { nom: 'asc' },
   })
 
-  return apiSuccess(clients)
+  return new Response(JSON.stringify({ success: true, data: clients }), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 's-maxage=120, stale-while-revalidate=60',
+    },
+  })
 }
 
 export async function POST(request: Request) {
