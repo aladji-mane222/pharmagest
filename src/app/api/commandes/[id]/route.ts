@@ -12,7 +12,9 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     where: { id: params.id, pharmacieId: session.user.pharmacieId },
     include: {
       fournisseur: true,
-      lignes: true,
+      lignes: {
+        include: { medicament: { select: { nom: true } } },
+      },
     },
   })
 
@@ -25,8 +27,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   if (!session) return apiError('Non autorise', 401)
   if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
 
+  const pharmacieId = session.user.pharmacieId
+  const userId = session.user.id
+
   const commande = await prisma.commandeFournisseur.findFirst({
-    where: { id: params.id, pharmacieId: session.user.pharmacieId },
+    where: { id: params.id, pharmacieId },
     include: { lignes: true },
   })
   if (!commande) return apiError('Commande non trouvee', 404)
@@ -35,17 +40,57 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const { statut } = body
 
   if (statut === 'RECUE') {
-    for (const ligne of commande.lignes) {
-      await prisma.lot.create({
-        data: {
-          medicamentId: ligne.id,
-          quantite: ligne.quantite,
-          datePeremption: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        },
+    if (commande.statut === 'RECUE') return apiError('Commande deja receptionnee', 400)
+    if (commande.statut === 'ANNULEE') return apiError('Commande annulee, impossible de receptionner', 400)
+
+    await prisma.$transaction(async (tx) => {
+      for (const ligne of commande.lignes) {
+        // ─── Bug #1 corrigé : ligne.medicamentId au lieu de ligne.id ─────
+        if (!ligne.medicamentId) {
+          console.warn(`Ligne ${ligne.id} sans medicamentId — ignoree`)
+          continue
+        }
+
+        // Créer le lot avec pharmacieId obligatoire
+        await tx.lot.create({
+          data: {
+            medicamentId: ligne.medicamentId,
+            pharmacieId,
+            quantite: ligne.quantite,
+            prixAchat: ligne.prixUnitaire,
+            datePeremption: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          },
+        })
+
+        // Créer le MouvementStock ENTREE pour traçabilité
+        await tx.mouvementStock.create({
+          data: {
+            type: 'ENTREE',
+            quantite: ligne.quantite,
+            medicamentId: ligne.medicamentId,
+            userId,
+          },
+        })
+      }
+
+      // Mettre à jour le statut de la commande
+      await tx.commandeFournisseur.update({
+        where: { id: params.id },
+        data: { statut: 'RECUE' },
       })
-    }
+    })
+
+    await createAuditLog({
+      action: 'COMMANDE_RECEPTIONNEE',
+      details: { commandeId: params.id, nbLignes: commande.lignes.length },
+      userId,
+      pharmacieId,
+    })
+
+    return apiSuccess({ message: 'Commande receptionnee avec succes' })
   }
 
+  // Pour les autres changements de statut (ENVOYEE, ANNULEE)
   const updated = await prisma.commandeFournisseur.update({
     where: { id: params.id },
     data: { statut },
@@ -54,8 +99,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   await createAuditLog({
     action: 'COMMANDE_STATUT_CHANGE',
     details: { commandeId: params.id, statut },
-    userId: session.user.id,
-    pharmacieId: session.user.pharmacieId,
+    userId,
+    pharmacieId,
   })
 
   return apiSuccess(updated)
