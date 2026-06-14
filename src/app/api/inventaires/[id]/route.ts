@@ -30,11 +30,14 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const body = await request.json()
   const { action, lignes } = body
 
+  const pharmacieId = session.user.pharmacieId
+
   const inventaire = await prisma.inventaire.findFirst({
-    where: { id: params.id, pharmacieId: session.user.pharmacieId },
+    where: { id: params.id, pharmacieId },
     include: { lignes: { include: { medicament: true } } },
   })
   if (!inventaire) return apiError('Inventaire non trouve', 404)
+  if (inventaire.statut === 'VALIDE') return apiError('Inventaire deja valide', 400)
 
   if (action === 'saisir' && lignes) {
     for (const ligne of lignes) {
@@ -43,12 +46,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         _sum: { quantite: true },
       })
       const stock = stockTheorique._sum.quantite ?? 0
+      const ecart = parseInt(ligne.quantiteReelle) - stock
 
       await prisma.ligneInventaire.update({
         where: { id: ligne.id },
         data: {
           quantiteReelle: parseInt(ligne.quantiteReelle),
-          ecart: parseInt(ligne.quantiteReelle) - stock,
+          ecart,
+          // Sauvegarder motifEcart s'il est fourni (Bug #4)
+          motifEcart: ligne.motifEcart ?? null,
         },
       })
     }
@@ -56,36 +62,76 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 
   if (action === 'valider') {
-    for (const ligne of inventaire.lignes) {
-      if (ligne.ecart !== 0) {
-        const lots = await prisma.lot.findMany({
-          where: { medicamentId: ligne.medicamentId, actif: true },
-          orderBy: { datePeremption: 'asc' },
-        })
+    // ─── VÉRIFICATION motifEcart OBLIGATOIRE (Bug #4) ────────────────────
+    const lignesSansMotif = inventaire.lignes.filter(
+      (l) => l.ecart !== 0 && (!l.motifEcart || l.motifEcart.trim() === '')
+    )
+    if (lignesSansMotif.length > 0) {
+      const noms = lignesSansMotif
+        .map((l) => l.medicament.nom)
+        .join(', ')
+      return apiError(
+        `Motif obligatoire pour chaque ecart. Manquant pour : ${noms}`,
+        400
+      )
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
-        if (lots.length > 0) {
-          const nouveauStock = Math.max(0, lots[0].quantite + ligne.ecart)
-          await prisma.lot.update({
-            where: { id: lots[0].id },
-            data: { quantite: nouveauStock, actif: nouveauStock > 0 },
+    await prisma.$transaction(async (tx) => {
+      for (const ligne of inventaire.lignes) {
+        if (ligne.ecart !== 0) {
+          const lots = await tx.lot.findMany({
+            where: { medicamentId: ligne.medicamentId, actif: true },
+            orderBy: { datePeremption: 'asc' },
+          })
+
+          if (lots.length > 0) {
+            const nouveauStock = Math.max(0, lots[0].quantite + ligne.ecart)
+            await tx.lot.update({
+              where: { id: lots[0].id },
+              data: { quantite: nouveauStock, actif: nouveauStock > 0 },
+            })
+          }
+
+          // MouvementStock pour traçabilité
+          await tx.mouvementStock.create({
+            data: {
+              type: 'AJUSTEMENT',
+              quantite: Math.abs(ligne.ecart),
+              medicamentId: ligne.medicamentId,
+              userId: session.user.id,
+            },
+          })
+
+          await createAuditLog({
+            action: 'INVENTAIRE_ECART',
+            details: {
+              inventaireId: params.id,
+              medicamentId: ligne.medicamentId,
+              medicamentNom: ligne.medicament.nom,
+              ecart: ligne.ecart,
+              motifEcart: ligne.motifEcart,
+            },
+            userId: session.user.id,
+            pharmacieId,
           })
         }
       }
-    }
 
-    const updated = await prisma.inventaire.update({
-      where: { id: params.id },
-      data: { statut: 'VALIDE' },
+      await tx.inventaire.update({
+        where: { id: params.id },
+        data: { statut: 'VALIDE' },
+      })
     })
 
     await createAuditLog({
       action: 'INVENTAIRE_VALIDE',
       details: { inventaireId: params.id },
       userId: session.user.id,
-      pharmacieId: session.user.pharmacieId,
+      pharmacieId,
     })
 
-    return apiSuccess(updated)
+    return apiSuccess({ message: 'Inventaire valide avec succes' })
   }
 
   return apiError('Action non reconnue', 400)
