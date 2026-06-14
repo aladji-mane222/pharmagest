@@ -12,7 +12,9 @@ export async function GET() {
     where: { pharmacieId: session.user.pharmacieId },
     include: {
       fournisseur: { select: { nom: true } },
-      lignes: true,
+      lignes: {
+        include: { medicament: { select: { nom: true } } },
+      },
     },
     orderBy: { createdAt: 'desc' },
     take: 20,
@@ -33,10 +35,25 @@ export async function POST(request: Request) {
     return apiError('Fournisseur et lignes requis', 400)
   }
 
+  const pharmacieId = session.user.pharmacieId
+
   const fournisseur = await prisma.fournisseur.findFirst({
-    where: { id: fournisseurId, pharmacieId: session.user.pharmacieId },
+    where: { id: fournisseurId, pharmacieId },
   })
   if (!fournisseur) return apiError('Fournisseur non trouve', 404)
+
+  // Vérifier que chaque ligne a un medicamentId valide appartenant à la pharmacie
+  const medicamentIds = lignes.map((l: any) => l.medicamentId).filter(Boolean)
+  if (medicamentIds.length !== lignes.length) {
+    return apiError('Chaque ligne doit avoir un medicamentId', 400)
+  }
+
+  const medicaments = await prisma.medicament.findMany({
+    where: { id: { in: medicamentIds }, pharmacieId, actif: true },
+  })
+  if (medicaments.length !== medicamentIds.length) {
+    return apiError('Un ou plusieurs medicaments sont invalides ou n\'appartiennent pas a cette pharmacie', 404)
+  }
 
   const montantTotal = lignes.reduce(
     (sum: number, l: { quantite: number; prixUnitaire: number }) =>
@@ -46,24 +63,28 @@ export async function POST(request: Request) {
 
   const commande = await prisma.commandeFournisseur.create({
     data: {
-      pharmacieId: session.user.pharmacieId,
+      pharmacieId,
       fournisseurId,
       montantTotal,
       lignes: {
-        create: lignes.map((l: { medicamentId?: string; quantite: number; prixUnitaire: number }) => ({
+        create: lignes.map((l: { medicamentId: string; quantite: number; prixUnitaire: number }) => ({
+          medicamentId: l.medicamentId, // ← corrigé : était absent
           quantite: l.quantite,
           prixUnitaire: l.prixUnitaire,
         })),
       },
     },
-    include: { lignes: true, fournisseur: true },
+    include: {
+      lignes: { include: { medicament: { select: { nom: true } } } },
+      fournisseur: true,
+    },
   })
 
   await createAuditLog({
     action: 'COMMANDE_CREEE',
     details: { commandeId: commande.id, fournisseurId, montantTotal },
     userId: session.user.id,
-    pharmacieId: session.user.pharmacieId,
+    pharmacieId,
   })
 
   return apiSuccess(commande, 201)
