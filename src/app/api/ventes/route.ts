@@ -18,7 +18,6 @@ export async function GET() {
 
   const pharmacieId = session.user.pharmacieId
 
-  // Optimisation : Une seule requête avec JOIN et JSON_AGG pour éviter 5 allers-retours réseau
   const ventes = await prisma.$queryRaw<any[]>`
     SELECT 
       v.*,
@@ -58,31 +57,59 @@ export async function POST(request: Request) {
 
   if (!lignes || lignes.length === 0) return apiError('Aucun article dans la vente', 400)
 
-  // Optimisation : Vérifier la session caisse selon logique v2.4 (actif + dateCloture null)
+  const pharmacieId = session.user.pharmacieId
+  const userId = session.user.id
+
+  // Vérifier la session caisse du caissier connecté
   const sessionCaisse = await prisma.sessionCaisse.findFirst({
     where: {
-      pharmacieId: session.user.pharmacieId,
-      userId: session.user.id,
+      pharmacieId,
+      userId,
       dateCloture: null,
-      actif: true
+      actif: true,
     },
   })
   if (!sessionCaisse) return apiError('Aucune session caisse ouverte pour cet utilisateur', 400)
 
-  // Optimisation : Récupérer tous les médicaments d'un coup (évite N+1)
+  // Récupérer tous les médicaments en une seule requête
   const medicamentIds = lignes.map((l: any) => l.medicamentId)
   const medicaments = await prisma.medicament.findMany({
-    where: { id: { in: medicamentIds }, pharmacieId: session.user.pharmacieId, actif: true }
+    where: { id: { in: medicamentIds }, pharmacieId, actif: true },
   })
   const medicamentMap = new Map(medicaments.map(m => [m.id, m]))
 
-  let montantTotal = 0
-  const lignesAvecPrix: LigneVenteInput[] = []
+  // ─── VÉRIFICATION STOCK AVANT TRANSACTION (Bug #3) ───────────────────────
+  // Récupérer le stock total de chaque médicament en une seule requête SQL
+  const stocksResult = await prisma.$queryRaw<{ medicamentId: string; stockTotal: number }[]>`
+    SELECT l."medicamentId", COALESCE(SUM(l.quantite), 0)::int as "stockTotal"
+    FROM "Lot" l
+    JOIN "Medicament" m ON m.id = l."medicamentId"
+    WHERE l."medicamentId" IN (${medicamentIds.join(',') as any})
+      AND l.actif = true
+      AND m."pharmacieId" = ${pharmacieId}
+    GROUP BY l."medicamentId"
+  `
+  const stockMap = new Map(stocksResult.map(s => [s.medicamentId, s.stockTotal]))
 
   for (const ligne of lignes) {
     const medicament = medicamentMap.get(ligne.medicamentId)
     if (!medicament) return apiError(`Medicament non trouve: ${ligne.medicamentId}`, 404)
 
+    const stockTotal = stockMap.get(ligne.medicamentId) ?? 0
+    if (stockTotal < ligne.quantite) {
+      return apiError(
+        `Stock insuffisant pour ${medicament.nom}: ${stockTotal} disponible(s), ${ligne.quantite} demande(s)`,
+        400
+      )
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  let montantTotal = 0
+  const lignesAvecPrix: LigneVenteInput[] = []
+
+  for (const ligne of lignes) {
+    const medicament = medicamentMap.get(ligne.medicamentId)!
     const sousTotal = medicament.prixVente * ligne.quantite
     montantTotal += sousTotal
     lignesAvecPrix.push({ ...ligne, prixUnitaire: medicament.prixVente })
@@ -92,7 +119,6 @@ export async function POST(request: Request) {
   const statut: StatutVente = montantPayeFloat >= montantTotal ? 'COMPLETE' : 'PARTIELLE'
   const monnaie = Math.max(0, montantPayeFloat - montantTotal)
 
-  // Utilisation d'une transaction Prisma pour garantir l'intégrité et la performance
   const vente = await prisma.$transaction(async (tx) => {
     // 1. Créer la vente
     const v = await tx.vente.create({
@@ -102,8 +128,8 @@ export async function POST(request: Request) {
         monnaie,
         modePaiement: modePaiement || 'ESPECES',
         statut,
-        pharmacieId: session.user.pharmacieId,
-        userId: session.user.id,
+        pharmacieId,
+        userId,
         clientId: clientId || null,
         sessionCaisseId: sessionCaisse.id,
         lignes: {
@@ -117,18 +143,16 @@ export async function POST(request: Request) {
       include: { lignes: true },
     })
 
-    // 2. Décrémenter les lots et enregistrer les mouvements
+    // 2. Décrémenter les lots FIFO et enregistrer les mouvements
     for (const ligne of lignesAvecPrix) {
-      // Note: decrementerLotFifo doit idéalement accepter le client Prisma tx
-      // On le laisse tel quel s'il gère sa propre transaction ou on l'adapte
-      await decrementerLotFifo(ligne.medicamentId, session.user.pharmacieId, ligne.quantite, tx)
+      await decrementerLotFifo(ligne.medicamentId, pharmacieId, ligne.quantite, tx)
 
       await tx.mouvementStock.create({
         data: {
           type: 'SORTIE',
           quantite: ligne.quantite,
           medicamentId: ligne.medicamentId,
-          userId: session.user.id,
+          userId,
         },
       })
     }
@@ -148,8 +172,8 @@ export async function POST(request: Request) {
   await createAuditLog({
     action: 'VENTE_EFFECTUEE',
     details: { venteId: vente.id, montantTotal, statut },
-    userId: session.user.id,
-    pharmacieId: session.user.pharmacieId,
+    userId,
+    pharmacieId,
   })
 
   return apiSuccess(vente, 201)
