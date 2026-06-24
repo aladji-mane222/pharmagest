@@ -69,9 +69,10 @@ export async function POST(request: Request) {
       libelle,
       montant: montantFloat,
       categorie: categorie || null,
-      userId: session.user.id, // toujours renseigné
+      userId: session.user.id,
       pharmacieId: session.user.pharmacieId,
     },
+    include: { user: { select: { nom: true } } }, 
   })
 
   await createAuditLog({
