@@ -10,9 +10,16 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const mois = searchParams.get('mois')
+  const categorie = searchParams.get('categorie')
 
-  const where: { pharmacieId: string; createdAt?: { gte: Date; lte: Date } } = {
+  const where: {
+    pharmacieId: string
+    archivee: boolean
+    categorie?: string
+    createdAt?: { gte: Date; lte: Date }
+  } = {
     pharmacieId: session.user.pharmacieId,
+    archivee: false, // Exclure les dépenses archivées par défaut
   }
 
   if (mois) {
@@ -23,9 +30,14 @@ export async function GET(request: Request) {
     }
   }
 
+  if (categorie) {
+    where.categorie = categorie
+  }
+
   const [depenses, total] = await Promise.all([
     prisma.depense.findMany({
       where,
+      include: { user: { select: { nom: true } } },
       orderBy: { createdAt: 'desc' },
     }),
     prisma.depense.aggregate({
@@ -40,25 +52,31 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
-  if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
 
+  // Le caissier PEUT saisir une dépense (règle v2.4 — corrigé Session B)
   const body = await request.json()
   const { libelle, montant, categorie } = body
 
   if (!libelle || !montant) return apiError('Libelle et montant requis', 400)
 
+  const montantFloat = parseFloat(montant)
+  if (isNaN(montantFloat) || montantFloat <= 0) {
+    return apiError('Montant invalide', 400)
+  }
+
   const depense = await prisma.depense.create({
     data: {
       libelle,
-      montant: parseFloat(montant),
+      montant: montantFloat,
       categorie: categorie || null,
+      userId: session.user.id, // toujours renseigné
       pharmacieId: session.user.pharmacieId,
     },
   })
 
   await createAuditLog({
     action: 'DEPENSE_AJOUTEE',
-    details: { depenseId: depense.id, libelle, montant },
+    details: { depenseId: depense.id, libelle, montant: montantFloat },
     userId: session.user.id,
     pharmacieId: session.user.pharmacieId,
   })
