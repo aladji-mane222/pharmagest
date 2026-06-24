@@ -60,6 +60,7 @@ export async function POST(request: Request) {
         pharmacieId,
         actif: true,
       },
+      include: { user: { select: { nom: true } } },
     })
 
     await createAuditLog({
