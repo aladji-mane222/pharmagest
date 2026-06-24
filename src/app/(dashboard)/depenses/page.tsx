@@ -51,8 +51,11 @@ export default function DepensesPage() {
       })
   }, [mois, categorieFiltre])
 
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMsg(null)
     setSaving(true)
     const res = await fetch('/api/depenses', {
       method: 'POST',
@@ -65,6 +68,8 @@ export default function DepensesPage() {
       setTotalMontant(totalMontant + json.data.montant)
       setForm({ libelle: '', montant: '', categorie: '' })
       setShowForm(false)
+    } else {
+      setErrorMsg(json.error || 'Une erreur est survenue')
     }
     setSaving(false)
   }
@@ -72,11 +77,15 @@ export default function DepensesPage() {
   const handleArchiver = async (id: string, montant: number) => {
     if (!confirm('Archiver cette depense ? Elle ne sera plus visible dans la liste.')) return
 
+    setErrorMsg(null)
     setArchivingId(id)
     const res = await fetch(`/api/depenses/${id}`, { method: 'DELETE' })
+    const json = await res.json()
     if (res.ok) {
       setDepenses(depenses.filter((d) => d.id !== id))
       setTotalMontant(totalMontant - montant)
+    } else {
+      setErrorMsg(json.error || 'Erreur lors de l\'archivage')
     }
     setArchivingId(null)
   }
@@ -151,6 +160,13 @@ export default function DepensesPage() {
         </form>
       )}
 
+
+      {errorMsg && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+          {errorMsg}
+        </div>
+      )}
+      
       <div className="bg-white rounded-xl shadow overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Chargement...</div>
