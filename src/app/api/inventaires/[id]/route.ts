@@ -48,12 +48,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       const stock = stockTheorique._sum.quantite ?? 0
       const ecart = parseInt(ligne.quantiteReelle) - stock
 
-      await prisma.ligneInventaire.update({
-        where: { id: ligne.id },
+      await prisma.ligneInventaire.updateMany({
+        where: { id: ligne.id, inventaireId: params.id },
         data: {
           quantiteReelle: parseInt(ligne.quantiteReelle),
           ecart,
-          // Sauvegarder motifEcart s'il est fourni (Bug #4)
           motifEcart: ligne.motifEcart ?? null,
         },
       })

@@ -118,8 +118,9 @@ export async function POST(request: Request) {
 
   // ─── VÉRIFICATION PLAFOND CRÉDIT (Session C) ──────────────────────────────
   if (clientId && resteADu > 0) {
-    const clientPour = await prisma.client.findUnique({ where: { id: clientId } })
-    if (clientPour && clientPour.soldeCredit + resteADu > clientPour.plafondCredit) {
+    const clientPour = await prisma.client.findFirst({ where: { id: clientId, pharmacieId } })
+    if (!clientPour) return apiError('Client introuvable', 404)
+    if (clientPour.soldeCredit + resteADu > clientPour.plafondCredit) {
       return apiError(
         `Plafond credit depasse pour ${clientPour.nom} — ` +
         `solde actuel: ${clientPour.soldeCredit} GNF, ` +
