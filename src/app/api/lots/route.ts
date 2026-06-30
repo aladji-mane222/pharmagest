@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       numeroLot: numeroLot || null,
       datePeremption: new Date(datePeremption),
       quantite: parseInt(quantite),
-    },
+    } as any,
   })
 
   await createAuditLog({
