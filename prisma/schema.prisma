@@ -21,6 +21,9 @@ enum ModePaiement {
   MOBILE_MONEY
   CARTE
   CREDIT
+  ORANGE_MONEY
+  MTN_MONEY
+  PAIEMENT_MARCHAND
 }
 
 enum StatutVente {
