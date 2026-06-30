@@ -48,11 +48,12 @@ export async function POST(request: Request) {
   if (!session) return apiError('Non autorise', 401)
 
   const body = await request.json()
-  const { lignes, modePaiement, montantPaye, clientId } = body as {
+  const { lignes, modePaiement, montantPaye, clientId, remise = 0 } = body as {
     lignes: { medicamentId: string; quantite: number }[]
     modePaiement?: ModePaiement
     montantPaye: string
     clientId?: string
+    remise?: number
   }
 
   if (!lignes || lignes.length === 0) return apiError('Aucun article dans la vente', 400)
@@ -98,15 +99,17 @@ export async function POST(request: Request) {
   }
   // ─────────────────────────────────────────────────────────────────────────
 
-  let montantTotal = 0
+  let sommeLignes = 0
   const lignesAvecPrix: LigneVenteInput[] = []
 
   for (const ligne of lignes) {
     const medicament = medicamentMap.get(ligne.medicamentId)!
-    const sousTotal = medicament.prixVente * ligne.quantite
-    montantTotal += sousTotal
+    sommeLignes += medicament.prixVente * ligne.quantite
     lignesAvecPrix.push({ ...ligne, prixUnitaire: medicament.prixVente })
   }
+
+  if (remise < 0 || remise > sommeLignes) return apiError('Remise invalide', 400)
+  const montantTotal = sommeLignes - remise
 
   const montantPayeFloat = parseFloat(montantPaye) || montantTotal
   const statut: StatutVente = montantPayeFloat >= montantTotal ? 'COMPLETE' : 'PARTIELLE'
@@ -135,6 +138,7 @@ export async function POST(request: Request) {
         montantTotal,
         montantPaye: montantPayeFloat,
         monnaie,
+        remise,
         modePaiement: modePaiement || 'ESPECES',
         statut,
         pharmacieId,

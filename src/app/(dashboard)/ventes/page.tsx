@@ -25,9 +25,10 @@ export default function VentesPage() {
   const [modePaiement, setModePaiement] = useState('ESPECES')
   const [montantPaye, setMontantPaye] = useState('')
   const [saving, setSaving] = useState(false)
-  const [recu, setRecu] = useState<{ montantTotal: number; monnaie: number; montantPaye: number; lignes: LignePanier[]; numero: string } | null>(null)
+  const [recu, setRecu] = useState<{ montantTotal: number; monnaie: number; montantPaye: number; lignes: LignePanier[]; numero: string; remise: number } | null>(null)
   const [clients, setClients] = useState<{ id: string; nom: string }[]>([])
   const [clientId, setClientId] = useState('')
+  const [remise, setRemise] = useState(0)
 
   useEffect(() => {
     fetch('/api/clients')
@@ -68,8 +69,9 @@ export default function VentesPage() {
   }
 
   const montantTotal = panier.reduce((sum, l) => sum + l.prixUnitaire * l.quantite, 0)
+  const totalNet = Math.max(0, montantTotal - remise)
   const montantPayeFloat = parseFloat(montantPaye) || 0
-  const monnaie = Math.max(0, montantPayeFloat - montantTotal)
+  const monnaie = Math.max(0, montantPayeFloat - totalNet)
 
   const validerVente = async () => {
     if (panier.length === 0) return alert('Panier vide')
@@ -86,16 +88,18 @@ export default function VentesPage() {
         modePaiement,
         montantPaye: montantPayeEffectif,
         clientId: clientId || null,
+        remise,
       }),
     })
 
     const json = await res.json()
     if (res.ok) {
       const numero = `REC-${Date.now()}`
-      setRecu({ montantTotal, monnaie: modePaiement === 'CREDIT' ? 0 : monnaie, montantPaye: parseFloat(montantPayeEffectif) || 0, lignes: [...panier], numero })
+      setRecu({ montantTotal: totalNet, monnaie: modePaiement === 'CREDIT' ? 0 : monnaie, montantPaye: parseFloat(montantPayeEffectif) || 0, lignes: [...panier], numero, remise })
       setPanier([])
       setMontantPaye('')
       setClientId('')
+      setRemise(0)
     } else {
       alert(json.error)
     }
@@ -148,6 +152,12 @@ export default function VentesPage() {
                   </tbody>
                 </table>
                 <div className="space-y-1 text-sm border-t pt-2">
+                  {recu.remise > 0 && (
+                    <div className="flex justify-between text-orange-500">
+                      <span>Remise</span>
+                      <span>-{formatMontant(recu.remise)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between font-bold text-green-600">
                     <span>Total</span>
                     <span>{formatMontant(recu.montantTotal)}</span>
@@ -272,9 +282,21 @@ export default function VentesPage() {
           <h2 className="font-semibold text-gray-700 text-lg">Paiement</h2>
 
           <div className="border-t pt-4">
+            {remise > 0 && (
+              <div className="flex justify-between text-sm text-gray-400 mb-1">
+                <span>Sous-total</span>
+                <span>{formatMontant(montantTotal)}</span>
+              </div>
+            )}
+            {remise > 0 && (
+              <div className="flex justify-between text-sm text-orange-500 mb-1">
+                <span>Remise</span>
+                <span>-{formatMontant(remise)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-lg font-bold mb-4">
               <span>Total</span>
-              <span className="text-green-600">{formatMontant(montantTotal)}</span>
+              <span className="text-green-600">{formatMontant(totalNet)}</span>
             </div>
           </div>
 
@@ -295,6 +317,9 @@ export default function VentesPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
               <option value="ESPECES">Especes</option>
               <option value="MOBILE_MONEY">Mobile Money</option>
+              <option value="ORANGE_MONEY">Orange Money</option>
+              <option value="MTN_MONEY">MTN Money</option>
+              <option value="PAIEMENT_MARCHAND">Paiement Marchand</option>
               <option value="CARTE">Carte</option>
               <option value="CREDIT">Credit</option>
             </select>
@@ -305,6 +330,19 @@ export default function VentesPage() {
             <input type="number" value={montantPaye} onChange={(e) => setMontantPaye(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-lg"
               placeholder="0" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Remise (GNF)</label>
+            <input
+              type="number"
+              min={0}
+              max={montantTotal}
+              value={remise || ''}
+              onChange={(e) => setRemise(Math.max(0, Math.min(Number(e.target.value), montantTotal)))}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              placeholder="0"
+            />
           </div>
 
           {montantPayeFloat > 0 && (
