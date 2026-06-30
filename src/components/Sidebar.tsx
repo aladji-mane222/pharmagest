@@ -8,6 +8,7 @@ const menuItems = [
   { href: '/dashboard', label: 'Tableau de bord', icon: '📊' },
   { href: '/medicaments', label: 'Medicaments', icon: '💊' },
   { href: '/stock', label: 'Stock', icon: '📦' },
+  { href: '/stock/mouvements', label: 'Mouvements stock', icon: '🔄' },
   { href: '/ventes', label: 'Ventes POS', icon: '🛒' },
   { href: '/ventes/historique', label: 'Historique ventes', icon: '🧾' },
   { href: '/caisse', label: 'Caisse', icon: '💰' },
