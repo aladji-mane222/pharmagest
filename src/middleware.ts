@@ -16,6 +16,11 @@ export default withAuth(
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
+    // Tableau de bord crédits — Admin uniquement
+    if (pathname.startsWith('/credits') && token?.role === 'CAISSIER') {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+
     return NextResponse.next()
   },
   {
@@ -39,6 +44,7 @@ export const config = {
     '/caisse/:path*',
     '/inventaire/:path*',
     '/depenses/:path*',
+    '/credits/:path*',
     '/superadmin/:path*',
   ],
 }

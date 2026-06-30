@@ -10,14 +10,16 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const search = searchParams.get('search') || ''
+  const avecCredit = searchParams.get('avecCredit') === 'true'
 
   const clients = await prisma.client.findMany({
     where: {
       pharmacieId: session.user.pharmacieId,
       actif: true,
       ...(search && { nom: { contains: search, mode: 'insensitive' as const } }),
+      ...(avecCredit && { soldeCredit: { gt: 0 } }),
     },
-    orderBy: { nom: 'asc' },
+    orderBy: avecCredit ? { soldeCredit: 'desc' } : { nom: 'asc' },
   })
 
   return new Response(JSON.stringify({ success: true, data: clients }), {
