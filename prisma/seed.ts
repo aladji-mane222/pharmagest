@@ -78,7 +78,7 @@ async function main() {
         datePeremption: new Date('2027-12-31'),
         quantite: Math.floor(Math.random() * 200) + 50,
         medicamentId: medicament.id,
-      },
+      } as any,
     })
     console.log('Médicament créé:', medicament.nom)
   }
@@ -98,6 +98,42 @@ async function main() {
     },
   })
   console.log('Fournisseur créé')
+
+  // Dépenses de démonstration — 7 catégories standard, 3 derniers mois
+  const depensesDemo = [
+    // Avril 2026
+    { id: 'dep-avril-salaires',    libelle: 'Salaires du personnel — Avril 2026',   montant: 500000, categorie: 'Salaires',               createdAt: new Date('2026-04-03') },
+    { id: 'dep-avril-loyer',       libelle: 'Loyer du local — Avril 2026',           montant: 150000, categorie: 'Loyer',                  createdAt: new Date('2026-04-03') },
+    { id: 'dep-avril-elec',        libelle: 'Facture électricité & eau — Avril',     montant:  45000, categorie: 'Électricité & eau',       createdAt: new Date('2026-04-15') },
+    // Mai 2026
+    { id: 'dep-mai-salaires',      libelle: 'Salaires du personnel — Mai 2026',     montant: 500000, categorie: 'Salaires',               createdAt: new Date('2026-05-02') },
+    { id: 'dep-mai-loyer',         libelle: 'Loyer du local — Mai 2026',             montant: 150000, categorie: 'Loyer',                  createdAt: new Date('2026-05-02') },
+    { id: 'dep-mai-fournitures',   libelle: 'Fournitures & matériel de bureau',      montant:  25000, categorie: 'Fournitures & matériel', createdAt: new Date('2026-05-18') },
+    { id: 'dep-mai-impots',        libelle: 'Taxe patente & impôts trimestriels',    montant:  80000, categorie: 'Impôts & taxes',          createdAt: new Date('2026-05-28') },
+    // Juin 2026
+    { id: 'dep-juin-salaires',     libelle: 'Salaires du personnel — Juin 2026',    montant: 500000, categorie: 'Salaires',               createdAt: new Date('2026-06-02') },
+    { id: 'dep-juin-loyer',        libelle: 'Loyer du local — Juin 2026',            montant: 150000, categorie: 'Loyer',                  createdAt: new Date('2026-06-02') },
+    { id: 'dep-juin-reparation',   libelle: 'Réparation groupe électrogène',         montant:  30000, categorie: 'Réparations & entretien', createdAt: new Date('2026-06-10') },
+    { id: 'dep-juin-autres',       libelle: 'Diverses dépenses — Juin',              montant:  20000, categorie: 'Autres charges',         createdAt: new Date('2026-06-25') },
+  ]
+
+  for (const dep of depensesDemo) {
+    await prisma.depense.upsert({
+      where: { id: dep.id },
+      update: {},
+      create: {
+        id: dep.id,
+        libelle: dep.libelle,
+        montant: dep.montant,
+        categorie: dep.categorie,
+        archivee: false,
+        pharmacieId: pharmacie.id,
+        userId: admin.id,
+        createdAt: dep.createdAt,
+      } as any,
+    })
+  }
+  console.log('Dépenses de démonstration créées (11 entrées, 3 mois)')
 
   console.log('Seed terminé avec succès !')
 }

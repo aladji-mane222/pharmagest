@@ -79,29 +79,22 @@ export async function POST(request: Request) {
   const medicamentMap = new Map(medicaments.map(m => [m.id, m]))
 
   // ─── VÉRIFICATION STOCK AVANT TRANSACTION (Bug #3) ───────────────────────
-  // Récupérer le stock total de chaque médicament en une seule requête SQL
-  const stocksResult = await prisma.$queryRaw<{ medicamentId: string; stockTotal: number }[]>`
-    SELECT l."medicamentId", COALESCE(SUM(l.quantite), 0)::int as "stockTotal"
-    FROM "Lot" l
-    JOIN "Medicament" m ON m.id = l."medicamentId"
-    WHERE l."medicamentId" IN (${medicamentIds.join(',') as any})
-      AND l.actif = true
-      AND m."pharmacieId" = ${pharmacieId}
-    GROUP BY l."medicamentId"
-  `
-  const stockMap = new Map(stocksResult.map(s => [s.medicamentId, s.stockTotal]))
-
+  const ruptures: string[] = []
   for (const ligne of lignes) {
     const medicament = medicamentMap.get(ligne.medicamentId)
     if (!medicament) return apiError(`Medicament non trouve: ${ligne.medicamentId}`, 404)
 
-    const stockTotal = stockMap.get(ligne.medicamentId) ?? 0
+    const agg = await prisma.lot.aggregate({
+      where: { medicamentId: ligne.medicamentId, actif: true },
+      _sum: { quantite: true },
+    })
+    const stockTotal = agg._sum.quantite ?? 0
     if (stockTotal < ligne.quantite) {
-      return apiError(
-        `Stock insuffisant pour ${medicament.nom}: ${stockTotal} disponible(s), ${ligne.quantite} demande(s)`,
-        400
-      )
+      ruptures.push(`${medicament.nom}: ${stockTotal} disponible(s), ${ligne.quantite} demande(s)`)
     }
+  }
+  if (ruptures.length > 0) {
+    return apiError(`Stock insuffisant — ${ruptures.join(' | ')}`, 400)
   }
   // ─────────────────────────────────────────────────────────────────────────
 

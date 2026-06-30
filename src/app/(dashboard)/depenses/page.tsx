@@ -98,6 +98,22 @@ export default function DepensesPage() {
           <p className="text-gray-500 text-sm mt-1">
             Total : <span className="font-semibold text-red-600">{formatMontant(totalMontant)}</span>
           </p>
+          {depenses.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
+              {Object.entries(
+                depenses.reduce<Record<string, number>>((acc, d) => {
+                  if (d.categorie) acc[d.categorie] = (acc[d.categorie] || 0) + d.montant
+                  return acc
+                }, {})
+              )
+                .sort((a, b) => b[1] - a[1])
+                .map(([cat, total]) => (
+                  <span key={cat} className="text-xs text-gray-400">
+                    {cat} : <span className="font-medium text-gray-600">{formatMontant(total)}</span>
+                  </span>
+                ))}
+            </div>
+          )}
         </div>
         <div className="flex gap-3">
           <select
