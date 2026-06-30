@@ -12,6 +12,7 @@ const menuItems = [
   { href: '/ventes/historique', label: 'Historique ventes', icon: '🧾' },
   { href: '/caisse', label: 'Caisse', icon: '💰' },
   { href: '/clients', label: 'Clients', icon: '👥' },
+  { href: '/credits', label: 'Credits', icon: '💳', adminOnly: true },
   { href: '/fournisseurs', label: 'Fournisseurs', icon: '🚚' },
   { href: '/fournisseurs/commandes', label: 'Commandes', icon: '📝' },
   { href: '/inventaire', label: 'Inventaire', icon: '📋' },
@@ -24,6 +25,7 @@ const menuItems = [
 export default function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
+  const isAdmin = session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN'
 
   return (
     <aside className="w-64 min-h-screen bg-green-800 text-white flex flex-col">
@@ -33,7 +35,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {menuItems.map((item) => {
+        {menuItems.filter((item) => !item.adminOnly || isAdmin).map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Link

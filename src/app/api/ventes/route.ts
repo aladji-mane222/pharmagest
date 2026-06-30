@@ -111,6 +111,22 @@ export async function POST(request: Request) {
   const montantPayeFloat = parseFloat(montantPaye) || montantTotal
   const statut: StatutVente = montantPayeFloat >= montantTotal ? 'COMPLETE' : 'PARTIELLE'
   const monnaie = Math.max(0, montantPayeFloat - montantTotal)
+  const resteADu = Math.max(0, montantTotal - montantPayeFloat)
+
+  // ─── VÉRIFICATION PLAFOND CRÉDIT (Session C) ──────────────────────────────
+  if (clientId && resteADu > 0) {
+    const clientPour = await prisma.client.findUnique({ where: { id: clientId } })
+    if (clientPour && clientPour.soldeCredit + resteADu > clientPour.plafondCredit) {
+      return apiError(
+        `Plafond credit depasse pour ${clientPour.nom} — ` +
+        `solde actuel: ${clientPour.soldeCredit} GNF, ` +
+        `plafond: ${clientPour.plafondCredit} GNF, ` +
+        `credit demande: ${resteADu} GNF`,
+        400
+      )
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   const vente = await prisma.$transaction(async (tx) => {
     // 1. Créer la vente
