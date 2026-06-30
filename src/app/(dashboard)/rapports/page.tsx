@@ -1,10 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
 import { exporterExcel, exporterCSV } from '@/lib/export'
+import { pdf } from '@react-pdf/renderer'
+import RapportPDF from '@/components/rapports/RapportPDF'
 
 type TypeRapport = 'ventes' | 'stock' | 'benefice' | 'credits'
+
+const TITRES: Record<TypeRapport, string> = {
+  benefice: 'Rapport Bénéfice Net',
+  ventes:   'Rapport des Ventes',
+  stock:    'Rapport de Stock',
+  credits:  'Rapport des Crédits Clients',
+}
 
 export default function RapportsPage() {
   const [type, setType] = useState<TypeRapport>('benefice')
@@ -12,6 +21,43 @@ export default function RapportsPage() {
   const [fin, setFin] = useState(() => new Date().toISOString().slice(0, 10))
   const [data, setData] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(false)
+  const [generatingPDF, setGeneratingPDF] = useState(false)
+  const [nomPharmacie, setNomPharmacie] = useState('Ma Pharmacie')
+
+  // Récupère le nom de la pharmacie depuis les paramètres (une seule fois)
+  useEffect(() => {
+    fetch('/api/parametres')
+      .then((r) => r.json())
+      .then((json) => {
+        const nom = json.data?.nom ?? json.data?.pharmacie?.nom
+        if (nom) setNomPharmacie(nom)
+      })
+      .catch(() => {})
+  }, [])
+
+  const handleExportPDF = async () => {
+    if (!data) return
+    setGeneratingPDF(true)
+    try {
+      const blob = await pdf(
+        <RapportPDF
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          data={data as any}
+          titre={TITRES[type]}
+          periode={{ debut, fin }}
+          nomPharmacie={nomPharmacie}
+        />
+      ).toBlob()
+      const url = URL.createObjectURL(blob)
+      const a   = document.createElement('a')
+      a.href     = url
+      a.download = `rapport-${type}-${debut}-${fin}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setGeneratingPDF(false)
+    }
+  }
 
   const genererRapport = async () => {
     setLoading(true)
@@ -71,6 +117,12 @@ export default function RapportsPage() {
               }}
               className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 text-sm">
               Exporter CSV
+            </button>
+            <button
+              onClick={handleExportPDF}
+              disabled={generatingPDF}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+              {generatingPDF ? 'Génération PDF...' : 'Exporter PDF'}
             </button>
           </div>
         )}
