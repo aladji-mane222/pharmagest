@@ -15,7 +15,8 @@ export async function GET() {
     SELECT 
       i.*,
       json_build_object('nom', u.nom) as user,
-      (SELECT COUNT(*) FROM "LigneInventaire" WHERE "inventaireId" = i.id)::int as "nbLignes"
+      (SELECT COUNT(*) FROM "LigneInventaire" WHERE "inventaireId" = i.id)::int                   as "nbLignes",
+      (SELECT COUNT(*) FROM "LigneInventaire" WHERE "inventaireId" = i.id AND ecart <> 0)::int as "nbEcarts"
     FROM "Inventaire" i
     JOIN "User" u ON u.id = i."userId"
     WHERE i."pharmacieId" = ${pharmacieId}
