@@ -13,10 +13,7 @@ interface Client {
 }
 
 function BarreProgression({ pct }: { pct: number }) {
-  const couleur =
-    pct > 80 ? 'bg-red-500' :
-    pct > 50 ? 'bg-orange-400' :
-               'bg-green-500'
+  const couleur = pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-orange-400' : 'bg-green-500'
   return (
     <div className="flex items-center gap-2">
       <div className="w-24 bg-gray-100 rounded-full h-2 overflow-hidden">
@@ -42,36 +39,72 @@ export default function CreditsPage() {
       })
   }, [])
 
-  const totalDu = clients.reduce((sum, c) => sum + c.soldeCredit, 0)
+  const totalDu       = clients.reduce((sum, c) => sum + c.soldeCredit, 0)
+  const plusGrosDebiteur = clients.length > 0
+    ? clients.reduce((max, c) => c.soldeCredit > max.soldeCredit ? c : max, clients[0])
+    : null
+
+  const envoyerWhatsApp = (client: Client) => {
+    if (!client.telephone) return alert('Ce client n\'a pas de numéro de téléphone enregistré')
+    const numero  = client.telephone.replace(/\D/g, '')
+    const message = encodeURIComponent(
+      `Bonjour ${client.nom},\n\nNous vous rappelons que vous avez un solde de crédit de ${client.soldeCredit.toLocaleString('fr-FR')} GNF en attente de règlement.\n\nMerci de bien vouloir régulariser votre situation.\n\nCordialement,\nVotre pharmacie`
+    )
+    window.open(`https://wa.me/${numero}?text=${message}`, '_blank')
+  }
 
   return (
     <div className="p-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Credits en cours</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          Total du :{' '}
-          <span className="font-semibold text-red-600">{formatMontant(totalDu)}</span>
-          {clients.length > 0 && (
-            <span className="ml-2 text-gray-400">— {clients.length} client{clients.length > 1 ? 's' : ''}</span>
-          )}
-        </p>
+        <h1 className="text-2xl font-bold text-gray-800">Crédits en cours</h1>
       </div>
 
+      {/* KPIs */}
+      {!loading && (
+        <div className="grid grid-cols-3 gap-6 mb-6">
+          <div className="bg-white rounded-xl shadow p-5">
+            <p className="text-sm text-gray-500 mb-1">Total dû</p>
+            <p className="text-2xl font-bold text-red-600">{formatMontant(totalDu)}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow p-5">
+            <p className="text-sm text-gray-500 mb-1">Clients avec crédit</p>
+            <p className="text-2xl font-bold text-gray-800">
+              {clients.length}
+              <span className="text-sm font-normal text-gray-400 ml-1">
+                client{clients.length > 1 ? 's' : ''}
+              </span>
+            </p>
+          </div>
+          <div className="bg-white rounded-xl shadow p-5">
+            <p className="text-sm text-gray-500 mb-1">Plus gros débiteur</p>
+            {plusGrosDebiteur ? (
+              <>
+                <p className="text-base font-bold text-gray-800 truncate">{plusGrosDebiteur.nom}</p>
+                <p className="text-sm font-semibold text-red-500">{formatMontant(plusGrosDebiteur.soldeCredit)}</p>
+              </>
+            ) : (
+              <p className="text-gray-400 text-sm">—</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tableau */}
       <div className="bg-white rounded-xl shadow overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Chargement...</div>
         ) : clients.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Aucun credit en cours</div>
+          <div className="p-8 text-center text-gray-400">Aucun crédit en cours ✓</div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left px-6 py-3 text-gray-600">Nom</th>
-                <th className="text-left px-6 py-3 text-gray-600">Telephone</th>
-                <th className="text-right px-6 py-3 text-gray-600">Solde du</th>
-                <th className="text-right px-6 py-3 text-gray-600">Plafond</th>
-                <th className="text-left px-6 py-3 text-gray-600">% utilise</th>
-                <th className="text-right px-6 py-3 text-gray-600">Actions</th>
+                <th className="text-left px-6 py-3 text-gray-600 font-medium">Nom</th>
+                <th className="text-left px-6 py-3 text-gray-600 font-medium">Téléphone</th>
+                <th className="text-right px-6 py-3 text-gray-600 font-medium">Solde dû</th>
+                <th className="text-right px-6 py-3 text-gray-600 font-medium">Plafond</th>
+                <th className="text-left px-6 py-3 text-gray-600 font-medium">% utilisé</th>
+                <th className="text-right px-6 py-3 text-gray-600 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -93,12 +126,20 @@ export default function CreditsPage() {
                       <BarreProgression pct={pct} />
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Link
-                        href={`/clients/${c.id}`}
-                        className="text-green-600 hover:text-green-800 text-xs font-medium"
-                      >
-                        Voir fiche
-                      </Link>
+                      <div className="flex items-center justify-end gap-3">
+                        {c.telephone && (
+                          <button
+                            onClick={() => envoyerWhatsApp(c)}
+                            className="text-green-600 hover:text-green-800 text-xs font-medium"
+                            title="Relancer par WhatsApp">
+                            📱 Relancer
+                          </button>
+                        )}
+                        <Link href={`/clients/${c.id}`}
+                          className="text-green-600 hover:underline text-xs font-medium">
+                          Voir fiche →
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 )
