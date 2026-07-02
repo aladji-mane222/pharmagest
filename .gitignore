@@ -39,3 +39,7 @@ next-env.d.ts
 /src/generated/prisma
 
 .vercel
+
+CONTEXTE.md
+JOURNAL.md
+*.docx
