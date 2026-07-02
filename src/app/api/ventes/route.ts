@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ModePaiement, StatutVente } from '@prisma/client'
+import { Prisma, ModePaiement, StatutVente } from '@prisma/client'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { decrementerLotFifo } from '@/lib/fifo'
 import { createAuditLog } from '@/lib/audit'
@@ -12,35 +12,66 @@ interface LigneVenteInput {
   prixUnitaire: number
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
 
   const pharmacieId = session.user.pharmacieId
+  const { searchParams } = new URL(request.url)
 
-  const ventes = await prisma.$queryRaw<any[]>`
-    SELECT 
-      v.*,
-      json_build_object('nom', u.nom) as user,
-      CASE WHEN c.id IS NOT NULL THEN json_build_object('nom', c.nom) ELSE NULL END as client,
-      (
-        SELECT json_agg(l_data)
-        FROM (
-          SELECT l.*, json_build_object('nom', m.nom) as medicament
-          FROM "LigneVente" l
-          JOIN "Medicament" m ON m.id = l."medicamentId"
-          WHERE l."venteId" = v.id
-        ) l_data
-      ) as lignes
-    FROM "Vente" v
-    JOIN "User" u ON u.id = v."userId"
-    LEFT JOIN "Client" c ON c.id = v."clientId"
-    WHERE v."pharmacieId" = ${pharmacieId}
-    ORDER BY v."createdAt" DESC
-    LIMIT 20
-  `
+  const page      = Math.max(1, parseInt(searchParams.get('page')   || '1'))
+  const limite    = Math.max(1, Math.min(100, parseInt(searchParams.get('limite') || '20')))
+  const statut    = searchParams.get('statut')    || ''
+  const dateDebut = searchParams.get('dateDebut') || ''
+  const dateFin   = searchParams.get('dateFin')   || ''
 
-  return apiSuccess(ventes)
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`v."pharmacieId" = ${pharmacieId}`,
+  ]
+
+  if (statut) {
+    conditions.push(Prisma.sql`v.statut = ${statut}::"StatutVente"`)
+  }
+  if (dateDebut) {
+    conditions.push(Prisma.sql`v."createdAt" >= ${new Date(dateDebut)}`)
+  }
+  if (dateFin) {
+    const fin = new Date(dateFin)
+    fin.setUTCHours(23, 59, 59, 999)
+    conditions.push(Prisma.sql`v."createdAt" <= ${fin}`)
+  }
+
+  const whereClause = Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
+  const offset      = (page - 1) * limite
+
+  const [ventes, countResult] = await Promise.all([
+    prisma.$queryRaw<any[]>`
+      SELECT
+        v.id, v."montantTotal", v."montantPaye", v.monnaie, v.remise,
+        v."modePaiement", v.statut, v."createdAt",
+        json_build_object('nom', u.nom) as user,
+        CASE WHEN c.id IS NOT NULL
+          THEN json_build_object('id', c.id, 'nom', c.nom)
+          ELSE NULL
+        END as client
+      FROM "Vente" v
+      JOIN "User" u ON u.id = v."userId"
+      LEFT JOIN "Client" c ON c.id = v."clientId"
+      ${whereClause}
+      ORDER BY v."createdAt" DESC
+      LIMIT ${limite} OFFSET ${offset}
+    `,
+    prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(*)::bigint as count
+      FROM "Vente" v
+      ${whereClause}
+    `,
+  ])
+
+  const total      = Number(countResult[0]?.count ?? 0)
+  const totalPages = Math.ceil(total / limite)
+
+  return apiSuccess({ ventes, total, page, totalPages })
 }
 
 export async function POST(request: Request) {
@@ -63,12 +94,7 @@ export async function POST(request: Request) {
 
   // Vérifier la session caisse du caissier connecté
   const sessionCaisse = await prisma.sessionCaisse.findFirst({
-    where: {
-      pharmacieId,
-      userId,
-      dateCloture: null,
-      actif: true,
-    },
+    where: { pharmacieId, userId, dateCloture: null, actif: true },
   })
   if (!sessionCaisse) return apiError('Aucune session caisse ouverte pour cet utilisateur', 400)
 
@@ -79,7 +105,7 @@ export async function POST(request: Request) {
   })
   const medicamentMap = new Map(medicaments.map(m => [m.id, m]))
 
-  // ─── VÉRIFICATION STOCK AVANT TRANSACTION (Bug #3) ───────────────────────
+  // Vérification stock avant transaction (Bug #3)
   const ruptures: string[] = []
   for (const ligne of lignes) {
     const medicament = medicamentMap.get(ligne.medicamentId)
@@ -97,7 +123,6 @@ export async function POST(request: Request) {
   if (ruptures.length > 0) {
     return apiError(`Stock insuffisant — ${ruptures.join(' | ')}`, 400)
   }
-  // ─────────────────────────────────────────────────────────────────────────
 
   let sommeLignes = 0
   const lignesAvecPrix: LigneVenteInput[] = []
@@ -116,7 +141,7 @@ export async function POST(request: Request) {
   const monnaie = Math.max(0, montantPayeFloat - montantTotal)
   const resteADu = Math.max(0, montantTotal - montantPayeFloat)
 
-  // ─── VÉRIFICATION PLAFOND CRÉDIT (Session C) ──────────────────────────────
+  // Vérification plafond crédit
   if (clientId && resteADu > 0) {
     const clientPour = await prisma.client.findFirst({ where: { id: clientId, pharmacieId } })
     if (!clientPour) return apiError('Client introuvable', 404)
@@ -130,7 +155,6 @@ export async function POST(request: Request) {
       )
     }
   }
-  // ─────────────────────────────────────────────────────────────────────────
 
   const vente = await prisma.$transaction(async (tx) => {
     // 1. Créer la vente
@@ -149,7 +173,7 @@ export async function POST(request: Request) {
         lignes: {
           create: lignesAvecPrix.map((l) => ({
             medicamentId: l.medicamentId,
-            quantite: l.quantite,
+            quantite:     l.quantite,
             prixUnitaire: l.prixUnitaire,
           })),
         },
@@ -160,11 +184,10 @@ export async function POST(request: Request) {
     // 2. Décrémenter les lots FIFO et enregistrer les mouvements
     for (const ligne of lignesAvecPrix) {
       await decrementerLotFifo(ligne.medicamentId, pharmacieId, ligne.quantite, tx)
-
       await tx.mouvementStock.create({
         data: {
-          type: 'SORTIE',
-          quantite: ligne.quantite,
+          type:        'SORTIE',
+          quantite:    ligne.quantite,
           medicamentId: ligne.medicamentId,
           userId,
         },
@@ -176,7 +199,7 @@ export async function POST(request: Request) {
       const resteADoit = montantTotal - montantPayeFloat
       await tx.client.update({
         where: { id: clientId },
-        data: { soldeCredit: { increment: resteADoit } },
+        data:  { soldeCredit: { increment: resteADoit } },
       })
     }
 
@@ -184,8 +207,8 @@ export async function POST(request: Request) {
   })
 
   await createAuditLog({
-    action: 'VENTE_EFFECTUEE',
-    details: { venteId: vente.id, montantTotal, statut },
+    action:   'VENTE_EFFECTUEE',
+    details:  { venteId: vente.id, montantTotal, statut },
     userId,
     pharmacieId,
   })
