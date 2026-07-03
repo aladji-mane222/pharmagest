@@ -164,7 +164,7 @@ export async function POST(request: Request) {
         montantPaye: montantPayeFloat,
         monnaie,
         remise,
-        modePaiement: modePaiement || 'ESPECES',
+        modePaiement: (modePaiement || 'ESPECES') as ModePaiement,
         statut,
         pharmacieId,
         userId,
