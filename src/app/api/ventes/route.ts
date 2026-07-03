@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   const body = await request.json()
   const { lignes, modePaiement, montantPaye, clientId, remise = 0 } = body as {
     lignes: { medicamentId: string; quantite: number }[]
-    modePaiement?: ModePaiement
+    modePaiement?: string
     montantPaye: string
     clientId?: string
     remise?: number
@@ -137,7 +137,7 @@ export async function POST(request: Request) {
   const montantTotal = sommeLignes - remise
 
   const montantPayeFloat = parseFloat(montantPaye) || montantTotal
-  const statut: StatutVente = montantPayeFloat >= montantTotal ? 'COMPLETE' : 'PARTIELLE'
+  const statut = montantPayeFloat >= montantTotal ? 'COMPLETE' : 'PARTIELLE'
   const monnaie = Math.max(0, montantPayeFloat - montantTotal)
   const resteADu = Math.max(0, montantTotal - montantPayeFloat)
 

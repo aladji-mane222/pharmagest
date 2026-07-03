@@ -16,34 +16,33 @@ export async function GET(request: Request) {
           const now = new Date()
           const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-          // Optimisation : Utilisation de requêtes plus légères et ciblées
-          const [ventesJour, stockBasCount, sessionCaisse] = await Promise.all([
+          const [ventesJour, medicamentsAvecStock, sessionCaisse] = await Promise.all([
             prisma.vente.aggregate({
               where: { pharmacieId, createdAt: { gte: debutJour }, statut: 'COMPLETE' },
               _sum: { montantTotal: true },
               _count: true,
             }),
-            // Compter uniquement les médicaments en stock bas (SQL optimisé)
-            prisma.$queryRaw<any[]>`
-              SELECT COUNT(*)::int as count
-              FROM "Medicament" m
-              WHERE m."pharmacieId" = ${pharmacieId} AND m.actif = true
-              AND (SELECT COALESCE(SUM(l.quantite), 0) FROM "Lot" l WHERE l."medicamentId" = m.id AND l.actif = true) < m."stockMinimum"
-            `,
-            prisma.sessionCaisse.findFirst({
-              where: {
-                pharmacieId,
-                dateCloture: null, // v2.4 logic
-                actif: true
+            prisma.medicament.findMany({
+              where: { pharmacieId, actif: true },
+              select: {
+                stockMinimum: true,
+                lots: { where: { actif: true }, select: { quantite: true } },
               },
-              select: { id: true } // On n'a besoin que de savoir si elle existe
+            }),
+            prisma.sessionCaisse.findFirst({
+              where: { pharmacieId, dateCloture: null, actif: true },
+              select: { id: true },
             }),
           ])
+
+          const stockBas = medicamentsAvecStock.filter(
+            m => m.lots.reduce((s, l) => s + l.quantite, 0) < m.stockMinimum
+          ).length
 
           const data = {
             caJour: ventesJour._sum.montantTotal ?? 0,
             nbVentes: ventesJour._count,
-            stockBas: stockBasCount[0]?.count ?? 0,
+            stockBas,
             sessionOuverte: !!sessionCaisse,
             timestamp: new Date().toISOString(),
           }
@@ -54,10 +53,8 @@ export async function GET(request: Request) {
         }
       }
 
-      // Premier envoi immédiat
       await sendData()
 
-      // Intervalle de 30s (suffisant pour le dashboard)
       const interval = setInterval(sendData, 30000)
 
       request.signal.addEventListener('abort', () => {
@@ -65,7 +62,7 @@ export async function GET(request: Request) {
         try {
           controller.close()
         } catch (e) {
-          // Déjà fermé
+          // already closed
         }
       })
     },

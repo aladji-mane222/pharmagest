@@ -13,28 +13,23 @@ export async function GET() {
   const debutMois = new Date(now.getFullYear(), now.getMonth(), 1)
   const dans90Jours = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
 
-  // Optimisation : Requêtes SQL brutes pour les calculs de stock bas (très performant)
   const [
     ventesJour,
     ventesMois,
     totalMedicaments,
     ventesRecentes,
-    stockBasStats,
-    peremptionsStats
+    medicamentsAvecStock,
+    peremptionsStats,
   ] = await Promise.all([
-    // CA du jour
     prisma.vente.aggregate({
       where: { pharmacieId, createdAt: { gte: debutJour }, statut: 'COMPLETE' },
       _sum: { montantTotal: true },
     }),
-    // CA du mois
     prisma.vente.aggregate({
       where: { pharmacieId, createdAt: { gte: debutMois }, statut: 'COMPLETE' },
       _sum: { montantTotal: true },
     }),
-    // Total médicaments
     prisma.medicament.count({ where: { pharmacieId, actif: true } }),
-    // Ventes récentes (limité aux champs nécessaires)
     prisma.vente.findMany({
       where: { pharmacieId },
       orderBy: { createdAt: 'desc' },
@@ -43,29 +38,33 @@ export async function GET() {
         id: true,
         montantTotal: true,
         createdAt: true,
-        user: { select: { nom: true } }
-      }
+        user: { select: { nom: true } },
+      },
     }),
-    // Stock bas (SQL pour éviter de charger tous les produits en mémoire)
-    prisma.$queryRaw<any[]>`
-      SELECT m.id, m.nom, m."stockMinimum", COALESCE(SUM(l.quantite), 0)::int as "stockTotal"
-      FROM "Medicament" m
-      LEFT JOIN "Lot" l ON l."medicamentId" = m.id AND l.actif = true
-      WHERE m."pharmacieId" = ${pharmacieId} AND m.actif = true
-      GROUP BY m.id, m.nom, m."stockMinimum"
-      HAVING COALESCE(SUM(l.quantite), 0) < m."stockMinimum"
-    `,
-    // Péremptions proches (SQL)
-    prisma.$queryRaw<any[]>`
-      SELECT l.id, l."datePeremption", m.nom as "medicamentNom"
-      FROM "Lot" l
-      JOIN "Medicament" m ON m.id = l."medicamentId"
-      WHERE m."pharmacieId" = ${pharmacieId} AND l.actif = true
-      AND l."datePeremption" <= ${dans90Jours} AND l."datePeremption" >= ${now}
-      ORDER BY l."datePeremption" ASC
-      LIMIT 5
-    `
+    prisma.medicament.findMany({
+      where: { pharmacieId, actif: true },
+      select: {
+        id: true,
+        nom: true,
+        stockMinimum: true,
+        lots: { where: { actif: true }, select: { quantite: true } },
+      },
+    }),
+    prisma.lot.findMany({
+      where: {
+        actif: true,
+        datePeremption: { lte: dans90Jours, gte: now },
+        medicament: { pharmacieId },
+      },
+      include: { medicament: { select: { nom: true } } },
+      orderBy: { datePeremption: 'asc' },
+      take: 5,
+    }),
   ])
+
+  const stockBasStats = medicamentsAvecStock
+    .map(m => ({ ...m, stockTotal: m.lots.reduce((s, l) => s + l.quantite, 0) }))
+    .filter(m => m.stockTotal < m.stockMinimum)
 
   return apiSuccess({
     caJour: ventesJour._sum.montantTotal ?? 0,
@@ -74,13 +73,13 @@ export async function GET() {
     stockBasDetails: stockBasStats.slice(0, 5).map(m => ({
       id: m.id,
       nom: m.nom,
-      lots: [{ quantite: m.stockTotal }]
+      lots: [{ quantite: m.stockTotal }],
     })),
     peremptions: peremptionsStats.length,
     peremptionsDetails: peremptionsStats.map(l => ({
       id: l.id,
       datePeremption: l.datePeremption,
-      medicament: { nom: l.medicamentNom }
+      medicament: { nom: l.medicament.nom },
     })),
     totalMedicaments,
     ventesRecentes,
