@@ -17,7 +17,7 @@ export async function createAuditLog({
     await prisma.auditLog.create({
       data: {
         action,
-        details: details ?? undefined,
+        details: details ? (details as object) : undefined,
         userId: userId ?? undefined,
         pharmacieId: pharmacieId ?? undefined,
       },

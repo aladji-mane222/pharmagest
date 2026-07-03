@@ -44,4 +44,13 @@ CONTEXTE.md
 JOURNAL.md
 *.docx
 
-tsconfig.seed.json
+# Local SQLite database
+prisma/dev.db
+prisma/*.db-journal
+
+# Claude Code local config
+.claude/settings.json
+.claude/settings.local.json
+
+.vercel
+.env*.local
