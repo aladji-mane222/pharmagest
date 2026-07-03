@@ -10,19 +10,21 @@ export async function GET() {
 
   const pharmacieId = session.user.pharmacieId
 
-  // Optimisation : SQL brut pour éviter les overheads de Prisma sur les listes
-  const inventaires = await prisma.$queryRaw<any[]>`
-    SELECT 
-      i.*,
-      json_build_object('nom', u.nom) as user,
-      (SELECT COUNT(*) FROM "LigneInventaire" WHERE "inventaireId" = i.id)::int                   as "nbLignes",
-      (SELECT COUNT(*) FROM "LigneInventaire" WHERE "inventaireId" = i.id AND ecart <> 0)::int as "nbEcarts"
-    FROM "Inventaire" i
-    JOIN "User" u ON u.id = i."userId"
-    WHERE i."pharmacieId" = ${pharmacieId}
-    ORDER BY i."createdAt" DESC
-    LIMIT 10
-  `
+  const inventairesRaw = await prisma.inventaire.findMany({
+    where: { pharmacieId },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+    include: {
+      user: { select: { nom: true } },
+      lignes: { select: { ecart: true } },
+    },
+  })
+
+  const inventaires = inventairesRaw.map(({ lignes, ...i }) => ({
+    ...i,
+    nbLignes: lignes.length,
+    nbEcarts: lignes.filter(l => l.ecart !== 0).length,
+  }))
 
   return apiSuccess(inventaires)
 }

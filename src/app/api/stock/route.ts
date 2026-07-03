@@ -8,26 +8,26 @@ export async function GET() {
   if (!session) return apiError('Non autorise', 401)
 
   const pharmacieId = session.user.pharmacieId
+  const dans90Jours = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
 
-  // Optimisation SQL : Calculs de stock directement en base pour éviter les allers-retours
-  const stock = await prisma.$queryRaw<any[]>`
-    SELECT 
-      m.*,
-      COALESCE(SUM(l.quantite), 0)::int as "stockTotal",
-      COUNT(l.id) FILTER (WHERE l."datePeremption" <= (CURRENT_DATE + INTERVAL '90 days'))::int as "lotsCritiques"
-    FROM "Medicament" m
-    LEFT JOIN "Lot" l ON l."medicamentId" = m.id AND l.actif = true
-    WHERE m."pharmacieId" = ${pharmacieId} AND m.actif = true
-    GROUP BY m.id
-    ORDER BY m.nom ASC
-  `
+  const medicamentsRaw = await prisma.medicament.findMany({
+    where: { pharmacieId, actif: true },
+    include: {
+      lots: {
+        where: { actif: true },
+        select: { quantite: true, datePeremption: true },
+      },
+    },
+    orderBy: { nom: 'asc' },
+  })
 
-  const stockFormatte = stock.map(med => ({
-    ...med,
-    stockBas: med.stockTotal < med.stockMinimum
-  }))
+  const stock = medicamentsRaw.map(({ lots, ...m }) => {
+    const stockTotal = lots.reduce((sum, l) => sum + l.quantite, 0)
+    const lotsCritiques = lots.filter(l => l.datePeremption <= dans90Jours).length
+    return { ...m, stockTotal, lotsCritiques, stockBas: stockTotal < m.stockMinimum }
+  })
 
-  const valeurTotale = stockFormatte.reduce((sum, med) => sum + (med.stockTotal * (med.prixAchat || 0)), 0)
+  const valeurTotale = stock.reduce((sum, m) => sum + (m.stockTotal * (m.prixAchat || 0)), 0)
 
-  return apiSuccess({ stock: stockFormatte, valeurTotale })
+  return apiSuccess({ stock, valeurTotale })
 }
