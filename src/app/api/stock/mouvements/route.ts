@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@prisma/client'
+import { Prisma, TypeMouvement } from '@prisma/client'
 import { apiError, apiSuccess } from '@/lib/utils'
 
 export async function GET(request: Request) {
@@ -19,20 +19,17 @@ export async function GET(request: Request) {
   const dateFin      = searchParams.get('dateFin')
 
   // Filtre multi-tenant via la relation medicament (MouvementStock n'a pas pharmacieId)
-  const where: Prisma.MouvementStockWhereInput = {
-    medicament: { pharmacieId },
-    ...(type         && { type }),
-    ...(medicamentId && { medicamentId }),
-    ...((dateDebut || dateFin) && {
-      createdAt: {
-        ...(dateDebut && { gte: new Date(dateDebut) }),
-        ...(dateFin   && (() => {
-          const fin = new Date(dateFin)
-          fin.setUTCHours(23, 59, 59, 999)
-          return { lte: fin }
-        })()),
-      },
-    }),
+  const where: Prisma.MouvementStockWhereInput = { medicament: { pharmacieId } }
+
+  if (type)         where.type         = type as TypeMouvement
+  if (medicamentId) where.medicamentId = medicamentId
+  if (dateDebut || dateFin) {
+    const fin = dateFin ? new Date(dateFin) : undefined
+    if (fin) fin.setUTCHours(23, 59, 59, 999)
+    where.createdAt = {
+      ...(dateDebut && { gte: new Date(dateDebut) }),
+      ...(fin       && { lte: fin }),
+    }
   }
 
   const [mouvements, total] = await Promise.all([
