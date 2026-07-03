@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { TypeMouvement, Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { apiError, apiSuccess } from '@/lib/utils'
 
 export async function GET(request: Request) {
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
   const page    = Math.max(1, parseInt(searchParams.get('page')   || '1'))
   const limite  = Math.max(1, Math.min(100, parseInt(searchParams.get('limite') || '20')))
-  const type    = searchParams.get('type') as TypeMouvement | null
+  const type    = searchParams.get('type') as string | null
   const medicamentId = searchParams.get('medicamentId')
   const dateDebut    = searchParams.get('dateDebut')
   const dateFin      = searchParams.get('dateFin')
