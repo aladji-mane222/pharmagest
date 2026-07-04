@@ -10,6 +10,10 @@ const prismaClientSingleton = () => {
 }
 
 declare global {
+  // "var" est obligatoire ici : TypeScript n'accepte pas "let"/"const" pour
+  // augmenter globalThis (vérifié le 04/07/2026 : avec "let", TS renvoie
+  // "Property 'prisma' does not exist on type 'typeof globalThis'").
+  // eslint-disable-next-line no-var
   var prisma: undefined | ReturnType<typeof prismaClientSingleton>
 }
 
