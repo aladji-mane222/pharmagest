@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { Prisma, ModePaiement, StatutVente } from '@prisma/client'
+import { Prisma, ModePaiement } from '@prisma/client'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { decrementerLotFifo } from '@/lib/fifo'
 import { createAuditLog } from '@/lib/audit'

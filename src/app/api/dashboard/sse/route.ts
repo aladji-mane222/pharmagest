@@ -61,7 +61,7 @@ export async function GET(request: Request) {
         clearInterval(interval)
         try {
           controller.close()
-        } catch (e) {
+        } catch {
           // already closed
         }
       })
