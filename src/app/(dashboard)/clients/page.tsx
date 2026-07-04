@@ -1,235 +1,174 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { formatMontant, formatDateTime } from '@/lib/utils'
-import DashboardClient from '@/components/dashboard/DashboardClient'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { formatMontant } from '@/lib/utils'
+import { PageHeader, Card, Badge, EmptyState, Input, Button } from '@/components/ui'
 
-export default async function DashboardPage() {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect('/login')
+interface Client {
+  id: string
+  nom: string
+  telephone: string | null
+  email: string | null
+  soldeCredit: number
+  plafondCredit: number
+}
 
-  const pharmacieId = session.user.pharmacieId
-  const now         = new Date()
-  const debutJour   = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const debutMois   = new Date(now.getFullYear(), now.getMonth(), 1)
-  const dans90Jours = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
+export default function ClientsPage() {
+  const [clients, setClients] = useState<Client[]>([])
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ nom: '', telephone: '', email: '', plafondCredit: '50000' })
 
-  const result = await prisma.$queryRaw<any[]>`
-    WITH stats AS (
-      SELECT
-        (SELECT COALESCE(SUM("montantTotal"), 0) FROM "Vente"
-         WHERE "pharmacieId" = ${pharmacieId} AND "createdAt" >= ${debutJour} AND "statut" = 'COMPLETE') as ca_jour,
-        (SELECT COALESCE(SUM("montantTotal"), 0) FROM "Vente"
-         WHERE "pharmacieId" = ${pharmacieId} AND "createdAt" >= ${debutMois} AND "statut" = 'COMPLETE') as ca_mois,
-        (SELECT COUNT(*) FROM "Medicament"
-         WHERE "pharmacieId" = ${pharmacieId} AND "actif" = true) as total_meds
-    ),
-    ventes_recentes AS (
-      SELECT json_agg(v) FROM (
-        SELECT v.id, v."montantTotal", v."createdAt", u.nom as "userNom"
-        FROM "Vente" v
-        JOIN "User" u ON u.id = v."userId"
-        WHERE v."pharmacieId" = ${pharmacieId}
-        ORDER BY v."createdAt" DESC
-        LIMIT 5
-      ) v
-    ),
-    stock_bas AS (
-      SELECT json_agg(s) FROM (
-        SELECT m.id, m.nom, COALESCE(SUM(l.quantite), 0)::int as "stockTotal", m."stockMinimum"
-        FROM "Medicament" m
-        LEFT JOIN "Lot" l ON l."medicamentId" = m.id AND l.actif = true
-        WHERE m."pharmacieId" = ${pharmacieId} AND m.actif = true
-        GROUP BY m.id, m.nom, m."stockMinimum"
-        HAVING COALESCE(SUM(l.quantite), 0) < m."stockMinimum"
-        LIMIT 5
-      ) s
-    ),
-    peremptions AS (
-      SELECT json_agg(p) FROM (
-        SELECT l.id, l."datePeremption", m.id as "medicamentId", m.nom as "medicamentNom"
-        FROM "Lot" l
-        JOIN "Medicament" m ON m.id = l."medicamentId"
-        WHERE m."pharmacieId" = ${pharmacieId} AND l.actif = true
-          AND l."datePeremption" <= ${dans90Jours} AND l."datePeremption" >= ${now}
-        ORDER BY l."datePeremption" ASC
-        LIMIT 5
-      ) p
-    )
-    SELECT
-      stats.*,
-      COALESCE(ventes_recentes.json_agg, '[]'::json) as ventes_recentes,
-      COALESCE(stock_bas.json_agg, '[]'::json) as stock_bas,
-      COALESCE(peremptions.json_agg, '[]'::json) as peremptions
-    FROM stats, ventes_recentes, stock_bas, peremptions;
-  `
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetch(`/api/clients?search=${search}`)
+        .then((res) => res.json())
+        .then((json) => {
+          setClients(json.data || [])
+          setLoading(false)
+        })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
 
-  const data = result[0]
-
-  const initialData = {
-    caJour:      Number(data.ca_jour),
-    caMois:      Number(data.ca_mois),
-    stockBas:    (data.stock_bas as any[]).length,
-    peremptions: (data.peremptions as any[]).length,
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    const res = await fetch('/api/clients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    const json = await res.json()
+    if (res.ok) {
+      setClients([...clients, json.data])
+      setForm({ nom: '', telephone: '', email: '', plafondCredit: '50000' })
+      setShowForm(false)
+    }
+    setSaving(false)
   }
 
   return (
     <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Tableau de bord</h1>
+      <PageHeader
+        title="Clients"
+        description="Gérez vos clients et leurs crédits"
+        actions={
+          <Button onClick={() => setShowForm(!showForm)}>
+            + Nouveau client
+          </Button>
+        }
+      />
 
-        {/* Raccourcis rapides */}
-        <div className="flex gap-3">
-          <Link
-            href="/ventes"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
-            style={{ backgroundColor: '#2ECC8A' }}
-          >
-            🛒 Nouvelle vente
-          </Link>
-          <Link
-            href="/caisse"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            💰 Ma caisse
-          </Link>
-          <Link
-            href="/depenses"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            💸 Saisir dépense
-          </Link>
-        </div>
+      {showForm && (
+        <Card className="mb-6">
+          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+            <Input
+              label="Nom" required
+              value={form.nom}
+              onChange={(e) => setForm({ ...form, nom: e.target.value })}
+              placeholder="Nom du client"
+            />
+            <Input
+              label="Téléphone"
+              value={form.telephone}
+              onChange={(e) => setForm({ ...form, telephone: e.target.value })}
+              placeholder="+224 xxx xxx xxx"
+            />
+            <Input
+              label="Email" type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="email@client.com"
+            />
+            <Input
+              label="Plafond crédit (GNF)" type="number"
+              value={form.plafondCredit}
+              onChange={(e) => setForm({ ...form, plafondCredit: e.target.value })}
+            />
+            <div className="col-span-2 flex gap-3">
+              <Button type="submit" loading={saving}>Enregistrer</Button>
+              <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
+                Annuler
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      <div className="mb-4">
+        <Input
+          type="text" placeholder="Rechercher un client..."
+          value={search} onChange={(e) => setSearch(e.target.value)}
+          className="max-w-md"
+        />
       </div>
 
-      <DashboardClient initialData={initialData} />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 mt-8">
-        {/* Alertes stock bas */}
-        <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="font-semibold text-gray-700 flex items-center gap-2">
-              ⚠️ Alertes Stock Bas
-            </h2>
-            {(data.stock_bas as any[]).length > 0 && (
-              <Link href="/stock?filtre=bas"
-                className="text-xs text-green-600 hover:underline">
-                Voir tout →
-              </Link>
-            )}
-          </div>
-          {(data.stock_bas as any[]).length === 0 ? (
-            <p className="text-gray-400 text-sm">Aucune alerte</p>
-          ) : (
-            <ul className="space-y-3">
-              {(data.stock_bas as any[]).map((med) => (
-                <li key={med.id}>
-                  <Link
-                    href={`/medicaments/${med.id}`}
-                    className="flex justify-between items-center text-sm p-2 hover:bg-gray-50 rounded-lg transition-colors group"
-                  >
-                    <span className="text-gray-700 font-medium group-hover:text-green-600 transition-colors">
-                      {med.nom}
-                    </span>
-                    <span className="px-2 py-1 bg-orange-100 text-orange-600 rounded font-bold">
-                      {med.stockTotal} / {med.stockMinimum} min
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Péremptions proches */}
-        <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="font-semibold text-gray-700 flex items-center gap-2">
-              📅 Péremptions proches
-            </h2>
-            {(data.peremptions as any[]).length > 0 && (
-              <Link href="/stock?filtre=critiques"
-                className="text-xs text-green-600 hover:underline">
-                Voir tout →
-              </Link>
-            )}
-          </div>
-          {(data.peremptions as any[]).length === 0 ? (
-            <p className="text-gray-400 text-sm">Aucune alerte</p>
-          ) : (
-            <ul className="space-y-3">
-              {(data.peremptions as any[]).map((lot) => {
-                const jours = Math.ceil(
-                  (new Date(lot.datePeremption).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-                )
-                return (
-                  <li key={lot.id}>
-                    <Link
-                      href={`/stock`}
-                      className="flex justify-between items-center text-sm p-2 hover:bg-gray-50 rounded-lg transition-colors group"
-                    >
-                      <span className="text-gray-700 font-medium group-hover:text-green-600 transition-colors">
-                        {lot.medicamentNom}
-                      </span>
-                      <span className={`px-2 py-1 rounded font-bold text-xs ${
-                        jours <= 30 ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'
-                      }`}>
-                        {jours <= 0 ? 'Expiré' : `J-${jours}`}
-                      </span>
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      {/* Ventes récentes */}
-      <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="font-semibold text-gray-700">🛒 Ventes récentes</h2>
-          <Link href="/ventes/historique"
-            className="text-xs text-green-600 hover:underline">
-            Voir tout →
-          </Link>
-        </div>
-        {(data.ventes_recentes as any[]).length === 0 ? (
-          <p className="text-gray-400 text-sm">Aucune vente pour le moment</p>
+      <Card padding="none">
+        {loading ? (
+          <div className="p-8 text-center text-gray-400">Chargement...</div>
+        ) : clients.length === 0 ? (
+          <EmptyState
+            icon="👥"
+            title="Aucun client pour l'instant"
+            description="Les clients apparaîtront ici une fois ajoutés."
+            action={<Button onClick={() => setShowForm(true)}>Ajouter le premier client</Button>}
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b">
-                  <th className="pb-3 font-semibold">Date</th>
-                  <th className="pb-3 font-semibold">Caissier</th>
-                  <th className="pb-3 text-right font-semibold">Montant</th>
-                  <th className="pb-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data.ventes_recentes as any[]).map((vente) => (
-                  <tr key={vente.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
-                    <td className="py-3 text-gray-600">{formatDateTime(vente.createdAt)}</td>
-                    <td className="py-3 text-gray-600">{vente.userNom}</td>
-                    <td className="py-3 text-right font-bold text-green-600">
-                      {formatMontant(vente.montantTotal)}
+          <table className="w-full text-sm">
+            <thead className="bg-app-bg border-b border-gray-100">
+              <tr>
+                <th className="text-left px-6 py-3 text-gray-600 font-semibold">Nom</th>
+                <th className="text-left px-6 py-3 text-gray-600 font-semibold">Téléphone</th>
+                <th className="text-left px-6 py-3 text-gray-600 font-semibold">Crédit</th>
+                <th className="text-right px-6 py-3 text-gray-600 font-semibold">Solde / Plafond</th>
+                <th className="px-6 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {clients.map((c) => {
+                const ratio = c.plafondCredit > 0
+                  ? Math.min(100, Math.round((c.soldeCredit / c.plafondCredit) * 100))
+                  : 0
+                return (
+                  <tr key={c.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg transition-colors">
+                    <td className="px-6 py-4 font-medium text-navy">{c.nom}</td>
+                    <td className="px-6 py-4 text-gray-600">{c.telephone || '-'}</td>
+                    <td className="px-6 py-4">
+                      {c.soldeCredit > 0 ? (
+                        <Badge variant="danger">Crédit</Badge>
+                      ) : (
+                        <Badge variant="neutral">Aucun</Badge>
+                      )}
                     </td>
-                    <td className="py-3 text-right">
-                      <Link href={`/ventes/${vente.id}`}
-                        className="text-xs text-green-600 hover:underline">
-                        Voir →
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`font-medium ${c.soldeCredit > 0 ? 'text-danger' : 'text-gray-600'}`}>
+                          {formatMontant(c.soldeCredit)} / {formatMontant(c.plafondCredit)}
+                        </span>
+                        <div className="w-32 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${ratio >= 90 ? 'bg-danger' : ratio >= 60 ? 'bg-warning' : 'bg-mint'}`}
+                            style={{ width: `${ratio}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <Link href={`/clients/${c.id}`} className="text-xs text-mint-dark hover:underline font-medium">
+                        Voir fiche →
                       </Link>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                )
+              })}
+            </tbody>
+          </table>
         )}
-      </div>
+      </Card>
     </div>
   )
 }
