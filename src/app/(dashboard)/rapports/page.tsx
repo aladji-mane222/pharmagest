@@ -3,8 +3,11 @@
 import { useState, useEffect } from 'react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
 import { exporterExcel, exporterCSV } from '@/lib/export'
-import { pdf } from '@react-pdf/renderer'
-import RapportPDF from '@/components/rapports/RapportPDF'
+// @react-pdf/renderer et RapportPDF ne sont plus importés ici statiquement :
+// c'est une librairie très lourde (moteur de mise en page PDF complet) qui
+// gonflait le JS de CETTE PAGE à 671 kB au premier chargement — visible pour
+// tout le monde même sans jamais cliquer sur "Exporter PDF". Corrigé le
+// 04/07/2026 : chargement dynamique dans handleExportPDF, uniquement au clic.
 
 type TypeRapport = 'benefice' | 'ventes' | 'stock' | 'credits'
 
@@ -58,6 +61,12 @@ export default function RapportsPage() {
     if (!data) return
     setGeneratingPDF(true)
     try {
+      // Import dynamique : ce code (lourd) n'est téléchargé par le
+      // navigateur que si l'utilisateur clique réellement sur "Exporter PDF"
+      const [{ pdf }, { default: RapportPDF }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/components/rapports/RapportPDF'),
+      ])
       const blob = await pdf(
         <RapportPDF
           data={data as any}

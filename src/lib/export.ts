@@ -1,6 +1,10 @@
-import * as XLSX from 'xlsx'
+// 'xlsx' n'est plus importée statiquement : elle est chargée dynamiquement
+// dans exporterExcel() uniquement, pour ne pas gonfler le JS des pages qui
+// n'utilisent que exporterCSV (qui n'en a jamais eu besoin) — corrigé le
+// 04/07/2026, cf. `/rapports` qui chargeait 671 kB au premier affichage.
 
-export function exporterExcel(donnees: Record<string, unknown>[], nomFichier: string) {
+export async function exporterExcel(donnees: Record<string, unknown>[], nomFichier: string) {
+  const XLSX = await import('xlsx')
   const worksheet = XLSX.utils.json_to_sheet(donnees)
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Rapport')
