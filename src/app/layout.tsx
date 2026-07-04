@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: 'PharmaGest',
   description: 'Pilotee par vous, ou que vous soyez',
   manifest: '/manifest.json',
-  themeColor: '#16a34a',
+  themeColor: '#2ECC8A', // vert de marque — cohérent avec DESIGN-SYSTEM.md
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
