@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
+import { Modal, useToast } from '@/components/ui'
 
 interface LigneVente {
   id: string
@@ -140,18 +141,22 @@ export default function ClientDetailPage() {
     setSavingEdit(false)
   }
 
+  const [confirmArchive, setConfirmArchive] = useState(false)
+  const { showToast } = useToast()
+
   const handleArchiver = async () => {
-    if (!confirm(`Archiver ${client?.nom} ? Cette action est irréversible si le solde est à zéro.`)) return
     setErrArch(null)
     setArchiving(true)
     const res  = await fetch(`/api/clients/${id}`, { method: 'DELETE' })
     const json = await res.json()
     if (res.ok) {
       setClient((c) => c ? { ...c, actif: false } : c)
+      showToast('Client archivé', 'success')
     } else {
       setErrArch(json.error || 'Erreur lors de l\'archivage')
     }
     setArchiving(false)
+    setConfirmArchive(false)
   }
 
   if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
@@ -186,7 +191,7 @@ export default function ClientDetailPage() {
               Modifier
             </button>
             {client.soldeCredit === 0 && (
-              <button onClick={handleArchiver} disabled={archiving}
+              <button onClick={() => setConfirmArchive(true)} disabled={archiving}
                 className="px-4 py-2 text-sm bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50">
                 {archiving ? 'Archivage...' : 'Archiver'}
               </button>
@@ -371,6 +376,17 @@ export default function ClientDetailPage() {
           </table>
         )}
       </div>
+
+      <Modal
+        open={confirmArchive}
+        onClose={() => setConfirmArchive(false)}
+        onConfirm={handleArchiver}
+        title={`Archiver ${client?.nom} ?`}
+        description="Le client ne sera plus visible dans la liste active. Cette action est réversible depuis la base si besoin."
+        variant="danger"
+        confirmLabel="Archiver"
+        loading={archiving}
+      />
     </div>
   )
 }
