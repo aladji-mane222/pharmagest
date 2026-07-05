@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       const cur = caissierMap.get(nom) ?? { nom, nbVentes: 0, total: 0 }
       caissierMap.set(nom, { ...cur, nbVentes: cur.nbVentes + 1, total: cur.total + v.montantTotal })
     }
-    const parCaissier = [...caissierMap.values()].sort((a, b) => b.total - a.total)
+    const parCaissier = Array.from(caissierMap.values()).sort((a, b) => b.total - a.total)
 
     // Agrégat par mode de paiement
     const modeMap = new Map<string, { mode: string; nbVentes: number; total: number }>()
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
       const cur  = modeMap.get(mode) ?? { mode, nbVentes: 0, total: 0 }
       modeMap.set(mode, { ...cur, nbVentes: cur.nbVentes + 1, total: cur.total + v.montantTotal })
     }
-    const parMode = [...modeMap.values()].sort((a, b) => b.total - a.total)
+    const parMode = Array.from(modeMap.values()).sort((a, b) => b.total - a.total)
 
     return apiSuccess({ ventes, total, parCaissier, parMode, type })
   }
