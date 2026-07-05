@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
+import Modal from '@/components/ui/Modal'
+import { useToast } from '@/components/ui/Toast'
 
 interface SessionCaisse {
   id: string
@@ -21,6 +23,8 @@ export default function CaissePage() {
   const [montantOuverture, setMontantOuverture] = useState('')
   const [montantCloture, setMontantCloture] = useState('')
   const [totalEncaisse, setTotalEncaisse] = useState(0)
+  const [confirmFermer, setConfirmFermer] = useState(false)
+  const { showToast } = useToast()
 
   // Chargement initial
   useEffect(() => {
@@ -60,13 +64,12 @@ export default function CaissePage() {
       setSessionActive(json.data)
       setMontantOuverture('')
     } else {
-      alert(json.error)
+      showToast(json.error ?? 'Erreur lors de l\'ouverture', 'error')
     }
     setSaving(false)
   }
 
-  const fermerSession = async () => {
-    if (!confirm('Fermer la session caisse ?')) return
+  const doFermerSession = async () => {
     setSaving(true)
     const res = await fetch('/api/caisse', {
       method: 'POST',
@@ -82,9 +85,10 @@ export default function CaissePage() {
       const jsonHist = await resHist.json()
       setHistorique(jsonHist.data?.historique || [])
     } else {
-      alert(json.error)
+      showToast(json.error ?? 'Erreur lors de la fermeture', 'error')
     }
     setSaving(false)
+    setConfirmFermer(false)
   }
 
   if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
@@ -134,11 +138,11 @@ export default function CaissePage() {
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
                 <button
-                  onClick={fermerSession}
+                  onClick={() => setConfirmFermer(true)}
                   disabled={saving}
                   className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50"
                 >
-                  {saving ? 'Fermeture...' : 'Fermer'}
+                  Fermer
                 </button>
               </div>
 
@@ -213,6 +217,17 @@ export default function CaissePage() {
         </div>
 
       </div>
+
+      <Modal
+        open={confirmFermer}
+        onClose={() => setConfirmFermer(false)}
+        onConfirm={doFermerSession}
+        title="Fermer la session caisse ?"
+        description="Cette action clôturera la session en cours. Vérifiez que le montant compté est correct avant de confirmer."
+        variant="danger"
+        confirmLabel="Fermer la session"
+        loading={saving}
+      />
     </div>
   )
 }

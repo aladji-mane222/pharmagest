@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatDateTime } from '@/lib/utils'
+import { useToast } from '@/components/ui/Toast'
 
 interface User {
   id: string
@@ -22,6 +23,7 @@ const roleCouleur = (role: string) => {
 export default function PersonnelPage() {
   const { data: sessionData } = useSession()
   const moiId = sessionData?.user?.id
+  const { showToast } = useToast()
 
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
@@ -85,7 +87,7 @@ export default function PersonnelPage() {
       setUsers(users.map((u) => u.id === id ? { ...u, nom: json.data.nom, role: json.data.role } : u))
       setEditingId(null)
     } else {
-      alert(json.error)
+      showToast(json.error ?? 'Erreur lors de la modification', 'error')
     }
     setEditSaving(false)
   }
@@ -101,7 +103,7 @@ export default function PersonnelPage() {
     if (res.ok) {
       setUsers(users.map((usr) => usr.id === u.id ? { ...usr, actif: json.data.actif } : usr))
     } else {
-      alert(json.error)
+      showToast(json.error ?? 'Erreur lors de la mise à jour', 'error')
     }
   }
 
