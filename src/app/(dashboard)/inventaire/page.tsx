@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { formatDateTime } from '@/lib/utils'
+import { useToast } from '@/components/ui'
 
 interface LigneInventaire {
   id: string
@@ -84,6 +85,7 @@ function CardsRapport({
 
 // ── Page principale ──────────────────────────────────────────────────────────
 export default function InventairePage() {
+  const { showToast } = useToast()
   const [inventaires, setInventaires] = useState<Inventaire[]>([])
   const [actif,   setActif]   = useState<Inventaire | null>(null) // EN_COURS — saisie
   const [lecture, setLecture] = useState<Inventaire | null>(null) // VALIDE   — lecture seule
@@ -108,7 +110,7 @@ export default function InventairePage() {
       const detail = await fetch(`/api/inventaires/${json.data.id}`).then((r) => r.json())
       setActif(detail.data)
     } else {
-      alert(json.error)
+      showToast(json.error, 'error')
     }
     setSaving(false)
   }
@@ -168,11 +170,11 @@ export default function InventairePage() {
     })
     const json = await res.json()
     if (res.ok) {
-      alert('Inventaire validé avec succès !')
+      showToast('Inventaire validé avec succès !', 'success')
       setActif(null)
       chargerListe()
     } else {
-      alert(json.error || 'Erreur lors de la validation')
+      showToast(json.error || 'Erreur lors de la validation', 'error')
     }
     setSaving(false)
   }
