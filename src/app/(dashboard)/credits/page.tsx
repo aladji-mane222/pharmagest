@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatMontant } from '@/lib/utils'
+import { useToast } from '@/components/ui'
 
 interface Client {
   id: string
@@ -27,6 +28,7 @@ function BarreProgression({ pct }: { pct: number }) {
 }
 
 export default function CreditsPage() {
+  const { showToast } = useToast()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -45,7 +47,7 @@ export default function CreditsPage() {
     : null
 
   const envoyerWhatsApp = (client: Client) => {
-    if (!client.telephone) return alert('Ce client n\'a pas de numéro de téléphone enregistré')
+    if (!client.telephone) { showToast('Ce client n\'a pas de numéro de téléphone enregistré', 'error'); return }
     const numero  = client.telephone.replace(/\D/g, '')
     const message = encodeURIComponent(
       `Bonjour ${client.nom},\n\nNous vous rappelons que vous avez un solde de crédit de ${client.soldeCredit.toLocaleString('fr-FR')} GNF en attente de règlement.\n\nMerci de bien vouloir régulariser votre situation.\n\nCordialement,\nVotre pharmacie`
