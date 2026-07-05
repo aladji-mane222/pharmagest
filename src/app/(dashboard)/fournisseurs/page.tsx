@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Modal, useToast } from '@/components/ui'
 
 interface Fournisseur {
   id: string
@@ -50,18 +51,24 @@ export default function FournisseursPage() {
     setSaving(false)
   }
 
-  const handleArchiver = async (id: string, nom: string) => {
-    if (!confirm(`Archiver ${nom} ? Il ne sera plus visible dans la liste.`)) return
+  const [confirmArchiver, setConfirmArchiver] = useState<{ id: string; nom: string } | null>(null)
+  const { showToast } = useToast()
+
+  const handleArchiver = async () => {
+    if (!confirmArchiver) return
+    const { id } = confirmArchiver
     setErreur(null)
     setArchivingId(id)
     const res  = await fetch(`/api/fournisseurs/${id}`, { method: 'DELETE' })
     const json = await res.json()
     if (res.ok) {
       setFournisseurs(fournisseurs.filter((f) => f.id !== id))
+      showToast('Fournisseur archivé', 'success')
     } else {
       setErreur(json.error || 'Erreur lors de l\'archivage')
     }
     setArchivingId(null)
+    setConfirmArchiver(null)
   }
 
   return (
@@ -158,7 +165,7 @@ export default function FournisseursPage() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button
-                      onClick={() => handleArchiver(f.id, f.nom)}
+                      onClick={() => setConfirmArchiver({ id: f.id, nom: f.nom })}
                       disabled={archivingId === f.id}
                       className="text-gray-400 hover:text-red-600 text-xs font-medium disabled:opacity-50 transition-colors">
                       {archivingId === f.id ? 'Archivage...' : 'Archiver'}
@@ -170,6 +177,17 @@ export default function FournisseursPage() {
           </table>
         )}
       </div>
+
+      <Modal
+        open={!!confirmArchiver}
+        onClose={() => setConfirmArchiver(null)}
+        onConfirm={handleArchiver}
+        title={`Archiver ${confirmArchiver?.nom} ?`}
+        description="Il ne sera plus visible dans la liste des fournisseurs actifs."
+        variant="danger"
+        confirmLabel="Archiver"
+        loading={!!archivingId}
+      />
     </div>
   )
 }
