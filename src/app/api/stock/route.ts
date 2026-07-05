@@ -15,15 +15,22 @@ export async function GET() {
     include: {
       lots: {
         where: { actif: true },
-        select: { quantite: true, datePeremption: true },
+        select: { id: true, numeroLot: true, quantite: true, datePeremption: true },
       },
     },
     orderBy: { nom: 'asc' },
   })
 
-  const stock = medicamentsRaw.map(({ lots, ...m }) => {
-    const stockTotal = lots.reduce((sum, l) => sum + l.quantite, 0)
-    const lotsCritiques = lots.filter(l => l.datePeremption <= dans90Jours).length
+  // BUG CRITIQUE corrigé le 04/07/2026 : l'ancien code faisait
+  // `medicamentsRaw.map(({ lots, ...m }) => ...)`, ce qui retirait "lots"
+  // de l'objet via la déstructuration et ne le renvoyait JAMAIS au frontend.
+  // La page /stock plantait ("Application error: a client-side exception")
+  // dès qu'on cliquait sur un médicament, car `selected.lots.map(...)`
+  // s'exécutait sur `undefined`. Le select des lots ne renvoyait pas non
+  // plus `id`/`numeroLot`, pourtant affichés dans le panneau détail.
+  const stock = medicamentsRaw.map((m) => {
+    const stockTotal = m.lots.reduce((sum, l) => sum + l.quantite, 0)
+    const lotsCritiques = m.lots.filter(l => l.datePeremption <= dans90Jours).length
     return { ...m, stockTotal, lotsCritiques, stockBas: stockTotal < m.stockMinimum }
   })
 
