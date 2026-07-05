@@ -26,11 +26,11 @@ interface MedicamentStock {
 }
 
 export default function StockPage() {
-  const [stock,        setStock]        = useState<MedicamentStock[]>([])
+  const [stock, setStock] = useState<MedicamentStock[]>([])
   const [valeurTotale, setValeurTotale] = useState(0)
-  const [loading,      setLoading]      = useState(true)
-  const [filtre,       setFiltre]       = useState<'tous' | 'bas' | 'critiques'>('tous')
-  const [selected,     setSelected]     = useState<MedicamentStock | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [filtre, setFiltre] = useState<'tous' | 'bas' | 'critiques'>('tous')
+  const [selected, setSelected] = useState<MedicamentStock | null>(null)
 
   useEffect(() => {
     fetch('/api/stock')
@@ -43,7 +43,7 @@ export default function StockPage() {
   }, [])
 
   const stockFiltre = stock.filter((med) => {
-    if (filtre === 'bas')      return med.stockBas
+    if (filtre === 'bas') return med.stockBas
     if (filtre === 'critiques') return med.lotsCritiques > 0
     return true
   })
@@ -60,21 +60,25 @@ export default function StockPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/stock/mouvements"
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+          >
+            🔄 Mouvements
+          </Link>
           <div className="flex gap-2">
             {(['tous', 'bas', 'critiques'] as const).map((f) => (
-              <button key={f} onClick={() => setFiltre(f)}
+              <button
+                key={f}
+                onClick={() => setFiltre(f)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   filtre === f ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}>
+                }`}
+              >
                 {f === 'tous' ? 'Tous' : f === 'bas' ? 'Stock bas' : 'Péremptions'}
               </button>
             ))}
           </div>
-          <Link
-            href="/stock/mouvements"
-            className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors">
-            🔄 Mouvements
-          </Link>
         </div>
       </div>
 
@@ -94,6 +98,8 @@ export default function StockPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-6">
+
+        {/* ── Tableau principal ── */}
         <div className="col-span-2 bg-white rounded-xl shadow overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
@@ -107,16 +113,22 @@ export default function StockPage() {
             </thead>
             <tbody>
               {stockFiltre.map((med) => (
-                <tr key={med.id}
+                <tr
+                  key={med.id}
                   onClick={() => setSelected(med)}
-                  className={`border-b last:border-0 hover:bg-gray-50 cursor-pointer ${selected?.id === med.id ? 'bg-green-50' : ''}`}>
+                  className={`border-b last:border-0 cursor-pointer transition-colors ${
+                    selected?.id === med.id
+                      ? 'bg-green-50'
+                      : 'hover:bg-gray-50'
+                  }`}
+                >
                   <td className="px-4 py-3 font-medium text-gray-800">{med.nom}</td>
                   <td className={`px-4 py-3 text-right font-medium ${med.stockBas ? 'text-red-500' : 'text-green-600'}`}>
                     {med.stockTotal} {med.unite}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-500">{med.stockMinimum}</td>
                   <td className="px-4 py-3 text-right text-gray-600">
-                    {med.prixAchat ? formatMontant(med.stockTotal * med.prixAchat) : '—'}
+                    {med.prixAchat ? formatMontant(med.stockTotal * med.prixAchat) : '-'}
                   </td>
                   <td className="px-4 py-3 text-center">
                     {med.stockBas && (
@@ -135,14 +147,16 @@ export default function StockPage() {
           </table>
         </div>
 
-        {/* Panneau détail lots */}
+        {/* ── Panneau détail ── */}
         <div className="bg-white rounded-xl shadow p-6">
           {selected ? (
             <>
-              <div className="flex justify-between items-start mb-3">
+              <div className="flex items-start justify-between mb-4">
                 <h2 className="font-semibold text-gray-700">{selected.nom}</h2>
-                <Link href={`/medicaments/${selected.id}`}
-                  className="text-xs text-green-600 hover:underline">
+                <Link
+                  href={`/medicaments/${selected.id}`}
+                  className="text-xs text-green-600 hover:underline whitespace-nowrap ml-2"
+                >
                   Fiche →
                 </Link>
               </div>
@@ -151,21 +165,13 @@ export default function StockPage() {
                 <p className="text-gray-400 text-sm">Aucun lot</p>
               ) : (
                 <ul className="space-y-3">
-                  {selected.lots.map((lot) => {
-                    const jours = Math.ceil(
-                      (new Date(lot.datePeremption).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-                    )
-                    return (
-                      <li key={lot.id} className="border rounded-lg p-3 text-sm">
-                        <p className="font-medium text-gray-800">{lot.numeroLot || 'Sans numéro'}</p>
-                        <p className={`text-xs mt-0.5 ${jours <= 90 ? 'text-orange-500 font-medium' : 'text-gray-500'}`}>
-                          Expire : {formatDate(lot.datePeremption)}
-                          {jours <= 90 && ` (J-${jours})`}
-                        </p>
-                        <p className="text-green-600 font-medium mt-1">{lot.quantite} unités</p>
-                      </li>
-                    )
-                  })}
+                  {selected.lots.map((lot) => (
+                    <li key={lot.id} className="border rounded-lg p-3 text-sm">
+                      <p className="font-medium">{lot.numeroLot || 'Sans numéro'}</p>
+                      <p className="text-gray-500">Expire : {formatDate(lot.datePeremption)}</p>
+                      <p className="text-green-600 font-medium">{lot.quantite} unités</p>
+                    </li>
+                  ))}
                 </ul>
               )}
             </>
@@ -175,6 +181,7 @@ export default function StockPage() {
             </p>
           )}
         </div>
+
       </div>
     </div>
   )

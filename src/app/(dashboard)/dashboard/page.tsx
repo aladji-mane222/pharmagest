@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { formatMontant, formatDateTime } from '@/lib/utils'
 import DashboardClient from '@/components/dashboard/DashboardClient'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
@@ -75,54 +76,117 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Tableau de bord</h1>
+
+      {/* ── En-tête + raccourcis rapides ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">Tableau de bord</h1>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/ventes"
+            className="bg-green-600 text-white rounded-lg px-3 py-1 text-sm hover:bg-green-700 transition-colors"
+          >
+            + Nouvelle vente
+          </Link>
+          <Link
+            href="/caisse"
+            className="bg-green-600 text-white rounded-lg px-3 py-1 text-sm hover:bg-green-700 transition-colors"
+          >
+            Ma caisse
+          </Link>
+          <Link
+            href="/depenses"
+            className="bg-green-600 text-white rounded-lg px-3 py-1 text-sm hover:bg-green-700 transition-colors"
+          >
+            Saisir dépense
+          </Link>
+        </div>
+      </div>
 
       <DashboardClient initialData={initialData} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 mt-8">
+
+        {/* ── Alertes stock bas ── */}
         <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            ⚠️ Alertes Stock Bas
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-700 flex items-center gap-2">
+              ⚠️ Alertes Stock Bas
+            </h2>
+            <Link href="/stock" className="text-xs text-green-600 hover:underline">
+              Voir tout →
+            </Link>
+          </div>
           {stockBasList.length === 0 ? (
             <p className="text-gray-400 text-sm">Aucune alerte</p>
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-2">
               {stockBasList.slice(0, 5).map((med) => (
-                <li key={med.id} className="flex justify-between items-center text-sm p-2 hover:bg-gray-50 rounded-lg transition-colors">
-                  <span className="text-gray-700 font-medium">{med.nom}</span>
-                  <span className="px-2 py-1 bg-orange-100 text-orange-600 rounded font-bold">
-                    {med.stockTotal} unités
-                  </span>
+                <li key={med.id}>
+                  <Link
+                    href={`/medicaments/${med.id}`}
+                    className="flex justify-between items-center text-sm p-2 hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    <span className="text-gray-700 font-medium">{med.nom}</span>
+                    <span className="px-2 py-1 bg-orange-100 text-orange-600 rounded font-bold text-xs">
+                      {med.stockTotal} unités
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
           )}
         </div>
 
+        {/* ── Péremptions proches ── */}
         <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
-          <h2 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            📅 Péremptions proches
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-700 flex items-center gap-2">
+              📅 Péremptions proches
+            </h2>
+            <Link href="/stock" className="text-xs text-green-600 hover:underline">
+              Voir tout →
+            </Link>
+          </div>
           {peremptionsRaw.length === 0 ? (
             <p className="text-gray-400 text-sm">Aucune alerte</p>
           ) : (
-            <ul className="space-y-3">
-              {peremptionsRaw.map((lot) => (
-                <li key={lot.id} className="flex justify-between items-center text-sm p-2 hover:bg-gray-50 rounded-lg transition-colors">
-                  <span className="text-gray-700 font-medium">{lot.medicament.nom}</span>
-                  <span className="px-2 py-1 bg-red-100 text-red-600 rounded font-bold">
-                    {formatDateTime(lot.datePeremption)}
-                  </span>
-                </li>
-              ))}
+            <ul className="space-y-2">
+              {peremptionsRaw.map((lot) => {
+                const jours = Math.ceil(
+                  (new Date(lot.datePeremption).getTime() - now.getTime()) / 86400000
+                )
+                const urgent = jours <= 30
+                return (
+                  <li
+                    key={lot.id}
+                    className="flex justify-between items-center text-sm p-2 hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    <span className="text-gray-700 font-medium">{lot.medicament.nom}</span>
+                    <span
+                      className={`px-2 py-1 rounded font-bold text-xs ${
+                        urgent
+                          ? 'bg-red-100 text-red-600'
+                          : 'bg-orange-100 text-orange-600'
+                      }`}
+                    >
+                      J-{jours}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
       </div>
 
+      {/* ── Ventes récentes ── */}
       <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
-        <h2 className="font-semibold text-gray-700 mb-4">🛒 Ventes récentes</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-gray-700">🛒 Ventes récentes</h2>
+          <Link href="/ventes/historique" className="text-xs text-green-600 hover:underline">
+            Voir tout →
+          </Link>
+        </div>
         {ventesRecentes.length === 0 ? (
           <p className="text-gray-400 text-sm">Aucune vente pour le moment</p>
         ) : (
@@ -133,15 +197,27 @@ export default async function DashboardPage() {
                   <th className="pb-3 font-semibold">Date</th>
                   <th className="pb-3 font-semibold">Caissier</th>
                   <th className="pb-3 text-right font-semibold">Montant</th>
+                  <th className="pb-3"></th>
                 </tr>
               </thead>
               <tbody>
                 {ventesRecentes.map((vente) => (
-                  <tr key={vente.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={vente.id}
+                    className="border-b last:border-0 hover:bg-gray-50 transition-colors"
+                  >
                     <td className="py-3 text-gray-600">{formatDateTime(vente.createdAt)}</td>
                     <td className="py-3 text-gray-600">{vente.user.nom}</td>
                     <td className="py-3 text-right font-bold text-green-600">
                       {formatMontant(vente.montantTotal)}
+                    </td>
+                    <td className="py-3 text-right">
+                      <Link
+                        href={`/ventes/${vente.id}`}
+                        className="text-xs text-green-600 hover:underline whitespace-nowrap"
+                      >
+                        Voir →
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -150,6 +226,7 @@ export default async function DashboardPage() {
           </div>
         )}
       </div>
+
     </div>
   )
 }

@@ -15,30 +15,19 @@ interface Medicament {
   unite: string
 }
 
-const CATEGORIES = [
-  'Analgésique', 'Antibiotique', 'Antipaludéen', 'Anti-inflammatoire',
-  'Antidiarrhéique', 'Antiparasitaire', 'Vitamine', 'Autre',
-]
-
 export default function MedicamentsPage() {
-  const { data: session } = useSession()
-  const isAdmin = session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN'
+  const { data: sessionData } = useSession()
+  const isAdmin = sessionData?.user?.role === 'ADMIN' || sessionData?.user?.role === 'SUPER_ADMIN'
 
   const [medicaments, setMedicaments] = useState<Medicament[]>([])
-  const [search,      setSearch]      = useState('')
-  const [categorie,   setCategorie]   = useState('')
-  const [loading,     setLoading]     = useState(true)
-  const [total,       setTotal]       = useState(0)
-  const [page,        setPage]        = useState(1)
-  const LIMITE = 20
+  const [search, setSearch] = useState('')
+  const [categorieFiltree, setCategorieFiltree] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [total, setTotal] = useState(0)
 
   useEffect(() => {
-    setLoading(true)
     const timer = setTimeout(() => {
-      const params = new URLSearchParams({ search, page: String(page), limite: String(LIMITE) })
-      if (categorie) params.set('categorie', categorie)
-
-      fetch(`/api/medicaments?${params.toString()}`)
+      fetch(`/api/medicaments?search=${search}`)
         .then((res) => res.json())
         .then((json) => {
           setMedicaments(json.data?.medicaments || [])
@@ -47,65 +36,59 @@ export default function MedicamentsPage() {
         })
     }, 300)
     return () => clearTimeout(timer)
-  }, [search, categorie, page])
+  }, [search])
 
-  const onFiltreChange = (setter: (v: string) => void) => (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    setter(e.target.value)
-    setPage(1)
-  }
+  // Catégories uniques dérivées des médicaments chargés
+  const categories = [...new Set(
+    medicaments.map((m) => m.categorie).filter(Boolean)
+  )] as string[]
 
-  const totalPages = Math.ceil(total / LIMITE)
+  const medicamentsFiltres = categorieFiltree
+    ? medicaments.filter((m) => m.categorie === categorieFiltree)
+    : medicaments
 
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Médicaments</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{total} médicament{total > 1 ? 's' : ''} au total</p>
+          <p className="text-gray-500 text-sm">{total} médicaments au total</p>
         </div>
         {isAdmin && (
           <Link
             href="/medicaments/nouveau"
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+          >
             + Nouveau médicament
           </Link>
         )}
       </div>
 
       {/* Filtres */}
-      <div className="flex gap-4 mb-4">
+      <div className="flex gap-3 mb-4">
         <input
           type="text"
           placeholder="Rechercher un médicament..."
           value={search}
-          onChange={onFiltreChange(setSearch)}
-          className="flex-1 max-w-sm px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
         />
         <select
-          value={categorie}
-          onChange={onFiltreChange(setCategorie)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+          value={categorieFiltree}
+          onChange={(e) => setCategorieFiltree(e.target.value)}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-white text-gray-700"
         >
           <option value="">Toutes catégories</option>
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <option key={cat} value={cat}>{cat}</option>
           ))}
         </select>
-        {(search || categorie) && (
-          <button
-            onClick={() => { setSearch(''); setCategorie(''); setPage(1) }}
-            className="px-4 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
-            Réinitialiser
-          </button>
-        )}
       </div>
 
-      <div className="bg-white rounded-xl shadow overflow-hidden mb-4">
+      <div className="bg-white rounded-xl shadow overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Chargement...</div>
-        ) : medicaments.length === 0 ? (
+        ) : medicamentsFiltres.length === 0 ? (
           <div className="p-8 text-center text-gray-400">Aucun médicament trouvé</div>
         ) : (
           <table className="w-full text-sm">
@@ -114,59 +97,45 @@ export default function MedicamentsPage() {
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Nom</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Catégorie</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Stock</th>
-                <th className="text-right px-6 py-3 text-gray-600 font-medium">Prix vente</th>
-                <th className="px-6 py-3"></th>
+                <th className="text-left px-6 py-3 text-gray-600 font-medium">Prix vente</th>
+                <th className="text-left px-6 py-3 text-gray-600 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {medicaments.map((med) => (
-                <tr key={med.id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="px-6 py-4 font-medium text-gray-800">{med.nom}</td>
-                  <td className="px-6 py-4 text-gray-600">{med.categorie || '—'}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span className={`font-medium ${med.stockTotal < med.stockMinimum ? 'text-red-500' : 'text-green-600'}`}>
-                        {med.stockTotal} {med.unite}
-                      </span>
-                      {med.stockTotal < med.stockMinimum && (
-                        <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-xs rounded-full">
+              {medicamentsFiltres.map((med) => {
+                const stockBas = med.stockTotal < med.stockMinimum
+                return (
+                  <tr key={med.id} className="border-b last:border-0 hover:bg-gray-50">
+                    <td className="px-6 py-4 font-medium text-gray-800">
+                      {med.nom}
+                      {stockBas && (
+                        <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs font-medium ml-2">
                           Stock bas
                         </span>
                       )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right text-gray-600">{formatMontant(med.prixVente)}</td>
-                  <td className="px-6 py-4 text-right">
-                    <Link href={`/medicaments/${med.id}`}
-                      className="text-green-600 hover:underline text-sm">
-                      Voir →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4 text-gray-600">{med.categorie || '-'}</td>
+                    <td className="px-6 py-4">
+                      <span className={`font-medium ${stockBas ? 'text-red-500' : 'text-green-600'}`}>
+                        {med.stockTotal} {med.unite}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-gray-600">{formatMontant(med.prixVente)}</td>
+                    <td className="px-6 py-4">
+                      <Link
+                        href={`/medicaments/${med.id}`}
+                        className="text-green-600 hover:underline"
+                      >
+                        Voir
+                      </Link>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
       </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500">
-            Page {page} sur {totalPages}
-          </p>
-          <div className="flex gap-2">
-            <button onClick={() => setPage((p) => p - 1)} disabled={page <= 1}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
-              ← Précédent
-            </button>
-            <button onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
-              Suivant →
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

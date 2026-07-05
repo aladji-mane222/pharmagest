@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatMontant } from '@/lib/utils'
-import { PageHeader, Card, Badge, EmptyState, Input, Button } from '@/components/ui'
 
 interface Client {
   id: string
@@ -53,112 +52,137 @@ export default function ClientsPage() {
 
   return (
     <div className="p-8">
-      <PageHeader
-        title="Clients"
-        description="Gérez vos clients et leurs crédits"
-        actions={
-          <Button onClick={() => setShowForm(!showForm)}>
-            + Nouveau client
-          </Button>
-        }
-      />
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">Clients</h1>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+        >
+          + Nouveau client
+        </button>
+      </div>
 
       {showForm && (
-        <Card className="mb-6">
-          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-            <Input
-              label="Nom" required
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-6 mb-6 grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+            <input
+              required
               value={form.nom}
               onChange={(e) => setForm({ ...form, nom: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="Nom du client"
             />
-            <Input
-              label="Téléphone"
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
+            <input
               value={form.telephone}
               onChange={(e) => setForm({ ...form, telephone: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="+224 xxx xxx xxx"
             />
-            <Input
-              label="Email" type="email"
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="email@client.com"
             />
-            <Input
-              label="Plafond crédit (GNF)" type="number"
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Plafond credit (GNF)</label>
+            <input
+              type="number"
               value={form.plafondCredit}
               onChange={(e) => setForm({ ...form, plafondCredit: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             />
-            <div className="col-span-2 flex gap-3">
-              <Button type="submit" loading={saving}>Enregistrer</Button>
-              <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
-                Annuler
-              </Button>
-            </div>
-          </form>
-        </Card>
+          </div>
+          <div className="col-span-2 flex gap-3">
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+            >
+              {saving ? 'Enregistrement...' : 'Enregistrer'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-200"
+            >
+              Annuler
+            </button>
+          </div>
+        </form>
       )}
 
       <div className="mb-4">
-        <Input
-          type="text" placeholder="Rechercher un client..."
-          value={search} onChange={(e) => setSearch(e.target.value)}
-          className="max-w-md"
+        <input
+          type="text"
+          placeholder="Rechercher un client..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
         />
       </div>
 
-      <Card padding="none">
+      <div className="bg-white rounded-xl shadow overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Chargement...</div>
         ) : clients.length === 0 ? (
-          <EmptyState
-            icon="👥"
-            title="Aucun client pour l'instant"
-            description="Les clients apparaîtront ici une fois ajoutés."
-            action={<Button onClick={() => setShowForm(true)}>Ajouter le premier client</Button>}
-          />
+          <div className="p-8 text-center text-gray-400">Aucun client</div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-app-bg border-b border-gray-100">
+            <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left px-6 py-3 text-gray-600 font-semibold">Nom</th>
-                <th className="text-left px-6 py-3 text-gray-600 font-semibold">Téléphone</th>
-                <th className="text-left px-6 py-3 text-gray-600 font-semibold">Crédit</th>
-                <th className="text-right px-6 py-3 text-gray-600 font-semibold">Solde / Plafond</th>
+                <th className="text-left px-6 py-3 text-gray-600">Nom</th>
+                <th className="text-left px-6 py-3 text-gray-600">Telephone</th>
+                <th className="text-right px-6 py-3 text-gray-600">Solde credit</th>
+                <th className="text-right px-6 py-3 text-gray-600">Plafond</th>
+                <th className="text-left px-6 py-3 text-gray-600">Utilisation</th>
                 <th className="px-6 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {clients.map((c) => {
-                const ratio = c.plafondCredit > 0
-                  ? Math.min(100, Math.round((c.soldeCredit / c.plafondCredit) * 100))
-                  : 0
+                const pct = c.plafondCredit > 0
+                  ? Math.min(100, (c.soldeCredit / c.plafondCredit) * 100)
+                  : c.soldeCredit > 0 ? 100 : 0
                 return (
-                  <tr key={c.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg transition-colors">
-                    <td className="px-6 py-4 font-medium text-navy">{c.nom}</td>
-                    <td className="px-6 py-4 text-gray-600">{c.telephone || '-'}</td>
-                    <td className="px-6 py-4">
-                      {c.soldeCredit > 0 ? (
-                        <Badge variant="danger">Crédit</Badge>
-                      ) : (
-                        <Badge variant="neutral">Aucun</Badge>
+                  <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50">
+                    <td className="px-6 py-4 font-medium text-gray-800">
+                      {c.nom}
+                      {c.soldeCredit > 0 && (
+                        <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs font-medium ml-2">
+                          Crédit
+                        </span>
                       )}
                     </td>
+                    <td className="px-6 py-4 text-gray-600">{c.telephone || '-'}</td>
+                    <td className={`px-6 py-4 text-right font-medium ${c.soldeCredit > 0 ? 'text-red-500' : 'text-gray-600'}`}>
+                      {formatMontant(c.soldeCredit)}
+                    </td>
+                    <td className="px-6 py-4 text-right text-gray-600">
+                      {formatMontant(c.plafondCredit)}
+                    </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col items-end gap-1">
-                        <span className={`font-medium ${c.soldeCredit > 0 ? 'text-danger' : 'text-gray-600'}`}>
-                          {formatMontant(c.soldeCredit)} / {formatMontant(c.plafondCredit)}
-                        </span>
-                        <div className="w-32 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${ratio >= 90 ? 'bg-danger' : ratio >= 60 ? 'bg-warning' : 'bg-mint'}`}
-                            style={{ width: `${ratio}%` }}
-                          />
-                        </div>
+                      <div className="w-24 bg-gray-100 rounded-full h-1.5">
+                        <div
+                          className={`h-1.5 rounded-full ${pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-orange-400' : 'bg-green-500'}`}
+                          style={{ width: pct + '%' }}
+                        />
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Link href={`/clients/${c.id}`} className="text-xs text-mint-dark hover:underline font-medium">
+                      <Link
+                        href={`/clients/${c.id}`}
+                        className="text-green-600 hover:text-green-800 text-xs font-medium whitespace-nowrap"
+                      >
                         Voir fiche →
                       </Link>
                     </td>
@@ -168,7 +192,7 @@ export default function ClientsPage() {
             </tbody>
           </table>
         )}
-      </Card>
+      </div>
     </div>
   )
 }

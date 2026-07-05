@@ -14,81 +14,75 @@ interface SessionCaisse {
 }
 
 export default function CaissePage() {
-  const [sessionActive,  setSessionActive]  = useState<SessionCaisse | null>(null)
-  const [historique,     setHistorique]     = useState<SessionCaisse[]>([])
-  const [totalSession,   setTotalSession]   = useState<number | null>(null)
-  const [loading,        setLoading]        = useState(true)
-  const [saving,         setSaving]         = useState(false)
+  const [sessionActive, setSessionActive] = useState<SessionCaisse | null>(null)
+  const [historique, setHistorique] = useState<SessionCaisse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [montantOuverture, setMontantOuverture] = useState('')
-  const [montantCloture,   setMontantCloture]   = useState('')
-  const [erreur,         setErreur]         = useState<string | null>(null)
+  const [montantCloture, setMontantCloture] = useState('')
+  const [totalEncaisse, setTotalEncaisse] = useState(0)
 
-  const charger = async () => {
-    const res  = await fetch('/api/caisse')
-    const json = await res.json()
-    setSessionActive(json.data?.sessionActive || null)
-    setHistorique(json.data?.historique || [])
+  // Chargement initial
+  useEffect(() => {
+    fetch('/api/caisse')
+      .then((res) => res.json())
+      .then((json) => {
+        setSessionActive(json.data?.sessionActive || null)
+        setHistorique(json.data?.historique || [])
+        setLoading(false)
+      })
+  }, [])
 
-    // Si session ouverte, charger le total des ventes de cette session
-    if (json.data?.sessionActive) {
-      const sessionId = json.data.sessionActive.id
-      fetch(`/api/ventes?sessionCaisseId=${sessionId}&limite=1000`)
-        .then((r) => r.json())
-        .then((v) => {
-          // Calculer le total des ventes COMPLETE de cette session
-          const ventes = v.data?.ventes || []
-          const total  = ventes
-            .filter((vt: { statut: string; montantPaye: number }) => vt.statut === 'COMPLETE')
-            .reduce((sum: number, vt: { montantPaye: number }) => sum + vt.montantPaye, 0)
-          setTotalSession(total)
-        })
-    } else {
-      setTotalSession(null)
+  // Fetch total encaissé dès qu'une session active est connue
+  useEffect(() => {
+    if (!sessionActive?.id) {
+      setTotalEncaisse(0)
+      return
     }
-    setLoading(false)
-  }
+    fetch(`/api/ventes?sessionCaisseId=${sessionActive.id}`)
+      .then((res) => res.json())
+      .then((json) => setTotalEncaisse(json.data?.totalEncaisse ?? 0))
+  }, [sessionActive?.id])
 
-  useEffect(() => { charger() }, [])
+  const totalAttendu = (sessionActive?.montantOuverture ?? 0) + totalEncaisse
+  const montantClotureNum = parseFloat(montantCloture) || 0
+  const ecart = montantCloture !== '' ? montantClotureNum - totalAttendu : null
 
   const ouvrirSession = async () => {
-    setErreur(null)
     setSaving(true)
-    const res  = await fetch('/api/caisse', {
-      method:  'POST',
+    const res = await fetch('/api/caisse', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ action: 'ouvrir', montantOuverture }),
+      body: JSON.stringify({ action: 'ouvrir', montantOuverture }),
     })
     const json = await res.json()
     if (res.ok) {
       setSessionActive(json.data)
-      setTotalSession(0)
       setMontantOuverture('')
     } else {
-      setErreur(json.error)
+      alert(json.error)
     }
     setSaving(false)
   }
 
   const fermerSession = async () => {
-    if (!montantCloture) { setErreur('Entrez le montant compté en caisse'); return }
-    setErreur(null)
+    if (!confirm('Fermer la session caisse ?')) return
     setSaving(true)
-    const res  = await fetch('/api/caisse', {
-      method:  'POST',
+    const res = await fetch('/api/caisse', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ action: 'fermer', montantCloture }),
+      body: JSON.stringify({ action: 'fermer', montantCloture }),
     })
     const json = await res.json()
     if (res.ok) {
       setSessionActive(null)
-      setTotalSession(null)
+      setTotalEncaisse(0)
       setMontantCloture('')
-      // Recharger l'historique
       const resHist = await fetch('/api/caisse')
       const jsonHist = await resHist.json()
       setHistorique(jsonHist.data?.historique || [])
     } else {
-      setErreur(json.error)
+      alert(json.error)
     }
     setSaving(false)
   }
@@ -100,78 +94,81 @@ export default function CaissePage() {
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Caisse</h1>
 
       <div className="grid grid-cols-2 gap-6 mb-8">
-        {/* Session actuelle */}
+
+        {/* ── Session actuelle ── */}
         <div className="bg-white rounded-xl shadow p-6">
           <h2 className="font-semibold text-gray-700 mb-4">Session actuelle</h2>
 
           {sessionActive ? (
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
                 <span className="text-green-600 font-medium">Session ouverte</span>
               </div>
 
-              <div className="space-y-2 text-sm text-gray-600 mb-4">
-                <p>Caissier : <span className="font-medium text-gray-800">{sessionActive.user.nom}</span></p>
-                <p>Depuis : <span className="font-medium text-gray-800">{formatDateTime(sessionActive.dateOuverture)}</span></p>
-                <p>Fonds initiaux : <span className="font-medium text-gray-800">{formatMontant(sessionActive.montantOuverture)}</span></p>
+              <div className="space-y-1 mb-4 text-sm text-gray-500">
+                <p>Ouverte par : <span className="font-medium text-gray-700">{sessionActive.user.nom}</span></p>
+                <p>Depuis : <span className="font-medium text-gray-700">{formatDateTime(sessionActive.dateOuverture)}</span></p>
+                <p>Montant ouverture : <span className="font-medium text-gray-700">{formatMontant(sessionActive.montantOuverture)}</span></p>
               </div>
 
-              {/* Total ventes session */}
-              {totalSession !== null && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                  <p className="text-xs text-green-600 font-medium mb-1">Encaissé depuis l'ouverture</p>
-                  <p className="text-2xl font-bold text-green-700">{formatMontant(totalSession)}</p>
-                  <p className="text-xs text-green-500 mt-1">
-                    Total attendu : {formatMontant(sessionActive.montantOuverture + totalSession)}
-                  </p>
+              {/* Totaux encaissé / attendu */}
+              <div className="bg-gray-50 rounded-lg p-3 mb-4 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Total encaissé</span>
+                  <span className="font-semibold text-green-600">{formatMontant(totalEncaisse)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Total attendu en caisse</span>
+                  <span className="font-semibold text-blue-600">{formatMontant(totalAttendu)}</span>
+                </div>
+              </div>
+
+              {/* Clôture */}
+              <div className="flex gap-3 mb-3">
+                <input
+                  type="number"
+                  placeholder="Montant compté en caisse"
+                  value={montantCloture}
+                  onChange={(e) => setMontantCloture(e.target.value)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+                <button
+                  onClick={fermerSession}
+                  disabled={saving}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50"
+                >
+                  {saving ? 'Fermeture...' : 'Fermer'}
+                </button>
+              </div>
+
+              {/* Écart en temps réel */}
+              {ecart !== null && (
+                <div className={`text-sm font-medium px-3 py-2 rounded-lg ${
+                  ecart === 0
+                    ? 'bg-gray-100 text-gray-600'
+                    : ecart > 0
+                      ? 'bg-green-50 text-green-700'
+                      : 'bg-red-50 text-red-700'
+                }`}>
+                  {ecart === 0
+                    ? '✓ Caisse équilibrée'
+                    : ecart > 0
+                      ? `▲ Excédent : +${formatMontant(ecart)}`
+                      : `▼ Manque : ${formatMontant(ecart)}`}
                 </div>
               )}
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Montant compté en caisse</label>
-                <div className="flex gap-3">
-                  <input
-                    type="number"
-                    placeholder="Montant compté (GNF)"
-                    value={montantCloture}
-                    onChange={(e) => setMontantCloture(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400"
-                  />
-                  <button
-                    onClick={fermerSession}
-                    disabled={saving}
-                    className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50">
-                    {saving ? 'Fermeture...' : 'Clôturer'}
-                  </button>
-                </div>
-                {montantCloture && totalSession !== null && (
-                  <p className={`text-xs font-medium ${
-                    parseFloat(montantCloture) === sessionActive.montantOuverture + totalSession
-                      ? 'text-green-600'
-                      : 'text-orange-500'
-                  }`}>
-                    {parseFloat(montantCloture) > sessionActive.montantOuverture + totalSession
-                      ? `Excédent : +${formatMontant(parseFloat(montantCloture) - sessionActive.montantOuverture - totalSession)}`
-                      : parseFloat(montantCloture) < sessionActive.montantOuverture + totalSession
-                      ? `Manque : −${formatMontant(sessionActive.montantOuverture + totalSession - parseFloat(montantCloture))}`
-                      : 'Caisse équilibrée ✓'
-                    }
-                  </p>
-                )}
-              </div>
             </div>
           ) : (
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <span className="w-3 h-3 bg-gray-300 rounded-full"></span>
+                <span className="w-3 h-3 bg-gray-300 rounded-full" />
                 <span className="text-gray-500">Aucune session ouverte</span>
               </div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fonds d'ouverture (GNF)</label>
               <div className="flex gap-3">
                 <input
                   type="number"
-                  placeholder="Montant initial"
+                  placeholder="Montant d'ouverture"
                   value={montantOuverture}
                   onChange={(e) => setMontantOuverture(e.target.value)}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -179,45 +176,42 @@ export default function CaissePage() {
                 <button
                   onClick={ouvrirSession}
                   disabled={saving}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                >
                   {saving ? 'Ouverture...' : 'Ouvrir'}
                 </button>
               </div>
             </div>
           )}
-
-          {erreur && <p className="text-red-500 text-sm mt-3">{erreur}</p>}
         </div>
 
-        {/* Historique */}
+        {/* ── Historique ── */}
         <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold text-gray-700 mb-4">Historique des sessions</h2>
+          <h2 className="font-semibold text-gray-700 mb-4">Historique sessions</h2>
           {historique.length === 0 ? (
             <p className="text-gray-400 text-sm">Aucune session</p>
           ) : (
             <ul className="space-y-3">
-              {historique.slice(0, 6).map((s) => (
+              {historique.slice(0, 5).map((s) => (
                 <li key={s.id} className="border rounded-lg p-3 text-sm">
                   <div className="flex justify-between mb-1">
-                    <span className="font-medium text-gray-800">{s.user.nom}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                    <span className="font-medium">{s.user.nom}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${
                       !s.dateCloture ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                     }`}>
-                      {!s.dateCloture ? 'En cours' : 'Fermée'}
+                      {!s.dateCloture ? 'OUVERTE' : 'FERMÉE'}
                     </span>
                   </div>
-                  <p className="text-gray-500 text-xs">{formatDateTime(s.dateOuverture)}</p>
-                  {s.dateCloture && (
-                    <p className="text-gray-400 text-xs">→ {formatDateTime(s.dateCloture)}</p>
-                  )}
+                  <p className="text-gray-500">{formatDateTime(s.dateOuverture)}</p>
                   {s.montantCloture != null && (
-                    <p className="text-green-600 font-medium mt-1">{formatMontant(s.montantCloture)}</p>
+                    <p className="text-blue-600 font-medium">{formatMontant(s.montantCloture)}</p>
                   )}
                 </li>
               ))}
             </ul>
           )}
         </div>
+
       </div>
     </div>
   )
