@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import Modal from '@/components/ui/Modal'
+import { useToast } from '@/components/ui/Toast'
 
 interface Fournisseur {
   id: string
@@ -22,6 +24,8 @@ export default function FournisseursPage() {
   const [form, setForm] = useState({ nom: '', contact: '', telephone: '', email: '', delaiLivraison: '' })
   const [saving, setSaving] = useState(false)
   const [archivingId, setArchivingId] = useState<string | null>(null)
+  const [confirmArchiverId, setConfirmArchiverId] = useState<string | null>(null)
+  const { showToast } = useToast()
 
   useEffect(() => {
     fetch('/api/fournisseurs')
@@ -49,17 +53,22 @@ export default function FournisseursPage() {
     setSaving(false)
   }
 
-  const archiver = async (id: string) => {
-    if (!confirm('Archiver ce fournisseur ?')) return
-    setArchivingId(id)
-    const res = await fetch(`/api/fournisseurs/${id}`, { method: 'DELETE' })
+  const archiver = (id: string) => {
+    setConfirmArchiverId(id)
+  }
+
+  const doArchiver = async () => {
+    if (!confirmArchiverId) return
+    setArchivingId(confirmArchiverId)
+    const res = await fetch(`/api/fournisseurs/${confirmArchiverId}`, { method: 'DELETE' })
     if (res.ok) {
-      setFournisseurs(fournisseurs.filter((f) => f.id !== id))
+      setFournisseurs(fournisseurs.filter((f) => f.id !== confirmArchiverId))
     } else {
       const json = await res.json()
-      alert(json.error || 'Erreur lors de l\'archivage')
+      showToast(json.error || 'Erreur lors de l\'archivage', 'error')
     }
     setArchivingId(null)
+    setConfirmArchiverId(null)
   }
 
   return (
@@ -185,6 +194,17 @@ export default function FournisseursPage() {
           </table>
         )}
       </div>
+
+      <Modal
+        open={!!confirmArchiverId}
+        onClose={() => setConfirmArchiverId(null)}
+        onConfirm={doArchiver}
+        title="Archiver ce fournisseur ?"
+        description="Il n'apparaîtra plus dans les listes actives. Ses commandes existantes restent consultables."
+        variant="danger"
+        confirmLabel="Archiver"
+        loading={!!archivingId}
+      />
     </div>
   )
 }
