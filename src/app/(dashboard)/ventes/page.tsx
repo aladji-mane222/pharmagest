@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { formatMontant } from '@/lib/utils'
+import { useToast } from '@/components/ui'
 
 interface Medicament {
   id: string
@@ -19,6 +20,7 @@ interface LignePanier {
 }
 
 export default function VentesPage() {
+  const { showToast } = useToast()
   const [medicaments, setMedicaments] = useState<Medicament[]>([])
   const [search, setSearch] = useState('')
   const [panier, setPanier] = useState<LignePanier[]>([])
@@ -74,8 +76,8 @@ export default function VentesPage() {
   const monnaie = Math.max(0, montantPayeFloat - totalNet)
 
   const validerVente = async () => {
-    if (panier.length === 0) return alert('Panier vide')
-    if (modePaiement !== 'CREDIT' && !montantPaye) return alert('Entrer le montant paye')
+    if (panier.length === 0) { showToast('Panier vide', 'error'); return }
+    if (modePaiement !== 'CREDIT' && !montantPaye) { showToast('Entrer le montant payé', 'error'); return }
     setSaving(true)
 
     const montantPayeEffectif = modePaiement === 'CREDIT' ? '0' : montantPaye
@@ -101,7 +103,7 @@ export default function VentesPage() {
       setClientId('')
       setRemise(0)
     } else {
-      alert(json.error)
+      showToast(json.error, 'error')
     }
     setSaving(false)
   }
