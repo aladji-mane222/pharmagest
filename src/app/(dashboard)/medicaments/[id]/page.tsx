@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { formatMontant, formatDate } from '@/lib/utils'
+import { Modal, useToast } from '@/components/ui'
 
 interface Lot {
   id: string
@@ -39,10 +40,25 @@ export default function FicheMedicamentPage() {
       })
   }, [id])
 
+  const [confirmArchive, setConfirmArchive] = useState(false)
+  const [archiving, setArchiving] = useState(false)
+  const { showToast } = useToast()
+
   const handleArchiver = async () => {
-    if (!confirm('Archiver ce medicament ?')) return
-    await fetch(`/api/medicaments/${id}`, { method: 'DELETE' })
-    router.push('/medicaments')
+    setArchiving(true)
+    try {
+      const res = await fetch(`/api/medicaments/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        showToast(json.error || 'Erreur lors de l\'archivage', 'error')
+        return
+      }
+      showToast('Médicament archivé', 'success')
+      router.push('/medicaments')
+    } finally {
+      setArchiving(false)
+      setConfirmArchive(false)
+    }
   }
 
   if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
@@ -60,7 +76,7 @@ export default function FicheMedicamentPage() {
             Modifier
           </button>
           <button
-            onClick={handleArchiver}
+            onClick={() => setConfirmArchive(true)}
             className="bg-red-100 text-red-600 px-4 py-2 rounded-lg hover:bg-red-200"
           >
             Archiver
@@ -132,6 +148,17 @@ export default function FicheMedicamentPage() {
           </table>
         )}
       </div>
+
+      <Modal
+        open={confirmArchive}
+        onClose={() => setConfirmArchive(false)}
+        onConfirm={handleArchiver}
+        title="Archiver ce médicament ?"
+        description="Il ne sera plus visible dans les listes actives. Cette action peut être annulée par un administrateur depuis la base si besoin."
+        variant="danger"
+        confirmLabel="Archiver"
+        loading={archiving}
+      />
     </div>
   )
 }
