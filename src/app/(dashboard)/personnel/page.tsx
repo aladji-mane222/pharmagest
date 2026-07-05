@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatDateTime } from '@/lib/utils'
+import { Modal, useToast } from '@/components/ui'
 
 interface User {
   id: string
@@ -98,9 +99,14 @@ export default function PersonnelPage() {
     setSavingEdit(false)
   }
 
-  const toggleActif = async (u: User) => {
-    const action = u.actif ? 'désactiver' : 'réactiver'
-    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} le compte de ${u.nom} ?`)) return
+  const [confirmToggle, setConfirmToggle] = useState<User | null>(null)
+  const [toggling, setToggling] = useState(false)
+  const { showToast } = useToast()
+
+  const toggleActif = async () => {
+    if (!confirmToggle) return
+    const u = confirmToggle
+    setToggling(true)
     setErreur(null)
     const res  = await fetch(`/api/users/${u.id}`, {
       method:  'PATCH',
@@ -110,9 +116,12 @@ export default function PersonnelPage() {
     const json = await res.json()
     if (res.ok) {
       setUsers(users.map((usr) => usr.id === u.id ? json.data : usr))
+      showToast(u.actif ? 'Compte désactivé' : 'Compte réactivé', 'success')
     } else {
       setErreur(json.error || `Erreur lors de la mise à jour`)
     }
+    setToggling(false)
+    setConfirmToggle(null)
   }
 
   if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
@@ -245,7 +254,7 @@ export default function PersonnelPage() {
                             className="text-blue-600 hover:text-blue-800 text-xs font-medium">
                             Modifier
                           </button>
-                          <button onClick={() => toggleActif(u)}
+                          <button onClick={() => setConfirmToggle(u)}
                             className={`text-xs font-medium ${u.actif ? 'text-red-500 hover:text-red-700' : 'text-green-600 hover:text-green-800'}`}>
                             {u.actif ? 'Désactiver' : 'Réactiver'}
                           </button>
@@ -259,6 +268,19 @@ export default function PersonnelPage() {
           </tbody>
         </table>
       </div>
+
+      <Modal
+        open={!!confirmToggle}
+        onClose={() => setConfirmToggle(null)}
+        onConfirm={toggleActif}
+        title={confirmToggle ? `${confirmToggle.actif ? 'Désactiver' : 'Réactiver'} le compte de ${confirmToggle.nom} ?` : ''}
+        description={confirmToggle?.actif
+          ? "L'employé ne pourra plus se connecter tant que le compte n'est pas réactivé."
+          : "L'employé pourra à nouveau se connecter normalement."}
+        variant={confirmToggle?.actif ? 'danger' : 'default'}
+        confirmLabel={confirmToggle?.actif ? 'Désactiver' : 'Réactiver'}
+        loading={toggling}
+      />
     </div>
   )
 }
