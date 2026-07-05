@@ -25,6 +25,20 @@ export async function GET(request: Request) {
   const dateDebut = searchParams.get('dateDebut') || ''
   const dateFin   = searchParams.get('dateFin')   || ''
 
+  // Mode agrégat pour la caisse : retourner le total encaissé d'une session
+  const sessionCaisseId = searchParams.get('sessionCaisseId') || ''
+  if (sessionCaisseId) {
+    const agg = await prisma.vente.aggregate({
+      where: { sessionCaisseId, pharmacieId, statut: 'COMPLETE' },
+      _sum: { montantPaye: true },
+      _count: true,
+    })
+    return apiSuccess({
+      totalEncaisse: agg._sum.montantPaye ?? 0,
+      nbVentes: agg._count,
+    })
+  }
+
   const conditions: Prisma.Sql[] = [
     Prisma.sql`v."pharmacieId" = ${pharmacieId}`,
   ]

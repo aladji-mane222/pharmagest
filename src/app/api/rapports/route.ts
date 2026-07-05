@@ -28,12 +28,33 @@ export async function GET(request: Request) {
       select: {
         id: true,
         montantTotal: true,
+        modePaiement: true,
         createdAt: true,
         user: { select: { nom: true } },
       },
     })
+
     const total = ventes.reduce((s, v) => s + v.montantTotal, 0)
-    return apiSuccess({ ventes, total, type })
+
+    // Agrégat par caissier
+    const caissierMap = new Map<string, { nom: string; nbVentes: number; total: number }>()
+    for (const v of ventes) {
+      const nom = v.user.nom
+      const cur = caissierMap.get(nom) ?? { nom, nbVentes: 0, total: 0 }
+      caissierMap.set(nom, { ...cur, nbVentes: cur.nbVentes + 1, total: cur.total + v.montantTotal })
+    }
+    const parCaissier = [...caissierMap.values()].sort((a, b) => b.total - a.total)
+
+    // Agrégat par mode de paiement
+    const modeMap = new Map<string, { mode: string; nbVentes: number; total: number }>()
+    for (const v of ventes) {
+      const mode = v.modePaiement
+      const cur  = modeMap.get(mode) ?? { mode, nbVentes: 0, total: 0 }
+      modeMap.set(mode, { ...cur, nbVentes: cur.nbVentes + 1, total: cur.total + v.montantTotal })
+    }
+    const parMode = [...modeMap.values()].sort((a, b) => b.total - a.total)
+
+    return apiSuccess({ ventes, total, parCaissier, parMode, type })
   }
 
   if (type === 'stock') {
@@ -56,43 +77,39 @@ export async function GET(request: Request) {
   }
 
   if (type === 'benefice') {
-    // BUG CRITIQUE corrigé le 04/07/2026 : le CMV (coût des médicaments
-    // vendus) n'était jamais soustrait — beneficeNet = ca - totalDepenses
-    // uniquement, alors que CONTEXTE.md §7.8 fixe la formule à
-    // CA − CMV − Dépenses. Le CMV étant généralement la plus grosse charge
-    // d'une pharmacie, le bénéfice net affiché était largement surestimé.
-    const [ventesAgg, depensesAgg, lignesVendues] = await Promise.all([
+    const ventesWhere = {
+      pharmacieId,
+      createdAt: { gte: debut, lte: fin },
+      statut: 'COMPLETE' as const,
+    }
+
+    const [ventesAgg, depensesAgg, lignesVente] = await Promise.all([
       prisma.vente.aggregate({
-        where: { pharmacieId, createdAt: { gte: debut, lte: fin }, statut: 'COMPLETE' },
+        where: ventesWhere,
         _sum: { montantTotal: true },
       }),
       prisma.depense.aggregate({
-        where: { pharmacieId, createdAt: { gte: debut, lte: fin } },
+        where: { pharmacieId, createdAt: { gte: debut, lte: fin }, archivee: false },
         _sum: { montant: true },
       }),
+      // CMV = somme des (prixAchat du médicament × quantité vendue)
       prisma.ligneVente.findMany({
-        where: {
-          vente: { pharmacieId, createdAt: { gte: debut, lte: fin }, statut: 'COMPLETE' },
-        },
+        where: { vente: ventesWhere },
         select: {
           quantite: true,
-          lot:        { select: { prixAchat: true } },
           medicament: { select: { prixAchat: true } },
         },
       }),
     ])
 
-    // Priorité au prixAchat réel du lot vendu (FIFO, coût par livraison) ;
-    // repli sur le prixAchat de référence du médicament si le lot est
-    // inconnu (ligne historique sans lotId, ou lot sans prixAchat renseigné)
-    const cmv = lignesVendues.reduce((somme, ligne) => {
-      const cout = ligne.lot?.prixAchat ?? ligne.medicament.prixAchat ?? 0
-      return somme + cout * ligne.quantite
-    }, 0)
-
-    const ca = ventesAgg._sum.montantTotal ?? 0
+    const ca            = ventesAgg._sum.montantTotal ?? 0
     const totalDepenses = depensesAgg._sum.montant ?? 0
-    const beneficeNet = ca - cmv - totalDepenses
+    const cmv           = lignesVente.reduce(
+      (sum, l) => sum + (l.medicament.prixAchat ?? 0) * l.quantite,
+      0
+    )
+    const beneficeNet   = ca - cmv - totalDepenses
+
     return apiSuccess({ ca, cmv, totalDepenses, beneficeNet, type })
   }
 

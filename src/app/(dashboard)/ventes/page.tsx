@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { formatMontant } from '@/lib/utils'
 import { useToast } from '@/components/ui'
 
@@ -17,6 +18,7 @@ interface LignePanier {
   nom: string
   prixUnitaire: number
   quantite: number
+  stockTotal: number
 }
 
 export default function VentesPage() {
@@ -31,16 +33,31 @@ export default function VentesPage() {
   const [clients, setClients] = useState<{ id: string; nom: string }[]>([])
   const [clientId, setClientId] = useState('')
   const [remise, setRemise] = useState(0)
+  const [nomPharmacie, setNomPharmacie] = useState('Ma Pharmacie')
+  const [sessionCaisse, setSessionCaisse] = useState<boolean | null>(null)
 
   useEffect(() => {
     fetch('/api/clients')
       .then((r) => r.json())
       .then((json) => setClients(json.data || []))
+
+    fetch('/api/parametres')
+      .then((r) => r.json())
+      .then((json) => {
+        const nom = json.data?.nom ?? json.data?.pharmacie?.nom
+        if (nom) setNomPharmacie(nom)
+      })
+      .catch(() => {})
+
+    fetch('/api/caisse')
+      .then((r) => r.json())
+      .then((json) => setSessionCaisse(!!json.data?.sessionActive))
+      .catch(() => setSessionCaisse(false))
   }, [])
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (search.length >= 3) {
+      if (search.length >= 2) {
         fetch(`/api/medicaments?search=${search}`)
           .then((res) => res.json())
           .then((json) => setMedicaments(json.data?.medicaments || []))
@@ -52,11 +69,13 @@ export default function VentesPage() {
   }, [search])
 
   const ajouterAuPanier = (med: Medicament) => {
+    if (med.stockTotal === 0) return
     const existant = panier.find((l) => l.medicamentId === med.id)
     if (existant) {
+      if (existant.quantite >= existant.stockTotal) return
       setPanier(panier.map((l) => l.medicamentId === med.id ? { ...l, quantite: l.quantite + 1 } : l))
     } else {
-      setPanier([...panier, { medicamentId: med.id, nom: med.nom, prixUnitaire: med.prixVente, quantite: 1 }])
+      setPanier([...panier, { medicamentId: med.id, nom: med.nom, prixUnitaire: med.prixVente, quantite: 1, stockTotal: med.stockTotal }])
     }
     setSearch('')
     setMedicaments([])
@@ -108,9 +127,29 @@ export default function VentesPage() {
     setSaving(false)
   }
 
+  const stockCouleur = (stock: number) => {
+    if (stock === 0) return 'text-red-500'
+    if (stock <= 10) return 'text-orange-500'
+    return 'text-green-600'
+  }
+
+  const stockLabel = (stock: number) => {
+    if (stock === 0) return 'Rupture'
+    return `Stock: ${stock}`
+  }
+
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Point de Vente</h1>
+      <h1 className="text-2xl font-bold text-gray-800 mb-4">Point de Vente</h1>
+
+      {sessionCaisse === false && (
+        <div className="mb-5 bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center justify-between">
+          <span className="text-red-700 font-medium text-sm">⚠️ Aucune session caisse ouverte — les ventes ne peuvent pas être enregistrées</span>
+          <Link href="/caisse" className="text-sm font-medium text-red-600 underline hover:text-red-800">
+            Ouvrir la caisse →
+          </Link>
+        </div>
+      )}
 
       {recu && (
         <>
@@ -131,7 +170,7 @@ export default function VentesPage() {
             <div className="bg-white rounded-xl p-8 max-w-md w-full">
               <div className="recu-print">
                 <div className="text-center mb-4">
-                  <p className="font-bold text-lg text-gray-900">Pharmacie Centrale de Conakry</p>
+                  <p className="font-bold text-lg text-gray-900">{nomPharmacie}</p>
                   <div className="text-3xl my-2">✅</div>
                   <h2 className="text-xl font-bold text-gray-800">Vente enregistree !</h2>
                   <p className="text-xs text-gray-400 mt-1">Recu {recu.numero}</p>
@@ -200,7 +239,7 @@ export default function VentesPage() {
                       `- ${l.nom} x${l.quantite} = ${(l.prixUnitaire * l.quantite).toLocaleString()} GNF`
                     ).join('%0A') || ''
 
-                    const message = `*RECU - Pharmacie Centrale de Conakry*%0A%0ARecu: ${recu?.numero || ''}%0ADate: ${new Date().toLocaleString('fr-FR')}%0A%0A*Articles:*%0A${lignesTexte}%0A%0A*Total: ${recu?.montantTotal?.toLocaleString()} GNF*%0AMontant recu: ${recu?.montantPaye?.toLocaleString()} GNF%0AMonnaie: ${recu?.monnaie?.toLocaleString()} GNF%0A%0AMerci de votre confiance!`
+                    const message = `*RECU - ${nomPharmacie}*%0A%0ARecu: ${recu?.numero || ''}%0ADate: ${new Date().toLocaleString('fr-FR')}%0A%0A*Articles:*%0A${lignesTexte}%0A%0A*Total: ${recu?.montantTotal?.toLocaleString()} GNF*%0AMontant recu: ${recu?.montantPaye?.toLocaleString()} GNF%0AMonnaie: ${recu?.monnaie?.toLocaleString()} GNF%0A%0AMerci de votre confiance!`
 
                     window.open(`https://wa.me/${numero}?text=${message}`, '_blank')
                   }}
@@ -226,10 +265,19 @@ export default function VentesPage() {
             {medicaments.length > 0 && (
               <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 mt-1">
                 {medicaments.map((med) => (
-                  <button key={med.id} onClick={() => ajouterAuPanier(med)}
-                    className="w-full text-left px-4 py-3 hover:bg-green-50 border-b last:border-0 flex justify-between">
+                  <button
+                    key={med.id}
+                    onClick={() => ajouterAuPanier(med)}
+                    disabled={med.stockTotal === 0}
+                    className="w-full text-left px-4 py-3 hover:bg-green-50 border-b last:border-0 flex justify-between items-center disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
                     <span className="font-medium">{med.nom}</span>
-                    <span className="text-green-600">{formatMontant(med.prixVente)}</span>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-xs font-semibold ${stockCouleur(med.stockTotal)}`}>
+                        {stockLabel(med.stockTotal)}
+                      </span>
+                      <span className="text-green-600">{formatMontant(med.prixVente)}</span>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -262,8 +310,11 @@ export default function VentesPage() {
                           <button onClick={() => modifierQuantite(ligne.medicamentId, ligne.quantite - 1)}
                             className="w-7 h-7 bg-gray-100 rounded-full hover:bg-gray-200 font-bold">-</button>
                           <span className="w-8 text-center">{ligne.quantite}</span>
-                          <button onClick={() => modifierQuantite(ligne.medicamentId, ligne.quantite + 1)}
-                            className="w-7 h-7 bg-gray-100 rounded-full hover:bg-gray-200 font-bold">+</button>
+                          <button
+                            onClick={() => modifierQuantite(ligne.medicamentId, ligne.quantite + 1)}
+                            disabled={ligne.quantite >= ligne.stockTotal}
+                            className="w-7 h-7 bg-gray-100 rounded-full hover:bg-gray-200 font-bold disabled:opacity-30 disabled:cursor-not-allowed"
+                          >+</button>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right text-gray-600">{formatMontant(ligne.prixUnitaire)}</td>
@@ -354,9 +405,12 @@ export default function VentesPage() {
             </div>
           )}
 
-          <button onClick={validerVente} disabled={saving || panier.length === 0}
-            className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium text-lg">
-            {saving ? 'Enregistrement...' : 'Valider la vente'}
+          <button
+            onClick={validerVente}
+            disabled={saving || panier.length === 0 || sessionCaisse === false}
+            className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium text-lg disabled:cursor-not-allowed"
+          >
+            {saving ? 'Enregistrement...' : sessionCaisse === false ? 'Session caisse requise' : 'Valider la vente'}
           </button>
         </div>
       </div>
