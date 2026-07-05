@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
+import { Modal, useToast } from '@/components/ui'
 
 interface Depense {
   id: string
@@ -74,9 +75,12 @@ export default function DepensesPage() {
     setSaving(false)
   }
 
-  const handleArchiver = async (id: string, montant: number) => {
-    if (!confirm('Archiver cette depense ? Elle ne sera plus visible dans la liste.')) return
+  const [confirmArchiver, setConfirmArchiver] = useState<{ id: string; montant: number } | null>(null)
+  const { showToast } = useToast()
 
+  const handleArchiver = async () => {
+    if (!confirmArchiver) return
+    const { id, montant } = confirmArchiver
     setErrorMsg(null)
     setArchivingId(id)
     const res = await fetch(`/api/depenses/${id}`, { method: 'DELETE' })
@@ -84,10 +88,12 @@ export default function DepensesPage() {
     if (res.ok) {
       setDepenses(depenses.filter((d) => d.id !== id))
       setTotalMontant(totalMontant - montant)
+      showToast('Dépense archivée', 'success')
     } else {
       setErrorMsg(json.error || 'Erreur lors de l\'archivage')
     }
     setArchivingId(null)
+    setConfirmArchiver(null)
   }
 
   return (
@@ -211,7 +217,7 @@ export default function DepensesPage() {
                   {isAdmin && (
                     <td className="px-6 py-4 text-right">
                       <button
-                        onClick={() => handleArchiver(d.id, d.montant)}
+                        onClick={() => setConfirmArchiver({ id: d.id, montant: d.montant })}
                         disabled={archivingId === d.id}
                         className="text-gray-500 hover:text-red-600 text-xs font-medium disabled:opacity-50"
                       >
@@ -225,6 +231,17 @@ export default function DepensesPage() {
           </table>
         )}
       </div>
+
+      <Modal
+        open={!!confirmArchiver}
+        onClose={() => setConfirmArchiver(null)}
+        onConfirm={handleArchiver}
+        title="Archiver cette dépense ?"
+        description="Elle ne sera plus visible dans la liste des dépenses actives."
+        variant="danger"
+        confirmLabel="Archiver"
+        loading={!!archivingId}
+      />
     </div>
   )
 }
