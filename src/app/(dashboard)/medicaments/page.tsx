@@ -39,9 +39,9 @@ export default function MedicamentsPage() {
   }, [search])
 
   // Catégories uniques dérivées des médicaments chargés
-  const categories = [...new Set(
+  const categories = Array.from(new Set(
     medicaments.map((m) => m.categorie).filter(Boolean)
-  )] as string[]
+  )) as string[]
 
   const medicamentsFiltres = categorieFiltree
     ? medicaments.filter((m) => m.categorie === categorieFiltree)
