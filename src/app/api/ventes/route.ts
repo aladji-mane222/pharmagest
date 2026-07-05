@@ -136,7 +136,15 @@ export async function POST(request: Request) {
   if (remise < 0 || remise > sommeLignes) return apiError('Remise invalide', 400)
   const montantTotal = sommeLignes - remise
 
-  const montantPayeFloat = parseFloat(montantPaye) || montantTotal
+  // BUG CRITIQUE corrigé le 04/07/2026 : l'ancien code faisait
+  // `parseFloat(montantPaye) || montantTotal`. Or en JavaScript, 0 est une
+  // valeur "falsy" — donc une vente à crédit total (le POS envoie
+  // volontairement montantPaye: "0") se voyait silencieusement traitée
+  // comme entièrement payée. Conséquence réelle observée : le plafond de
+  // crédit n'était jamais vérifié et le solde crédit du client n'était
+  // jamais incrémenté pour TOUTE vente à crédit total depuis l'origine.
+  const montantPayeParse = parseFloat(montantPaye)
+  const montantPayeFloat = Number.isNaN(montantPayeParse) ? montantTotal : montantPayeParse
   const statut = montantPayeFloat >= montantTotal ? 'COMPLETE' : 'PARTIELLE'
   const monnaie = Math.max(0, montantPayeFloat - montantTotal)
   const resteADu = Math.max(0, montantTotal - montantPayeFloat)
