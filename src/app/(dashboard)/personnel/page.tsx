@@ -115,7 +115,7 @@ export default function PersonnelPage() {
   const DROITS = [
     { label: 'Faire une vente',       caissier: true,  pharmacien: true,  admin: true  },
     { label: 'Voir son historique',   caissier: true,  pharmacien: true,  admin: true  },
-    { label: 'Voir tout l'historique',caissier: false, pharmacien: true,  admin: true  },
+    { label: "Voir tout l'historique",caissier: false, pharmacien: true,  admin: true  },
     { label: 'Gérer les médicaments', caissier: false, pharmacien: true,  admin: true  },
     { label: 'Gérer les fournisseurs',caissier: false, pharmacien: true,  admin: true  },
     { label: 'Archiver / annuler',    caissier: false, pharmacien: false, admin: true  },
