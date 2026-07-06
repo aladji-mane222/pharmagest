@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
 
 interface Vente {
@@ -40,6 +41,9 @@ const MODE_LABELS: Record<string, string> = {
 const LIMITE = 20
 
 export default function HistoriqueVentesPage() {
+  const { data: session } = useSession()
+  const isCaissier = session?.user?.role === 'CAISSIER'
+
   const [ventes,     setVentes]     = useState<Vente[]>([])
   const [total,      setTotal]      = useState(0)
   const [loading,    setLoading]    = useState(true)
@@ -88,6 +92,12 @@ export default function HistoriqueVentesPage() {
 
   return (
     <div className="p-8">
+      {isCaissier && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-sm text-blue-700">
+          Vous consultez uniquement vos propres ventes
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Historique des ventes</h1>

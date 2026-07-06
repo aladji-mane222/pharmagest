@@ -203,7 +203,7 @@ export default function DepensesPage() {
                 <th className="text-left px-6 py-3 text-gray-600">Categorie</th>
                 <th className="text-left px-6 py-3 text-gray-600">Saisie par</th>
                 <th className="text-right px-6 py-3 text-gray-600">Montant</th>
-                {isAdmin && <th className="text-right px-6 py-3 text-gray-600">Actions</th>}
+                <th className="text-right px-6 py-3 text-gray-600">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -214,8 +214,8 @@ export default function DepensesPage() {
                   <td className="px-6 py-4 text-gray-600">{d.categorie || '-'}</td>
                   <td className="px-6 py-4 text-gray-600">{d.user?.nom || '-'}</td>
                   <td className="px-6 py-4 text-right font-medium text-red-600">{formatMontant(d.montant)}</td>
-                  {isAdmin && (
-                    <td className="px-6 py-4 text-right">
+                  <td className="px-6 py-4 text-right">
+                    {isAdmin ? (
                       <button
                         onClick={() => setConfirmArchiver({ id: d.id, montant: d.montant })}
                         disabled={archivingId === d.id}
@@ -223,8 +223,10 @@ export default function DepensesPage() {
                       >
                         {archivingId === d.id ? 'Archivage...' : 'Archiver'}
                       </button>
-                    </td>
-                  )}
+                    ) : (
+                      <span title="Réservé aux administrateurs" className="text-gray-300 cursor-help">🔒</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

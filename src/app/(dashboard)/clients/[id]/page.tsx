@@ -184,17 +184,23 @@ export default function ClientDetailPage() {
             <span className="px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">Archivé</span>
           )}
         </div>
-        {isAdmin && client.actif && (
-          <div className="flex gap-2">
-            <button onClick={() => setShowEdit(!showEdit)}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700">
-              Modifier
-            </button>
-            {client.soldeCredit === 0 && (
-              <button onClick={() => setConfirmArchive(true)} disabled={archiving}
-                className="px-4 py-2 text-sm bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50">
-                {archiving ? 'Archivage...' : 'Archiver'}
-              </button>
+        {client.actif && (
+          <div className="flex gap-2 items-center">
+            {isAdmin ? (
+              <>
+                <button onClick={() => setShowEdit(!showEdit)}
+                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700">
+                  Modifier
+                </button>
+                {client.soldeCredit === 0 && (
+                  <button onClick={() => setConfirmArchive(true)} disabled={archiving}
+                    className="px-4 py-2 text-sm bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50">
+                    {archiving ? 'Archivage...' : 'Archiver'}
+                  </button>
+                )}
+              </>
+            ) : (
+              <span title="Réservé aux administrateurs" className="text-gray-300 cursor-help text-lg">🔒</span>
             )}
           </div>
         )}

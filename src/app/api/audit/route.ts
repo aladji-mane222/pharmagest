@@ -9,14 +9,25 @@ export async function GET(request: Request) {
   if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
 
   const { searchParams } = new URL(request.url)
-  const action = searchParams.get('action') || ''
-  const page = parseInt(searchParams.get('page') || '1')
-  const limit = 20
-  const skip = (page - 1) * limit
+  const action    = searchParams.get('action')    || ''
+  const dateDebut = searchParams.get('dateDebut') || ''
+  const dateFin   = searchParams.get('dateFin')   || ''
+  const page      = parseInt(searchParams.get('page') || '1')
+  const limit     = 20
+  const skip      = (page - 1) * limit
+
+  const createdAt: { gte?: Date; lte?: Date } = {}
+  if (dateDebut) createdAt.gte = new Date(dateDebut)
+  if (dateFin) {
+    const fin = new Date(dateFin)
+    fin.setUTCHours(23, 59, 59, 999)
+    createdAt.lte = fin
+  }
 
   const where = {
     pharmacieId: session.user.pharmacieId,
-    ...(action && { action: { contains: action, mode: 'insensitive' as const } }),
+    ...(action    && { action: { contains: action, mode: 'insensitive' as const } }),
+    ...(Object.keys(createdAt).length > 0 && { createdAt }),
   }
 
   const [logs, total] = await Promise.all([

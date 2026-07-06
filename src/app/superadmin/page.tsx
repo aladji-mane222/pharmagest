@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { formatDateTime } from '@/lib/utils'
 
 interface Pharmacie {
   id: string
@@ -15,11 +16,19 @@ interface Pharmacie {
   _count: { users: number; medicaments: number; ventes: number }
 }
 
+interface BackupStatut {
+  pharmacieId:  string
+  pharmacieNom: string
+  dernierSucces: { date: string; fichier: string | null; taille: number | null } | null
+  dernierEchec:  { date: string; erreur: string | null } | null
+}
+
 export default function SuperAdminPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [pharmacies, setPharmacies] = useState<Pharmacie[]>([])
-  const [loading, setLoading] = useState(true)
+  const [backups,    setBackups]    = useState<BackupStatut[]>([])
+  const [loading,    setLoading]    = useState(true)
 
   useEffect(() => {
     if (status === 'authenticated' && session?.user?.role !== 'SUPER_ADMIN') {
@@ -29,12 +38,14 @@ export default function SuperAdminPage() {
 
   useEffect(() => {
     if (status === 'authenticated' && session?.user?.role === 'SUPER_ADMIN') {
-      fetch('/api/superadmin/pharmacies')
-        .then((res) => res.json())
-        .then((json) => {
-          setPharmacies(json.data || [])
-          setLoading(false)
-        })
+      Promise.all([
+        fetch('/api/superadmin/pharmacies').then((r) => r.json()),
+        fetch('/api/superadmin/backups').then((r) => r.json()),
+      ]).then(([pharmJson, backupJson]) => {
+        setPharmacies(pharmJson.data || [])
+        setBackups(backupJson.data || [])
+        setLoading(false)
+      })
     }
   }, [status, session])
 
@@ -115,6 +126,69 @@ export default function SuperAdminPage() {
             </tbody>
           </table>
         </div>
+
+        {/* ── Tableau des sauvegardes ───────────────────────────────────────── */}
+        <h2 className="text-xl font-semibold text-gray-800 mt-10 mb-4">Sauvegardes B2</h2>
+        <div className="bg-white rounded-xl shadow overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b">
+              <tr>
+                <th className="text-left px-6 py-3 text-gray-600">Pharmacie</th>
+                <th className="text-left px-6 py-3 text-gray-600">Dernier backup réussi</th>
+                <th className="text-left px-6 py-3 text-gray-600">Taille</th>
+                <th className="text-left px-6 py-3 text-gray-600">Dernier échec</th>
+                <th className="text-center px-6 py-3 text-gray-600">Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              {backups.map((b) => {
+                const tailleKo = b.dernierSucces?.taille
+                  ? Math.round((b.dernierSucces.taille as number) / 1024)
+                  : null
+
+                const echecPlusRecent = b.dernierEchec && b.dernierSucces
+                  ? new Date(b.dernierEchec.date) > new Date(b.dernierSucces.date)
+                  : !!b.dernierEchec
+
+                return (
+                  <tr key={b.pharmacieId} className="border-b last:border-0 hover:bg-gray-50">
+                    <td className="px-6 py-4 font-medium">{b.pharmacieNom}</td>
+                    <td className="px-6 py-4 text-gray-600">
+                      {b.dernierSucces ? formatDateTime(b.dernierSucces.date) : '—'}
+                    </td>
+                    <td className="px-6 py-4 text-gray-600">
+                      {tailleKo !== null ? `${tailleKo} Ko` : '—'}
+                    </td>
+                    <td className="px-6 py-4 text-gray-600">
+                      {b.dernierEchec ? (
+                        <span title={b.dernierEchec.erreur ?? ''} className="cursor-help">
+                          {formatDateTime(b.dernierEchec.date)}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {!b.dernierSucces && !b.dernierEchec ? (
+                        <span className="text-gray-400 text-xs">Aucun backup</span>
+                      ) : echecPlusRecent ? (
+                        <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">❌ Échec</span>
+                      ) : (
+                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">✅ OK</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+              {backups.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
+                    Aucun backup enregistré — le cron n&apos;a pas encore tourné
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
       </div>
     </div>
   )
