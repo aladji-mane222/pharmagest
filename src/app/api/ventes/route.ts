@@ -43,6 +43,10 @@ export async function GET(request: Request) {
     Prisma.sql`v."pharmacieId" = ${pharmacieId}`,
   ]
 
+  if (session.user.role === 'CAISSIER') {
+    conditions.push(Prisma.sql`v."userId" = ${session.user.id}`)
+  }
+
   if (statut) {
     conditions.push(Prisma.sql`v.statut = ${statut}::"StatutVente"`)
   }

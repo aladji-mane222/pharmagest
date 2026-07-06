@@ -1,6 +1,8 @@
 import { createHash } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
+import { createAuditLog } from '@/lib/audit'
+import { envoyerEmail } from '@/lib/email'
 
 // ── Types B2 ─────────────────────────────────────────────────────────────────
 
@@ -115,7 +117,7 @@ export async function GET(request: Request) {
 
   const pharmacies = await prisma.pharmacie.findMany({
     where:  { licenceActive: true },
-    select: { id: true, nom: true },
+    select: { id: true, nom: true, email: true },
   })
 
   const resultats: ResultatPharmacie[] = []
@@ -165,6 +167,12 @@ export async function GET(request: Request) {
 
       console.log(`[Backup] ✓ ${pharmacie.nom} → ${nomFichier} (${tailleKo} Ko)`)
 
+      await createAuditLog({
+        action:      'BACKUP_REUSSI',
+        details:     { fichier: nomFichier, taille: octets },
+        pharmacieId: pharmacie.id,
+      })
+
       resultats.push({
         pharmacieId:  pharmacie.id,
         pharmacieNom: pharmacie.nom,
@@ -176,6 +184,38 @@ export async function GET(request: Request) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`[Backup] ✗ ${pharmacie.nom}:`, msg)
+
+      await createAuditLog({
+        action:      'BACKUP_ECHEC',
+        details:     { erreur: msg, fichier: nomFichier },
+        pharmacieId: pharmacie.id,
+      })
+
+      // Alerte email si 2 échecs consécutifs dans les 48h
+      const il48h = new Date(Date.now() - 48 * 60 * 60 * 1000)
+      const nbEchecRecents = await prisma.auditLog.count({
+        where: {
+          pharmacieId: pharmacie.id,
+          action:      'BACKUP_ECHEC',
+          createdAt:   { gte: il48h },
+        },
+      })
+      if (nbEchecRecents >= 2) {
+        const emailDest = pharmacie.email ?? process.env.EMAIL_ADMIN
+        if (emailDest) {
+          await envoyerEmail({
+            to:      emailDest,
+            subject: `[URGENT] Échec backup PharmaGest — ${pharmacie.nom}`,
+            html: `
+              <h2>⚠️ Échec de sauvegarde répété</h2>
+              <p>La sauvegarde automatique de <strong>${pharmacie.nom}</strong>
+              a échoué <strong>${nbEchecRecents} fois</strong> au cours des dernières 48h.</p>
+              <p><strong>Dernière erreur :</strong> ${msg}</p>
+              <p>Vérifiez les credentials Backblaze B2 et l'accès réseau.</p>
+            `,
+          }).catch((e: Error) => console.error('[Backup] Échec envoi email alerte:', e.message))
+        }
+      }
 
       resultats.push({
         pharmacieId:  pharmacie.id,

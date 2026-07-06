@@ -22,8 +22,11 @@ const roleCouleur = (role: string) => {
 
 export default function PersonnelPage() {
   const { data: sessionData } = useSession()
-  const moiId = sessionData?.user?.id
+  const moiId   = sessionData?.user?.id
+  const isAdmin = sessionData?.user?.role === 'ADMIN' || sessionData?.user?.role === 'SUPER_ADMIN'
   const { showToast } = useToast()
+
+  const [showDroits, setShowDroits] = useState(false)
 
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
@@ -109,6 +112,18 @@ export default function PersonnelPage() {
 
   if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
 
+  const DROITS = [
+    { label: 'Faire une vente',       caissier: true,  pharmacien: true,  admin: true  },
+    { label: 'Voir son historique',   caissier: true,  pharmacien: true,  admin: true  },
+    { label: 'Voir tout l'historique',caissier: false, pharmacien: true,  admin: true  },
+    { label: 'Gérer les médicaments', caissier: false, pharmacien: true,  admin: true  },
+    { label: 'Gérer les fournisseurs',caissier: false, pharmacien: true,  admin: true  },
+    { label: 'Archiver / annuler',    caissier: false, pharmacien: false, admin: true  },
+    { label: 'Accès rapports',        caissier: false, pharmacien: true,  admin: true  },
+    { label: 'Gérer le personnel',    caissier: false, pharmacien: false, admin: true  },
+    { label: 'Accès crédits',         caissier: false, pharmacien: true,  admin: true  },
+  ]
+
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
@@ -120,6 +135,43 @@ export default function PersonnelPage() {
           + Nouveau compte
         </button>
       </div>
+
+      {/* Tableau des droits — visible ADMIN uniquement */}
+      {isAdmin && (
+        <div className="bg-white rounded-xl shadow mb-6 overflow-hidden">
+          <button
+            onClick={() => setShowDroits((v) => !v)}
+            className="w-full flex items-center justify-between px-6 py-4 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <span>Droits par rôle</span>
+            <span className="text-gray-400">{showDroits ? '▲' : '▼'}</span>
+          </button>
+          {showDroits && (
+            <div className="border-t overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-6 py-3 text-gray-600 font-medium">Fonctionnalité</th>
+                    <th className="text-center px-6 py-3 text-gray-600 font-medium">CAISSIER</th>
+                    <th className="text-center px-6 py-3 text-gray-600 font-medium">PHARMACIEN</th>
+                    <th className="text-center px-6 py-3 text-gray-600 font-medium">ADMIN</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {DROITS.map((d) => (
+                    <tr key={d.label} className="border-t">
+                      <td className="px-6 py-3 text-gray-700">{d.label}</td>
+                      <td className="px-6 py-3 text-center">{d.caissier  ? '✅' : '❌'}</td>
+                      <td className="px-6 py-3 text-center">{d.pharmacien ? '✅' : '❌'}</td>
+                      <td className="px-6 py-3 text-center">{d.admin     ? '✅' : '❌'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-6 mb-6 grid grid-cols-2 gap-4">
