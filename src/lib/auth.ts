@@ -2,6 +2,7 @@ import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { verifierRateLimit, enregistrerEchec, reinitialiser } from '@/lib/rate-limit'
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -17,9 +18,22 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Mot de passe', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) {
           return null
+        }
+
+        const ip =
+          (req?.headers?.['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ||
+          'ip-inconnue'
+        const cleRateLimit = `${credentials.email.toLowerCase()}:${ip}`
+
+        const { autorise, reessayerDansMs } = await verifierRateLimit(cleRateLimit)
+        if (!autorise) {
+          const minutes = Math.ceil((reessayerDansMs ?? 0) / 60000)
+          throw new Error(
+            `Trop de tentatives de connexion. Réessayez dans ${minutes} minute(s).`
+          )
         }
 
         const user = await prisma.user.findUnique({
@@ -28,6 +42,7 @@ export const authOptions: NextAuthOptions = {
         })
 
         if (!user || !user.actif) {
+          await enregistrerEchec(cleRateLimit)
           return null
         }
 
@@ -37,8 +52,11 @@ export const authOptions: NextAuthOptions = {
         )
 
         if (!passwordValid) {
+          await enregistrerEchec(cleRateLimit)
           return null
         }
+
+        await reinitialiser(cleRateLimit)
 
         return {
           id: user.id,
