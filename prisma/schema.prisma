@@ -356,3 +356,10 @@ model AuditLog {
   @@index([pharmacieId])
   @@index([createdAt])
 }
+model TentativeConnexion {
+  id        String   @id @default(cuid())
+  cle       String
+  createdAt DateTime @default(now())
+
+  @@index([cle, createdAt])
+}
