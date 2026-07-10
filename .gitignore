@@ -54,3 +54,6 @@ prisma/*.db-journal
 
 .vercel
 .env*.local
+
+public/sw.js
+public/workbox-*.js
