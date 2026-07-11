@@ -101,30 +101,44 @@ export default function VentesPage() {
 
     const montantPayeEffectif = modePaiement === 'CREDIT' ? '0' : montantPaye
 
-    const res = await fetch('/api/ventes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        lignes: panier.map((l) => ({ medicamentId: l.medicamentId, quantite: l.quantite })),
-        modePaiement,
-        montantPaye: montantPayeEffectif,
-        clientId: clientId || null,
-        remise,
-      }),
-    })
+    try {
+      const res = await fetch('/api/ventes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lignes: panier.map((l) => ({ medicamentId: l.medicamentId, quantite: l.quantite })),
+          modePaiement,
+          montantPaye: montantPayeEffectif,
+          clientId: clientId || null,
+          remise,
+        }),
+      })
 
-    const json = await res.json()
-    if (res.ok) {
-      const numero = `REC-${Date.now()}`
-      setRecu({ montantTotal: totalNet, monnaie: modePaiement === 'CREDIT' ? 0 : monnaie, montantPaye: parseFloat(montantPayeEffectif) || 0, lignes: [...panier], numero, remise })
-      setPanier([])
-      setMontantPaye('')
-      setClientId('')
-      setRemise(0)
-    } else {
-      showToast(json.error, 'error')
+      let json: { error?: string } = {}
+      try {
+        json = await res.json()
+      } catch {
+        // Reponse vide ou non-JSON (panne reseau/base en cours de requete) —
+        // on traite comme un echec generique plutot que de laisser planter
+        // la page (constate en usage reel le 11/07/2026 : la page restait
+        // bloquee indefiniment sur ce cas).
+      }
+
+      if (res.ok) {
+        const numero = `REC-${Date.now()}`
+        setRecu({ montantTotal: totalNet, monnaie: modePaiement === 'CREDIT' ? 0 : monnaie, montantPaye: parseFloat(montantPayeEffectif) || 0, lignes: [...panier], numero, remise })
+        setPanier([])
+        setMontantPaye('')
+        setClientId('')
+        setRemise(0)
+      } else {
+        showToast(json.error || 'Erreur lors de la vente — reessaie dans quelques secondes', 'error')
+      }
+    } catch {
+      showToast('Erreur reseau — la vente n\'a peut-etre pas ete enregistree, verifie l\'historique avant de reessayer', 'error')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   const stockCouleur = (stock: number) => {

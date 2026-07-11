@@ -182,7 +182,14 @@ export async function POST(request: Request) {
     }
   }
 
-  const vente = await prisma.$transaction(async (tx) => {
+  // timeout/maxWait releves du defaut Prisma (5s/2s) : une vente de plusieurs
+  // articles fait plusieurs allers-retours sequentiels vers la base
+  // (decrementerLotFifo + mouvementStock par ligne), et la latence
+  // Guinee-Europe documentee (250-350ms/aller-retour) peut facilement
+  // depasser 5s pour 2-3 articles — constate en usage reel le 11/07/2026
+  // (erreur P2028 "Transaction not found" sur une vente normale).
+  const vente = await prisma.$transaction(
+    async (tx) => {
     // 1. Créer la vente
     const v = await tx.vente.create({
       data: {
@@ -230,7 +237,9 @@ export async function POST(request: Request) {
     }
 
     return v
-  })
+    },
+    { timeout: 15000, maxWait: 10000 }
+  )
 
   await createAuditLog({
     action:   'VENTE_EFFECTUEE',
