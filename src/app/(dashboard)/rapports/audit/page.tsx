@@ -39,6 +39,7 @@ const LABELS_ACTIONS: Record<string, string> = {
   LOT_MODIFIE:             'Lot modifié',
   USER_CREE:               'Nouvel employé créé',
   USER_MODIFIE:            'Employé modifié',
+  IMPORT_MEDICAMENTS:      'Import de médicaments en masse',
   BACKUP_REUSSI:           'Sauvegarde réussie',
   BACKUP_ECHEC:            'Échec de sauvegarde',
 }
@@ -71,6 +72,7 @@ const DESCRIPTIONS_ACTIONS: Record<string, string> = {
   LOT_MODIFIE:            "Les informations d'un lot de stock ont été modifiées",
   USER_CREE:              'Un nouveau compte employé a été créé',
   USER_MODIFIE:           "Les informations ou le mot de passe d'un employé ont été modifiés",
+  IMPORT_MEDICAMENTS:     'Un import en masse de médicaments a été effectué depuis un fichier',
   BACKUP_REUSSI:          "La sauvegarde automatique B2 s'est terminée avec succès",
   BACKUP_ECHEC:           'La sauvegarde automatique B2 a échoué',
 }
