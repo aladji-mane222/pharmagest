@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import { formatMontant, formatDate } from '@/lib/utils'
+import ImportModal, { ImportField } from '@/components/ui/ImportModal'
 
 interface Lot {
   id: string
@@ -25,14 +27,26 @@ interface MedicamentStock {
   lots: Lot[]
 }
 
+const CHAMPS_IMPORT_STOCK: ImportField[] = [
+  { key: 'nomMedicament', label: 'Medicament', required: true, guessKeywords: ['medicament', 'nom', 'designation', 'produit'] },
+  { key: 'numeroLot', label: 'Numero de lot', guessKeywords: ['lot', 'numero lot'] },
+  { key: 'datePeremption', label: 'Date de peremption', required: true, guessKeywords: ['peremption', 'expiration', 'date'] },
+  { key: 'quantite', label: 'Quantite', required: true, guessKeywords: ['quantite', 'qte', 'stock'] },
+  { key: 'prixAchat', label: 'Prix d\'achat', guessKeywords: ['prix achat', 'pu achat', 'achat'] },
+]
+
 export default function StockPage() {
+  const { data: sessionData } = useSession()
+  const isAdmin = sessionData?.user?.role === 'ADMIN' || sessionData?.user?.role === 'SUPER_ADMIN'
+
   const [stock, setStock] = useState<MedicamentStock[]>([])
   const [valeurTotale, setValeurTotale] = useState(0)
   const [loading, setLoading] = useState(true)
   const [filtre, setFiltre] = useState<'tous' | 'bas' | 'critiques'>('tous')
   const [selected, setSelected] = useState<MedicamentStock | null>(null)
+  const [importOuvert, setImportOuvert] = useState(false)
 
-  useEffect(() => {
+  const chargerStock = () => {
     fetch('/api/stock')
       .then((res) => res.json())
       .then((json) => {
@@ -40,6 +54,10 @@ export default function StockPage() {
         setValeurTotale(json.data?.valeurTotale || 0)
         setLoading(false)
       })
+  }
+
+  useEffect(() => {
+    chargerStock()
   }, [])
 
   const stockFiltre = stock.filter((med) => {
@@ -60,6 +78,14 @@ export default function StockPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {isAdmin && (
+            <button
+              onClick={() => setImportOuvert(true)}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 transition-colors"
+            >
+              Importer le stock initial
+            </button>
+          )}
           <Link
             href="/stock/mouvements"
             className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
@@ -81,6 +107,16 @@ export default function StockPage() {
           </div>
         </div>
       </div>
+
+      <ImportModal
+        open={importOuvert}
+        onClose={() => setImportOuvert(false)}
+        title="Importer le stock initial"
+        fields={CHAMPS_IMPORT_STOCK}
+        apiEndpoint="/api/stock/import"
+        templateHref="/modeles/stock-modele.xlsx"
+        onImported={() => chargerStock()}
+      />
 
       <div className="grid grid-cols-3 gap-6 mb-6">
         <div className="bg-white rounded-xl shadow p-4">
