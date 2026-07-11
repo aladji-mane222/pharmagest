@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatMontant } from '@/lib/utils'
+import ImportModal, { ImportField } from '@/components/ui/ImportModal'
 
 interface Medicament {
   id: string
@@ -15,6 +16,15 @@ interface Medicament {
   unite: string
 }
 
+const CHAMPS_IMPORT: ImportField[] = [
+  { key: 'nom', label: 'Nom', required: true, guessKeywords: ['nom', 'designation', 'produit', 'medicament'] },
+  { key: 'categorie', label: 'Categorie', guessKeywords: ['categorie', 'famille', 'type'] },
+  { key: 'prixVente', label: 'Prix de vente', required: true, guessKeywords: ['prix vente', 'pu vente', 'prix de vente', 'vente'] },
+  { key: 'prixAchat', label: 'Prix d\'achat', guessKeywords: ['prix achat', 'pu achat', 'prix d\'achat', 'achat'] },
+  { key: 'unite', label: 'Unite', guessKeywords: ['unite', 'unit'] },
+  { key: 'stockMinimum', label: 'Stock minimum', guessKeywords: ['stock min', 'seuil', 'stock minimum'] },
+]
+
 export default function MedicamentsPage() {
   const { data: sessionData } = useSession()
   const isAdmin = sessionData?.user?.role === 'ADMIN' || sessionData?.user?.role === 'SUPER_ADMIN'
@@ -24,17 +34,30 @@ export default function MedicamentsPage() {
   const [categorieFiltree, setCategorieFiltree] = useState('')
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
+  const [importOuvert, setImportOuvert] = useState(false)
+
+  const chargerMedicaments = () => {
+    fetch(`/api/medicaments?search=${search}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`Erreur ${res.status}`)
+        }
+        return res.json()
+      })
+      .then((json) => {
+        setMedicaments(json.data?.medicaments || [])
+        setTotal(json.data?.total || 0)
+        setLoading(false)
+      })
+      .catch(() => {
+        // Panne reseau/base temporaire — on arrete le chargement plutot
+        // que de laisser planter la page avec une erreur JSON cryptique.
+        setLoading(false)
+      })
+  }
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetch(`/api/medicaments?search=${search}`)
-        .then((res) => res.json())
-        .then((json) => {
-          setMedicaments(json.data?.medicaments || [])
-          setTotal(json.data?.total || 0)
-          setLoading(false)
-        })
-    }, 300)
+    const timer = setTimeout(chargerMedicaments, 300)
     return () => clearTimeout(timer)
   }, [search])
 
@@ -55,14 +78,32 @@ export default function MedicamentsPage() {
           <p className="text-gray-500 text-sm">{total} médicaments au total</p>
         </div>
         {isAdmin && (
-          <Link
-            href="/medicaments/nouveau"
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-          >
-            + Nouveau médicament
-          </Link>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setImportOuvert(true)}
+              className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Importer
+            </button>
+            <Link
+              href="/medicaments/nouveau"
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+            >
+              + Nouveau médicament
+            </Link>
+          </div>
         )}
       </div>
+
+      <ImportModal
+        open={importOuvert}
+        onClose={() => setImportOuvert(false)}
+        title="Importer des médicaments"
+        fields={CHAMPS_IMPORT}
+        apiEndpoint="/api/medicaments/import"
+        templateHref="/modeles/medicaments-modele.xlsx"
+        onImported={() => chargerMedicaments()}
+      />
 
       {/* Filtres */}
       <div className="flex gap-3 mb-4">
