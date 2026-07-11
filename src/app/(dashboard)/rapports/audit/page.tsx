@@ -40,6 +40,9 @@ const LABELS_ACTIONS: Record<string, string> = {
   USER_CREE:               'Nouvel employé créé',
   USER_MODIFIE:            'Employé modifié',
   IMPORT_MEDICAMENTS:      'Import de médicaments en masse',
+  IMPORT_STOCK:            'Import de stock initial en masse',
+  IMPORT_CLIENTS:          'Import de clients en masse',
+  IMPORT_FOURNISSEURS:     'Import de fournisseurs en masse',
   BACKUP_REUSSI:           'Sauvegarde réussie',
   BACKUP_ECHEC:            'Échec de sauvegarde',
 }
@@ -73,6 +76,9 @@ const DESCRIPTIONS_ACTIONS: Record<string, string> = {
   USER_CREE:              'Un nouveau compte employé a été créé',
   USER_MODIFIE:           "Les informations ou le mot de passe d'un employé ont été modifiés",
   IMPORT_MEDICAMENTS:     'Un import en masse de médicaments a été effectué depuis un fichier',
+  IMPORT_STOCK:           'Un import en masse de stock initial (lots) a été effectué depuis un fichier',
+  IMPORT_CLIENTS:         'Un import en masse de clients a été effectué depuis un fichier',
+  IMPORT_FOURNISSEURS:    'Un import en masse de fournisseurs a été effectué depuis un fichier',
   BACKUP_REUSSI:          "La sauvegarde automatique B2 s'est terminée avec succès",
   BACKUP_ECHEC:           'La sauvegarde automatique B2 a échoué',
 }
