@@ -12,6 +12,18 @@
  * - La base Supabase est le seul etat partage fiable entre toutes les
  *   instances, en dev comme en prod.
  *
+ * IMPORTANT — comportement "fail open" (ajoute le 10/07/2026) :
+ * Les ports Postgres (5432/6543) sont bloques de facon intermittente par
+ * les operateurs reseau en Guinee (contrainte documentee du projet), donc
+ * la base peut devenir injoignable a tout moment, y compris pendant une
+ * tentative de connexion legitime. Si verifierRateLimit/enregistrerEchec/
+ * reinitialiser echouent a cause d'une panne reseau ou base, on AUTORISE
+ * la tentative plutot que de la bloquer : le mot de passe sera quand meme
+ * verifie normalement juste apres dans authorize(). Un rate limiting qui
+ * bloque tout le monde des que la base a un probleme serait pire que
+ * l'absence de rate limiting — la disponibilite d'un acces legitime prime
+ * sur la protection anti brute-force dans ce cas precis.
+ *
  * Fenetre glissante simple : 5 tentatives echouees / 5 minutes / cle (email+IP).
  */
 import { prisma } from '@/lib/prisma'
@@ -26,60 +38,67 @@ const MAX_TENTATIVES = 5
  * Purge au passage les tentatives de cette cle plus vieilles que la fenetre,
  * pour eviter d'accumuler des lignes indefiniment sans avoir besoin d'un
  * cron dedie (le volume par cle est faible, cette purge est bon marche).
+ *
+ * En cas d'erreur base/reseau : autorise par defaut (voir note "fail open"
+ * en tete de fichier).
  */
 export async function verifierRateLimit(
   cle: string
 ): Promise<{ autorise: boolean; reessayerDansMs?: number }> {
-  const maintenant = Date.now()
-  const depuis = new Date(maintenant - FENETRE_MS)
+  try {
+    const maintenant = Date.now()
+    const depuis = new Date(maintenant - FENETRE_MS)
 
-  await prisma.tentativeConnexion.deleteMany({
-    where: { cle, createdAt: { lt: depuis } },
-  })
+    await prisma.tentativeConnexion.deleteMany({
+      where: { cle, createdAt: { lt: depuis } },
+    })
 
-  const tentativesRecentes = await prisma.tentativeConnexion.findMany({
-    where: { cle, createdAt: { gte: depuis } },
-    orderBy: { createdAt: 'asc' },
-  })
+    const tentativesRecentes = await prisma.tentativeConnexion.findMany({
+      where: { cle, createdAt: { gte: depuis } },
+      orderBy: { createdAt: 'asc' },
+    })
 
-  // DEBUG TEMPORAIRE — a retirer une fois le rate limiting confirme fonctionnel
-  console.log('[rate-limit] verifierRateLimit', {
-    cle,
-    maintenant: new Date(maintenant).toISOString(),
-    depuis: depuis.toISOString(),
-    nbTrouvees: tentativesRecentes.length,
-    createdAtTrouvees: tentativesRecentes.map((t) => t.createdAt.toISOString()),
-  })
+    if (tentativesRecentes.length < MAX_TENTATIVES) {
+      return { autorise: true }
+    }
 
-  if (tentativesRecentes.length < MAX_TENTATIVES) {
+    const premiere = tentativesRecentes[0]
+    const reessayerDansMs = Math.max(
+      FENETRE_MS - (maintenant - premiere.createdAt.getTime()),
+      0
+    )
+    return { autorise: false, reessayerDansMs }
+  } catch (error) {
+    console.error(
+      '[rate-limit] Verification impossible (base injoignable) — tentative autorisee par defaut pour ne pas bloquer une connexion legitime :',
+      error
+    )
     return { autorise: true }
   }
-
-  const premiere = tentativesRecentes[0]
-  const reessayerDansMs = Math.max(
-    FENETRE_MS - (maintenant - premiere.createdAt.getTime()),
-    0
-  )
-  return { autorise: false, reessayerDansMs }
 }
 
 /**
  * Enregistre une tentative echouee pour la cle donnee.
  * A appeler uniquement en cas d'echec d'authentification (pas sur un succes).
+ * Echec silencieux (log seulement) si la base est injoignable — ce n'est
+ * qu'un compteur de securite, pas une operation critique pour l'utilisateur.
  */
 export async function enregistrerEchec(cle: string): Promise<void> {
-  const ligne = await prisma.tentativeConnexion.create({ data: { cle } })
-  // DEBUG TEMPORAIRE — a retirer une fois le rate limiting confirme fonctionnel
-  console.log('[rate-limit] enregistrerEchec - ligne creee', {
-    id: ligne.id,
-    cle: ligne.cle,
-    createdAt: ligne.createdAt.toISOString(),
-  })
+  try {
+    await prisma.tentativeConnexion.create({ data: { cle } })
+  } catch (error) {
+    console.error('[rate-limit] Impossible d\'enregistrer la tentative echouee (base injoignable) :', error)
+  }
 }
 
 /**
  * Reinitialise le compteur pour une cle (a appeler sur une connexion reussie).
+ * Echec silencieux si la base est injoignable, meme raison qu'au-dessus.
  */
 export async function reinitialiser(cle: string): Promise<void> {
-  await prisma.tentativeConnexion.deleteMany({ where: { cle } })
+  try {
+    await prisma.tentativeConnexion.deleteMany({ where: { cle } })
+  } catch (error) {
+    console.error('[rate-limit] Impossible de reinitialiser le compteur (base injoignable) :', error)
+  }
 }
