@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import { formatMontant } from '@/lib/utils'
+import ImportModal, { ImportField } from '@/components/ui/ImportModal'
 
 interface Client {
   id: string
@@ -13,23 +15,36 @@ interface Client {
   plafondCredit: number
 }
 
+const CHAMPS_IMPORT_CLIENTS: ImportField[] = [
+  { key: 'nom', label: 'Nom', required: true, guessKeywords: ['nom', 'client', 'designation'] },
+  { key: 'telephone', label: 'Telephone', guessKeywords: ['telephone', 'tel', 'phone', 'contact'] },
+  { key: 'email', label: 'Email', guessKeywords: ['email', 'mail'] },
+  { key: 'plafondCredit', label: 'Plafond de credit', guessKeywords: ['plafond', 'credit', 'limite'] },
+]
+
 export default function ClientsPage() {
+  const { data: sessionData } = useSession()
+  const isAdmin = sessionData?.user?.role === 'ADMIN' || sessionData?.user?.role === 'SUPER_ADMIN'
+
   const [clients, setClients] = useState<Client[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ nom: '', telephone: '', email: '', plafondCredit: '50000' })
+  const [importOuvert, setImportOuvert] = useState(false)
+
+  const chargerClients = () => {
+    fetch(`/api/clients?search=${search}`)
+      .then((res) => res.json())
+      .then((json) => {
+        setClients(json.data || [])
+        setLoading(false)
+      })
+  }
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetch(`/api/clients?search=${search}`)
-        .then((res) => res.json())
-        .then((json) => {
-          setClients(json.data || [])
-          setLoading(false)
-        })
-    }, 300)
+    const timer = setTimeout(chargerClients, 300)
     return () => clearTimeout(timer)
   }, [search])
 
@@ -54,13 +69,33 @@ export default function ClientsPage() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Clients</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-        >
-          + Nouveau client
-        </button>
+        <div className="flex gap-3">
+          {isAdmin && (
+            <button
+              onClick={() => setImportOuvert(true)}
+              className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50"
+            >
+              Importer
+            </button>
+          )}
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+          >
+            + Nouveau client
+          </button>
+        </div>
       </div>
+
+      <ImportModal
+        open={importOuvert}
+        onClose={() => setImportOuvert(false)}
+        title="Importer des clients"
+        fields={CHAMPS_IMPORT_CLIENTS}
+        apiEndpoint="/api/clients/import"
+        templateHref="/modeles/clients-modele.xlsx"
+        onImported={() => chargerClients()}
+      />
 
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-6 mb-6 grid grid-cols-2 gap-4">
