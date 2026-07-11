@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
+import ImportModal, { ImportField } from '@/components/ui/ImportModal'
 
 interface Fournisseur {
   id: string
@@ -13,6 +14,14 @@ interface Fournisseur {
   email: string | null
   delaiLivraison: number | null
 }
+
+const CHAMPS_IMPORT_FOURNISSEURS: ImportField[] = [
+  { key: 'nom', label: 'Nom', required: true, guessKeywords: ['nom', 'fournisseur', 'designation', 'raison sociale'] },
+  { key: 'contact', label: 'Contact', guessKeywords: ['contact', 'responsable', 'interlocuteur'] },
+  { key: 'telephone', label: 'Telephone', guessKeywords: ['telephone', 'tel', 'phone'] },
+  { key: 'email', label: 'Email', guessKeywords: ['email', 'mail'] },
+  { key: 'delaiLivraison', label: 'Delai de livraison (jours)', guessKeywords: ['delai', 'livraison'] },
+]
 
 export default function FournisseursPage() {
   const { data: sessionData } = useSession()
@@ -25,15 +34,20 @@ export default function FournisseursPage() {
   const [saving, setSaving] = useState(false)
   const [archivingId, setArchivingId] = useState<string | null>(null)
   const [confirmArchiverId, setConfirmArchiverId] = useState<string | null>(null)
+  const [importOuvert, setImportOuvert] = useState(false)
   const { showToast } = useToast()
 
-  useEffect(() => {
+  const chargerFournisseurs = () => {
     fetch('/api/fournisseurs')
       .then((res) => res.json())
       .then((json) => {
         setFournisseurs(json.data || [])
         setLoading(false)
       })
+  }
+
+  useEffect(() => {
+    chargerFournisseurs()
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -75,13 +89,33 @@ export default function FournisseursPage() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Fournisseurs</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-        >
-          + Nouveau fournisseur
-        </button>
+        <div className="flex gap-3">
+          {isAdmin && (
+            <button
+              onClick={() => setImportOuvert(true)}
+              className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50"
+            >
+              Importer
+            </button>
+          )}
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+          >
+            + Nouveau fournisseur
+          </button>
+        </div>
       </div>
+
+      <ImportModal
+        open={importOuvert}
+        onClose={() => setImportOuvert(false)}
+        title="Importer des fournisseurs"
+        fields={CHAMPS_IMPORT_FOURNISSEURS}
+        apiEndpoint="/api/fournisseurs/import"
+        templateHref="/modeles/fournisseurs-modele.xlsx"
+        onImported={() => chargerFournisseurs()}
+      />
 
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-6 mb-6 grid grid-cols-2 gap-4">
