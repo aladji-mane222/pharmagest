@@ -30,6 +30,16 @@ export async function GET(request: Request) {
   })
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function normaliserTelephone(tel: string): string {
+  let chiffres = tel.replace(/\D/g, '')
+  if (chiffres.length > 9 && chiffres.startsWith('224')) {
+    chiffres = chiffres.slice(3)
+  }
+  return chiffres
+}
+
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
@@ -38,6 +48,40 @@ export async function POST(request: Request) {
   const { nom, telephone, email, plafondCredit } = body
 
   if (!nom) return apiError('Nom du client requis', 400)
+  if (email && email.trim() && !EMAIL_REGEX.test(email.trim())) {
+    return apiError('Email invalide', 400)
+  }
+
+  // Meme logique que l'import en masse : telephone et email sont les seuls
+  // signaux fiables pour detecter un doublon de CLIENT (personne physique)
+  // — le nom seul n'est pas fiable en contexte guineen (homonymes tres
+  // frequents : Camara, Sylla, Soumah...), donc on ne bloque jamais sur le
+  // nom seul ici.
+  if ((telephone && telephone.trim()) || (email && email.trim())) {
+    // Postgres ne normalise pas les numeros/emails au format libre saisi par
+    // l'utilisateur, donc on compare cote code plutot qu'en SQL — le volume
+    // de clients par pharmacie reste faible, cout negligeable.
+    const clients = await prisma.client.findMany({
+      where: { pharmacieId: session.user.pharmacieId, actif: true },
+      select: { id: true, nom: true, telephone: true, email: true },
+    })
+
+    if (telephone && telephone.trim()) {
+      const telNorm = normaliserTelephone(telephone)
+      const existant = clients.find((c) => c.telephone && normaliserTelephone(c.telephone) === telNorm)
+      if (existant) {
+        return apiError(`Un client avec ce numero de telephone existe deja (${existant.nom})`, 409)
+      }
+    }
+
+    if (email && email.trim()) {
+      const emailNorm = email.trim().toLowerCase()
+      const existant = clients.find((c) => c.email && c.email.toLowerCase() === emailNorm)
+      if (existant) {
+        return apiError(`Un client avec cet email existe deja (${existant.nom})`, 409)
+      }
+    }
+  }
 
   const client = await prisma.client.create({
     data: {
