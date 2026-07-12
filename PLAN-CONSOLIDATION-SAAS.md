@@ -648,3 +648,6 @@ Rien n'empêche de réordonner selon ce qui te semble le plus urgent une fois qu
 # Tâche à part — Réactivation des éléments archivés (constat du 10/07/2026)
 
 Aucune fonctionnalité de réactivation n'existe pour Medicament, Client, Fournisseur — les API list (/api/medicaments, /api/clients, /api/fournisseurs) filtrent en dur sur actif: true, sans vue "archivés" ni bouton retour arrière. À traiter : (1) une vue/filtre "voir les archivés" sur chaque liste concernée, (2) un bouton "Réactiver" avec logique inverse de l'archivage existant, (3) vérifier les conflits possibles au moment de la réactivation (ex: réactiver un médicament dont le nom a depuis été repris par un autre — pertinent vu qu'on vient de renforcer la détection de doublons à l'import).
+
+# Tâche à part — Numéro client/fournisseur séquentiel (constat du 11/07/2026)
+Ajouter Client.numeroClient et Fournisseur.numeroFournisseur (séquentiel par pharmacie, même logique que Vente.numeroFacture déjà prévu Phase 2bis). Objectif : désambiguïser les homonymes au quotidien (recherche, POS, crédits), pas seulement à l'import. Affichage dans les listes/recherches. Migration Supabase SQL Editor + génération séquentielle en transaction.
