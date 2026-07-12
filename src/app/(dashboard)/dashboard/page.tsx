@@ -16,52 +16,74 @@ export default async function DashboardPage() {
   const debutMois = new Date(now.getFullYear(), now.getMonth(), 1)
   const dans90Jours = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
 
-  const [
-    ventesJour,
-    ventesMois,
-    ventesRecentes,
-    medicamentsAvecStock,
-    peremptionsRaw,
-  ] = await Promise.all([
-    prisma.vente.aggregate({
-      where: { pharmacieId, createdAt: { gte: debutJour }, statut: 'COMPLETE' },
-      _sum: { montantTotal: true },
-    }),
-    prisma.vente.aggregate({
-      where: { pharmacieId, createdAt: { gte: debutMois }, statut: 'COMPLETE' },
-      _sum: { montantTotal: true },
-    }),
-    prisma.vente.findMany({
-      where: { pharmacieId },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: {
-        id: true,
-        montantTotal: true,
-        createdAt: true,
-        user: { select: { nom: true } },
-      },
-    }),
-    prisma.medicament.findMany({
-      where: { pharmacieId, actif: true },
-      select: {
-        id: true,
-        nom: true,
-        stockMinimum: true,
-        lots: { where: { actif: true }, select: { quantite: true } },
-      },
-    }),
-    prisma.lot.findMany({
-      where: {
-        actif: true,
-        datePeremption: { lte: dans90Jours, gte: now },
-        medicament: { pharmacieId },
-      },
-      include: { medicament: { select: { nom: true } } },
-      orderBy: { datePeremption: 'asc' },
-      take: 5,
-    }),
-  ])
+  let ventesJour, ventesMois, ventesRecentes, medicamentsAvecStock, peremptionsRaw
+
+  try {
+    ;[ventesJour, ventesMois, ventesRecentes, medicamentsAvecStock, peremptionsRaw] = await Promise.all([
+      prisma.vente.aggregate({
+        where: { pharmacieId, createdAt: { gte: debutJour }, statut: 'COMPLETE' },
+        _sum: { montantTotal: true },
+      }),
+      prisma.vente.aggregate({
+        where: { pharmacieId, createdAt: { gte: debutMois }, statut: 'COMPLETE' },
+        _sum: { montantTotal: true },
+      }),
+      prisma.vente.findMany({
+        where: { pharmacieId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          montantTotal: true,
+          createdAt: true,
+          user: { select: { nom: true } },
+        },
+      }),
+      prisma.medicament.findMany({
+        where: { pharmacieId, actif: true },
+        select: {
+          id: true,
+          nom: true,
+          stockMinimum: true,
+          lots: { where: { actif: true }, select: { quantite: true } },
+        },
+      }),
+      prisma.lot.findMany({
+        where: {
+          actif: true,
+          datePeremption: { lte: dans90Jours, gte: now },
+          medicament: { pharmacieId },
+        },
+        include: { medicament: { select: { nom: true } } },
+        orderBy: { datePeremption: 'asc' },
+        take: 5,
+      }),
+    ])
+  } catch (error) {
+    // La base peut devenir injoignable a tout moment (coupures reseau
+    // documentees, cote Guinee comme cote Supabase) — le tableau de bord
+    // est la toute premiere page vue par la pharmacienne, elle ne doit
+    // jamais planter avec un ecran d'erreur technique illisible.
+    console.error('[dashboard] Base injoignable :', error)
+    return (
+      <div className="p-8">
+        <div className="bg-white rounded-xl shadow p-8 border border-gray-100 text-center max-w-md mx-auto mt-12">
+          <p className="text-3xl mb-3">📡</p>
+          <h1 className="text-lg font-semibold text-gray-800 mb-2">Connexion impossible</h1>
+          <p className="text-gray-500 text-sm mb-6">
+            Impossible de joindre le serveur pour le moment. Vérifie ta connexion internet,
+            puis réessaie dans quelques instants.
+          </p>
+          <a
+            href="/dashboard"
+            className="inline-block bg-green-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-green-700 transition-colors"
+          >
+            Réessayer
+          </a>
+        </div>
+      </div>
+    )
+  }
 
   const stockBasList = medicamentsAvecStock
     .map(m => ({ ...m, stockTotal: m.lots.reduce((s, l) => s + l.quantite, 0) }))
