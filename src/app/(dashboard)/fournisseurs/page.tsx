@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
@@ -63,6 +64,8 @@ export default function FournisseursPage() {
       setFournisseurs([...fournisseurs, json.data])
       setForm({ nom: '', contact: '', telephone: '', email: '', delaiLivraison: '' })
       setShowForm(false)
+    } else {
+      showToast(json.error || 'Erreur lors de la creation du fournisseur', 'error')
     }
     setSaving(false)
   }
@@ -199,29 +202,41 @@ export default function FournisseursPage() {
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Contact</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Téléphone</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Délai</th>
-                {isAdmin && <th className="text-right px-6 py-3 text-gray-600 font-medium">Actions</th>}
+                <th className="text-right px-6 py-3 text-gray-600 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {fournisseurs.map((f) => (
                 <tr key={f.id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="px-6 py-4 font-medium text-gray-800">{f.nom}</td>
+                  <td className="px-6 py-4 font-medium text-gray-800">
+                    <Link href={`/fournisseurs/${f.id}`} className="hover:underline hover:text-mint-dark">
+                      {f.nom}
+                    </Link>
+                  </td>
                   <td className="px-6 py-4 text-gray-600">{f.contact || '-'}</td>
                   <td className="px-6 py-4 text-gray-600">{f.telephone || '-'}</td>
                   <td className="px-6 py-4 text-gray-600">
                     {f.delaiLivraison ? `${f.delaiLivraison} jours` : '-'}
                   </td>
-                  {isAdmin && (
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => archiver(f.id)}
-                        disabled={archivingId === f.id}
-                        className="text-xs px-3 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <Link
+                        href={`/fournisseurs/${f.id}`}
+                        className="text-xs px-3 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
                       >
-                        {archivingId === f.id ? '...' : 'Archiver'}
-                      </button>
-                    </td>
-                  )}
+                        Détail
+                      </Link>
+                      {isAdmin && (
+                        <button
+                          onClick={() => archiver(f.id)}
+                          disabled={archivingId === f.id}
+                          className="text-xs px-3 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
+                        >
+                          {archivingId === f.id ? '...' : 'Archiver'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
