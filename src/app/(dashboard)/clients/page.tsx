@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatMontant } from '@/lib/utils'
 import ImportModal, { ImportField } from '@/components/ui/ImportModal'
+import { useToast } from '@/components/ui/Toast'
 
 interface Client {
   id: string
@@ -33,6 +34,7 @@ export default function ClientsPage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ nom: '', telephone: '', email: '', plafondCredit: '50000' })
   const [importOuvert, setImportOuvert] = useState(false)
+  const { showToast } = useToast()
 
   const chargerClients = () => {
     fetch(`/api/clients?search=${search}`)
@@ -61,6 +63,8 @@ export default function ClientsPage() {
       setClients([...clients, json.data])
       setForm({ nom: '', telephone: '', email: '', plafondCredit: '50000' })
       setShowForm(false)
+    } else {
+      showToast(json.error || 'Erreur lors de la creation du client', 'error')
     }
     setSaving(false)
   }
