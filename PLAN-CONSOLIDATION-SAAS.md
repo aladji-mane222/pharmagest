@@ -651,3 +651,6 @@ Aucune fonctionnalité de réactivation n'existe pour Medicament, Client, Fourni
 
 # Tâche à part — Numéro client/fournisseur séquentiel (constat du 11/07/2026)
 Ajouter Client.numeroClient et Fournisseur.numeroFournisseur (séquentiel par pharmacie, même logique que Vente.numeroFacture déjà prévu Phase 2bis). Objectif : désambiguïser les homonymes au quotidien (recherche, POS, crédits), pas seulement à l'import. Affichage dans les listes/recherches. Migration Supabase SQL Editor + génération séquentielle en transaction.
+
+# Tâche à part — Édition en ligne dans la prévisualisation d'import (proposé le 12/07/2026)
+Permettre de corriger une cellule directement dans le tableau de prévisualisation (nom, prix, etc.) sans repasser par le fichier source ou la grille manuelle — utile pour corriger un grand nombre de lignes en erreur d'un coup lors d'un import volumineux (ex: onboarding d'une pharmacie avec un catalogue existant mal formaté).
