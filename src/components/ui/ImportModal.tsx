@@ -19,7 +19,7 @@ export interface ImportField {
   guessKeywords: string[]
 }
 
-export type StatutLigne = 'ok' | 'erreur' | 'doublon'
+export type StatutLigne = 'ok' | 'erreur' | 'doublon' | 'avertissement'
 
 export interface LignePreview {
   index: number
@@ -43,9 +43,17 @@ interface ImportModalProps {
   onImported?: (resume: { crees: number; misAJour: number; ignores: number; erreurs: number }) => void
 }
 
-type Etape = 'upload' | 'mapping' | 'preview' | 'resultat'
+type Etape = 'upload' | 'mapping' | 'grille' | 'preview' | 'resultat'
+type ModeSaisie = 'fichier' | 'grille' | null
 
 const MAX_LIGNES = 5000
+const LIGNES_GRILLE_INITIALES = 6
+
+function ligneVide(fields: ImportField[]): Record<string, string> {
+  const ligne: Record<string, string> = {}
+  for (const champ of fields) ligne[champ.key] = ''
+  return ligne
+}
 
 export default function ImportModal({
   open,
@@ -59,20 +67,24 @@ export default function ImportModal({
   const { showToast } = useToast()
 
   const [etape, setEtape] = useState<Etape>('upload')
+  const [modeSaisie, setModeSaisie] = useState<ModeSaisie>(null)
   const [nomFichier, setNomFichier] = useState('')
   const [entetes, setEntetes] = useState<string[]>([])
   const [lignesBrutes, setLignesBrutes] = useState<string[][]>([])
   const [mapping, setMapping] = useState<Record<string, string>>({}) // fieldKey -> entete choisie
+  const [grilleLignes, setGrilleLignes] = useState<Record<string, string>[]>([])
   const [lignesPreview, setLignesPreview] = useState<LignePreview[]>([])
   const [chargement, setChargement] = useState(false)
   const [resume, setResume] = useState<{ crees: number; misAJour: number; ignores: number; erreurs: number } | null>(null)
 
   const reinitialiser = useCallback(() => {
     setEtape('upload')
+    setModeSaisie(null)
     setNomFichier('')
     setEntetes([])
     setLignesBrutes([])
     setMapping({})
+    setGrilleLignes([])
     setLignesPreview([])
     setResume(null)
   }, [])
@@ -80,6 +92,12 @@ export default function ImportModal({
   const fermer = () => {
     reinitialiser()
     onClose()
+  }
+
+  const ouvrirGrille = () => {
+    setModeSaisie('grille')
+    setGrilleLignes(Array.from({ length: LIGNES_GRILLE_INITIALES }, () => ligneVide(fields)))
+    setEtape('grille')
   }
 
   // ─── Étape 1 : upload + parsing ────────────────────────────────────────
@@ -115,6 +133,7 @@ export default function ImportModal({
       setEntetes(entetesNettoyees)
       setLignesBrutes(lignesUtiles)
       setNomFichier(fichier.name)
+      setModeSaisie('fichier')
 
       // Détection automatique de la correspondance de colonnes
       const mappingAuto: Record<string, string> = {}
@@ -139,31 +158,18 @@ export default function ImportModal({
     if (fichier) handleFichier(fichier)
   }
 
-  // ─── Étape 2 : correspondance des colonnes ─────────────────────────────
-  const champsObligatoiresManquants = fields.filter((f) => f.required && !mapping[f.key])
-
-  const passerAPreview = async () => {
+  const envoyerPourPreview = async (lignesAValider: Record<string, string>[]) => {
     setChargement(true)
     try {
-      const lignesMappees = lignesBrutes.map((ligne) => {
-        const valeurs: Record<string, string> = {}
-        for (const champ of fields) {
-          const entete = mapping[champ.key]
-          const colIndex = entete ? entetes.indexOf(entete) : -1
-          valeurs[champ.key] = colIndex >= 0 ? String(ligne[colIndex] ?? '').trim() : ''
-        }
-        return valeurs
-      })
-
       const res = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'preview', lignes: lignesMappees }),
+        body: JSON.stringify({ mode: 'preview', lignes: lignesAValider }),
       })
       const json = await res.json()
 
       if (!res.ok) {
-        showToast(json.error || 'Erreur lors de la validation du fichier', 'error')
+        showToast(json.error || 'Erreur lors de la validation', 'error')
         return
       }
 
@@ -179,6 +185,76 @@ export default function ImportModal({
       setChargement(false)
     }
   }
+
+  const passerAPreviewDepuisFichier = () => {
+    const lignesMappees = lignesBrutes.map((ligne) => {
+      const valeurs: Record<string, string> = {}
+      for (const champ of fields) {
+        const entete = mapping[champ.key]
+        const colIndex = entete ? entetes.indexOf(entete) : -1
+        valeurs[champ.key] = colIndex >= 0 ? String(ligne[colIndex] ?? '').trim() : ''
+      }
+      return valeurs
+    })
+    return envoyerPourPreview(lignesMappees)
+  }
+
+  // ─── Étape grille : saisie manuelle ────────────────────────────────────
+  const modifierCelluleGrille = (rowIndex: number, key: string, valeur: string) => {
+    setGrilleLignes((prev) =>
+      prev.map((ligne, i) => (i === rowIndex ? { ...ligne, [key]: valeur } : ligne))
+    )
+  }
+
+  const ajouterLigneGrille = () => {
+    setGrilleLignes((prev) => [...prev, ligneVide(fields)])
+  }
+
+  const supprimerLigneGrille = (rowIndex: number) => {
+    setGrilleLignes((prev) => prev.filter((_, i) => i !== rowIndex))
+  }
+
+  /**
+   * Colle un bloc de texte (copie depuis Excel, Google Sheets, ou meme du
+   * texte brut separe par tabulations/retours a la ligne) a partir d'une
+   * cellule donnee, en remplissant les cellules suivantes ligne par ligne
+   * et colonne par colonne — comportement standard d'un tableur.
+   */
+  const collerDansGrille = (rowIndex: number, colIndex: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+    const texte = e.clipboardData.getData('text')
+    if (!texte.includes('\t') && !texte.includes('\n')) return // collage simple, laisser le comportement par defaut
+
+    e.preventDefault()
+    const lignesCollees = texte.replace(/\r/g, '').split('\n').filter((l) => l !== '')
+
+    setGrilleLignes((prev) => {
+      const copie = [...prev.map((l) => ({ ...l }))]
+      lignesCollees.forEach((ligneTexte, i) => {
+        const cellules = ligneTexte.split('\t')
+        const cibleIndex = rowIndex + i
+        while (cibleIndex >= copie.length) copie.push(ligneVide(fields))
+        cellules.forEach((valeur, j) => {
+          const champ = fields[colIndex + j]
+          if (champ) copie[cibleIndex][champ.key] = valeur.trim()
+        })
+      })
+      return copie
+    })
+  }
+
+  const passerAPreviewDepuisGrille = () => {
+    const lignesNonVides = grilleLignes.filter((ligne) =>
+      Object.values(ligne).some((v) => v.trim() !== '')
+    )
+    if (lignesNonVides.length === 0) {
+      showToast('Aucune ligne remplie', 'error')
+      return
+    }
+    return envoyerPourPreview(lignesNonVides)
+  }
+
+  // ─── Étape mapping (upload fichier) ────────────────────────────────────
+  const champsObligatoiresManquants = fields.filter((f) => f.required && !mapping[f.key])
 
   // ─── Étape 3 : prévisualisation → confirmation ─────────────────────────
   const changerActionDoublon = (index: number, action: 'ignorer' | 'mettreAJour') => {
@@ -221,6 +297,8 @@ export default function ImportModal({
   const nbOk = lignesPreview.filter((l) => l.statut === 'ok').length
   const nbErreurs = lignesPreview.filter((l) => l.statut === 'erreur').length
   const nbDoublons = lignesPreview.filter((l) => l.statut === 'doublon').length
+  const nbAvertissements = lignesPreview.filter((l) => l.statut === 'avertissement').length
+  const nbImportables = nbOk + nbDoublons + nbAvertissements
 
   return (
     <div
@@ -239,8 +317,11 @@ export default function ImportModal({
 
         {/* Indicateur d'étape */}
         <div className="flex gap-1 mb-6">
-          {(['upload', 'mapping', 'preview', 'resultat'] as Etape[]).map((e, i) => {
-            const etapeIndex = ['upload', 'mapping', 'preview', 'resultat'].indexOf(etape)
+          {(modeSaisie === 'grille'
+            ? (['upload', 'grille', 'preview', 'resultat'] as Etape[])
+            : (['upload', 'mapping', 'preview', 'resultat'] as Etape[])
+          ).map((e, i, liste) => {
+            const etapeIndex = liste.indexOf(etape)
             const actif = i === etapeIndex
             const fait = i < etapeIndex
             return (
@@ -278,6 +359,14 @@ export default function ImportModal({
                 Telecharger le modele
               </a>
             )}
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <button
+                onClick={ouvrirGrille}
+                className="text-sm text-gray-600 hover:underline"
+              >
+                Rien a exporter ? Saisir directement en grille →
+              </button>
+            </div>
           </div>
         )}
 
@@ -316,10 +405,72 @@ export default function ImportModal({
             <div className="flex justify-between">
               <Button variant="secondary" onClick={() => setEtape('upload')}>Retour</Button>
               <Button
-                onClick={passerAPreview}
+                onClick={passerAPreviewDepuisFichier}
                 loading={chargement}
                 disabled={champsObligatoiresManquants.length > 0}
               >
+                Continuer
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Étape grille : saisie manuelle */}
+        {etape === 'grille' && (
+          <div>
+            <p className="text-sm text-gray-600 mb-4">
+              Remplis les lignes a la main, ou colle un bloc copie depuis n&apos;importe quel tableur
+              (une cellule suffit comme point de depart, le collage remplit les cellules suivantes).
+            </p>
+            <div className="border border-gray-200 rounded-card overflow-x-auto mb-3 max-h-72 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    {fields.map((champ) => (
+                      <th key={champ.key} className="text-left px-2 py-2 text-gray-600 font-medium whitespace-nowrap">
+                        {champ.label}{champ.required && ' *'}
+                      </th>
+                    ))}
+                    <th className="px-2 py-2 w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grilleLignes.map((ligne, rowIndex) => (
+                    <tr key={rowIndex} className="border-t border-gray-100">
+                      {fields.map((champ, colIndex) => (
+                        <td key={champ.key} className="p-1">
+                          <input
+                            type="text"
+                            value={ligne[champ.key] || ''}
+                            onChange={(e) => modifierCelluleGrille(rowIndex, champ.key, e.target.value)}
+                            onPaste={(e) => collerDansGrille(rowIndex, colIndex, e)}
+                            className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-mint"
+                          />
+                        </td>
+                      ))}
+                      <td className="p-1 text-center">
+                        <button
+                          onClick={() => supprimerLigneGrille(rowIndex)}
+                          className="text-gray-300 hover:text-danger text-sm"
+                          aria-label="Supprimer la ligne"
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button
+              onClick={ajouterLigneGrille}
+              className="text-sm text-mint-dark hover:underline mb-6"
+            >
+              + Ajouter une ligne
+            </button>
+            <div className="flex justify-between">
+              <Button variant="secondary" onClick={() => setEtape('upload')}>Retour</Button>
+              <Button onClick={passerAPreviewDepuisGrille} loading={chargement}>
                 Continuer
               </Button>
             </div>
@@ -330,7 +481,7 @@ export default function ImportModal({
         {etape === 'preview' && (
           <div>
             <p className="text-sm text-gray-600 mb-4">
-              {lignesPreview.length} ligne(s) — {nbOk} prete(s), {nbDoublons} doublon(s), {nbErreurs} erreur(s).
+              {lignesPreview.length} ligne(s) — {nbOk} prete(s), {nbDoublons} doublon(s), {nbAvertissements} a verifier, {nbErreurs} erreur(s).
               Rien n&apos;est encore enregistre.
             </p>
             <div className="border border-gray-200 rounded-card overflow-hidden mb-4 max-h-72 overflow-y-auto">
@@ -371,6 +522,14 @@ export default function ImportModal({
                             </select>
                           </div>
                         )}
+                        {ligne.statut === 'avertissement' && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600"
+                            title={ligne.message}
+                          >
+                            A verifier{ligne.message ? ` — ${ligne.message}` : ''}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -378,9 +537,9 @@ export default function ImportModal({
               </table>
             </div>
             <div className="flex justify-between">
-              <Button variant="secondary" onClick={() => setEtape('mapping')}>Retour</Button>
-              <Button onClick={confirmerImport} loading={chargement} disabled={nbOk + nbDoublons === 0}>
-                Confirmer l&apos;import ({nbOk + nbDoublons} ligne{nbOk + nbDoublons > 1 ? 's' : ''})
+              <Button variant="secondary" onClick={() => setEtape(modeSaisie === 'grille' ? 'grille' : 'mapping')}>Retour</Button>
+              <Button onClick={confirmerImport} loading={chargement} disabled={nbImportables === 0}>
+                Confirmer l&apos;import ({nbImportables} ligne{nbImportables > 1 ? 's' : ''})
               </Button>
             </div>
           </div>
