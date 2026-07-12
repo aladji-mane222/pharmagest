@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     ...(categorie && { categorie }),
   }
 
-  const [medicamentsRaw, total] = await Promise.all([
+  const [medicamentsRaw, total, categoriesRaw] = await Promise.all([
     prisma.medicament.findMany({
       where,
       include: { lots: { where: { actif: true }, select: { quantite: true } } },
@@ -32,14 +32,25 @@ export async function GET(request: Request) {
       take: limit,
     }),
     prisma.medicament.count({ where }),
+    // Liste complete des categories du catalogue, independante de la page
+    // et de la recherche en cours — sinon le menu deroulant de filtre ne
+    // proposerait que les categories visibles sur la page courante
+    // (constate en usage reel le 12/07/2026 avec la pagination manquante).
+    prisma.medicament.findMany({
+      where: { pharmacieId, actif: true, categorie: { not: null } },
+      select: { categorie: true },
+      distinct: ['categorie'],
+      orderBy: { categorie: 'asc' },
+    }),
   ])
 
   const medicaments = medicamentsRaw.map(({ lots, ...m }) => ({
     ...m,
     stockTotal: lots.reduce((sum, l) => sum + l.quantite, 0),
   }))
+  const categories = categoriesRaw.map((c) => c.categorie).filter(Boolean)
 
-  return apiSuccess({ medicaments, total, page, limit })
+  return apiSuccess({ medicaments, total, page, limit, categories })
 }
 
 export async function POST(request: Request) {
