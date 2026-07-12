@@ -30,14 +30,18 @@ export default function MedicamentsPage() {
   const isAdmin = sessionData?.user?.role === 'ADMIN' || sessionData?.user?.role === 'SUPER_ADMIN'
 
   const [medicaments, setMedicaments] = useState<Medicament[]>([])
+  const [categories, setCategories] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [categorieFiltree, setCategorieFiltree] = useState('')
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const LIMIT = 20
   const [importOuvert, setImportOuvert] = useState(false)
 
   const chargerMedicaments = () => {
-    fetch(`/api/medicaments?search=${search}`)
+    const params = new URLSearchParams({ search, categorie: categorieFiltree, page: String(page), limit: String(LIMIT) })
+    fetch(`/api/medicaments?${params.toString()}`)
       .then(async (res) => {
         if (!res.ok) {
           throw new Error(`Erreur ${res.status}`)
@@ -47,6 +51,7 @@ export default function MedicamentsPage() {
       .then((json) => {
         setMedicaments(json.data?.medicaments || [])
         setTotal(json.data?.total || 0)
+        setCategories(json.data?.categories || [])
         setLoading(false)
       })
       .catch(() => {
@@ -56,19 +61,19 @@ export default function MedicamentsPage() {
       })
   }
 
+  // Revenir a la page 1 a chaque nouveau filtre — sinon on peut se
+  // retrouver sur une page qui n'existe plus pour le nouveau filtre.
+  useEffect(() => {
+    setPage(1)
+  }, [search, categorieFiltree])
+
   useEffect(() => {
     const timer = setTimeout(chargerMedicaments, 300)
     return () => clearTimeout(timer)
-  }, [search])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, categorieFiltree, page])
 
-  // Catégories uniques dérivées des médicaments chargés
-  const categories = Array.from(new Set(
-    medicaments.map((m) => m.categorie).filter(Boolean)
-  )) as string[]
-
-  const medicamentsFiltres = categorieFiltree
-    ? medicaments.filter((m) => m.categorie === categorieFiltree)
-    : medicaments
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT))
 
   return (
     <div className="p-8">
@@ -129,7 +134,7 @@ export default function MedicamentsPage() {
       <div className="bg-white rounded-xl shadow overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Chargement...</div>
-        ) : medicamentsFiltres.length === 0 ? (
+        ) : medicaments.length === 0 ? (
           <div className="p-8 text-center text-gray-400">Aucun médicament trouvé</div>
         ) : (
           <table className="w-full text-sm">
@@ -143,7 +148,7 @@ export default function MedicamentsPage() {
               </tr>
             </thead>
             <tbody>
-              {medicamentsFiltres.map((med) => {
+              {medicaments.map((med) => {
                 const stockBas = med.stockTotal < med.stockMinimum
                 return (
                   <tr key={med.id} className="border-b last:border-0 hover:bg-gray-50">
@@ -177,6 +182,31 @@ export default function MedicamentsPage() {
           </table>
         )}
       </div>
+
+      {!loading && total > 0 && (
+        <div className="flex justify-between items-center mt-4 text-sm text-gray-600">
+          <span>
+            {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} sur {total}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+            >
+              ← Précédent
+            </button>
+            <span className="px-2 py-1.5 text-gray-500">Page {page} / {totalPages}</span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+            >
+              Suivant →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
