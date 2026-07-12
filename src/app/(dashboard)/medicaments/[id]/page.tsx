@@ -10,6 +10,7 @@ interface Lot {
   numeroLot: string | null
   datePeremption: string
   quantite: number
+  prixAchat: number | null
 }
 
 interface Medicament {
@@ -84,6 +85,13 @@ export default function FicheMedicamentPage() {
         </div>
       </div>
 
+      {med.lots.some((lot) => lot.prixAchat !== null && lot.prixAchat > med.prixVente) && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
+          ⚠️ Au moins un lot a été acheté plus cher que le prix de vente actuel ({formatMontant(med.prixVente)}) —
+          vérifie le tableau des lots ci-dessous : soit une erreur de saisie, soit le prix de vente doit être augmenté.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-6 mb-6">
         <div className="bg-white rounded-xl shadow p-6">
           <h2 className="font-semibold text-gray-700 mb-4">Informations</h2>
@@ -134,16 +142,56 @@ export default function FicheMedicamentPage() {
                 <th className="text-left py-2 text-gray-500">Numero lot</th>
                 <th className="text-left py-2 text-gray-500">Peremption</th>
                 <th className="text-right py-2 text-gray-500">Quantite</th>
+                <th className="text-right py-2 text-gray-500">Prix d&apos;achat</th>
               </tr>
             </thead>
             <tbody>
-              {med.lots.map((lot) => (
-                <tr key={lot.id} className="border-b last:border-0">
-                  <td className="py-2">{lot.numeroLot || '-'}</td>
-                  <td className="py-2">{formatDate(lot.datePeremption)}</td>
-                  <td className="py-2 text-right font-medium">{lot.quantite}</td>
-                </tr>
-              ))}
+              {med.lots.map((lot) => {
+                // Signale un prix d'achat de lot anormal : soit superieur au
+                // prix de vente (perte garantie sur ce lot), soit nettement
+                // au-dessus du prix de reference du medicament (>20%) — aide
+                // a repérer une erreur de saisie ou une vraie hausse
+                // fournisseur a traiter (ajuster le prix de vente ou verifier
+                // aupres du fournisseur).
+                const prixAchatSuperieurVente = lot.prixAchat !== null && lot.prixAchat > med.prixVente
+                const prixAchatEleve =
+                  !prixAchatSuperieurVente &&
+                  lot.prixAchat !== null &&
+                  med.prixAchat !== null &&
+                  lot.prixAchat > med.prixAchat * 1.2
+                return (
+                  <tr key={lot.id} className="border-b last:border-0">
+                    <td className="py-2">{lot.numeroLot || '-'}</td>
+                    <td className="py-2">{formatDate(lot.datePeremption)}</td>
+                    <td className="py-2 text-right font-medium">{lot.quantite}</td>
+                    <td className="py-2 text-right">
+                      {lot.prixAchat === null ? (
+                        <span className="text-gray-400">-</span>
+                      ) : (
+                        <span
+                          className={
+                            prixAchatSuperieurVente
+                              ? 'text-danger font-medium'
+                              : prixAchatEleve
+                              ? 'text-warning font-medium'
+                              : 'text-gray-700'
+                          }
+                          title={
+                            prixAchatSuperieurVente
+                              ? `Superieur au prix de vente (${formatMontant(med.prixVente)}) — perte garantie sur ce lot`
+                              : prixAchatEleve
+                              ? `Plus de 20% au-dessus du prix d'achat de reference (${formatMontant(med.prixAchat!)})`
+                              : undefined
+                          }
+                        >
+                          {formatMontant(lot.prixAchat)}
+                          {(prixAchatSuperieurVente || prixAchatEleve) && ' ⚠️'}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
