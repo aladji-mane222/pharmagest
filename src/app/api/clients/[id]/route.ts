@@ -28,6 +28,14 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   return apiSuccess(client)
 }
 
+function normaliserTelephone(tel: string): string {
+  let chiffres = tel.replace(/\D/g, '')
+  if (chiffres.length > 9 && chiffres.startsWith('224')) {
+    chiffres = chiffres.slice(3)
+  }
+  return chiffres
+}
+
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
@@ -42,6 +50,40 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   const body = await request.json()
   const { nom, telephone, email, plafondCredit } = body
+
+  if (email !== undefined && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return apiError('Email invalide', 400)
+  }
+
+  // Meme logique que la creation/l'import : on ne verifie les doublons que
+  // si le telephone ou l'email a effectivement change (sinon on comparerait
+  // le client a lui-meme inutilement), et on exclut toujours ce client
+  // (params.id) des resultats de comparaison.
+  if (
+    (telephone !== undefined && telephone && telephone !== client.telephone) ||
+    (email !== undefined && email && email !== client.email)
+  ) {
+    const autresClients = await prisma.client.findMany({
+      where: { pharmacieId, actif: true, id: { not: params.id } },
+      select: { id: true, nom: true, telephone: true, email: true },
+    })
+
+    if (telephone !== undefined && telephone && telephone !== client.telephone) {
+      const telNorm = normaliserTelephone(telephone)
+      const existant = autresClients.find((c) => c.telephone && normaliserTelephone(c.telephone) === telNorm)
+      if (existant) {
+        return apiError(`Un autre client avec ce numero de telephone existe deja (${existant.nom})`, 409)
+      }
+    }
+
+    if (email !== undefined && email && email !== client.email) {
+      const emailNorm = email.trim().toLowerCase()
+      const existant = autresClients.find((c) => c.email && c.email.toLowerCase() === emailNorm)
+      if (existant) {
+        return apiError(`Un autre client avec cet email existe deja (${existant.nom})`, 409)
+      }
+    }
+  }
 
   const dataToUpdate: {
     nom?: string
