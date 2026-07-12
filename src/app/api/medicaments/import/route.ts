@@ -132,7 +132,8 @@ export async function POST(request: Request) {
   let ignores = 0
   let erreurs = 0
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(
+    async (tx) => {
     for (const { valeurs, action } of lignes) {
       const erreurValidation = validerLigne(valeurs)
       if (erreurValidation) {
@@ -169,7 +170,9 @@ export async function POST(request: Request) {
         crees++
       }
     }
-  })
+    },
+    { timeout: 60000, maxWait: 10000 }
+  )
 
   await createAuditLog({
     action: 'IMPORT_MEDICAMENTS',
