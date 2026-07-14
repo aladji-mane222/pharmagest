@@ -11,15 +11,29 @@ export async function GET(request: Request) {
   const pharmacieId = session.user.pharmacieId
   const { searchParams } = new URL(request.url)
   const search = searchParams.get('search') || ''
+  const codeBarre = searchParams.get('codeBarre') || ''
   const categorie = searchParams.get('categorie') || ''
   const page = parseInt(searchParams.get('page') || '1')
   const limit = parseInt(searchParams.get('limit') || '20')
   const offset = (page - 1) * limit
 
+  // codeBarre : recherche exacte prioritaire (cas scan douchette POS, Phase
+  // 3.4bis — une douchette tape le code puis Entree, on veut une correspondance
+  // exacte immediate, pas un "contains" qui pourrait matcher plusieurs lignes).
+  // search : recherche generale, matche desormais nom OU codeBarre partiel,
+  // pour couvrir aussi le cas ou quelqu'un tape/colle un code-barres dans la
+  // barre de recherche classique plutot que de scanner.
   const where = {
     pharmacieId,
     actif: true,
-    ...(search && { nom: { contains: search, mode: 'insensitive' as const } }),
+    ...(codeBarre && { codeBarre }),
+    ...(search &&
+      !codeBarre && {
+        OR: [
+          { nom: { contains: search, mode: 'insensitive' as const } },
+          { codeBarre: { contains: search, mode: 'insensitive' as const } },
+        ],
+      }),
     ...(categorie && { categorie }),
   }
 
