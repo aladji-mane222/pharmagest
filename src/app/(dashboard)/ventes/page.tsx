@@ -32,14 +32,52 @@ export default function VentesPage() {
   const [recu, setRecu] = useState<{ montantTotal: number; monnaie: number; montantPaye: number; lignes: LignePanier[]; numero: string; remise: number } | null>(null)
   const [clients, setClients] = useState<{ id: string; nom: string }[]>([])
   const [clientId, setClientId] = useState('')
+  const [nouveauClientOuvert, setNouveauClientOuvert] = useState(false)
+  const [nouveauClientForm, setNouveauClientForm] = useState({ nom: '', telephone: '' })
+  const [nouveauClientSaving, setNouveauClientSaving] = useState(false)
   const [remise, setRemise] = useState(0)
   const [nomPharmacie, setNomPharmacie] = useState('Ma Pharmacie')
   const [sessionCaisse, setSessionCaisse] = useState<boolean | null>(null)
 
-  useEffect(() => {
+  const chargerClients = () => {
     fetch('/api/clients')
       .then((r) => r.json())
       .then((json) => setClients(json.data || []))
+  }
+
+  const creerClientRapide = async () => {
+    if (!nouveauClientForm.nom.trim()) {
+      showToast('Le nom est requis', 'error')
+      return
+    }
+    setNouveauClientSaving(true)
+    try {
+      const res = await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nom: nouveauClientForm.nom, telephone: nouveauClientForm.telephone || null }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        showToast(json.error || 'Erreur lors de la creation du client', 'error')
+        return
+      }
+      // Le nouveau client est directement selectionne pour cette vente —
+      // pas besoin de revenir chercher dans la liste apres l'avoir cree.
+      chargerClients()
+      setClientId(json.data.id)
+      setNouveauClientForm({ nom: '', telephone: '' })
+      setNouveauClientOuvert(false)
+      showToast('Client cree et selectionne', 'success')
+    } catch {
+      showToast('Erreur reseau', 'error')
+    } finally {
+      setNouveauClientSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    chargerClients()
 
     fetch('/api/parametres')
       .then((r) => r.json())
@@ -114,7 +152,7 @@ export default function VentesPage() {
         }),
       })
 
-      let json: { error?: string } = {}
+      let json: { error?: string; data?: { numeroFacture?: string } } = {}
       try {
         json = await res.json()
       } catch {
@@ -125,7 +163,10 @@ export default function VentesPage() {
       }
 
       if (res.ok) {
-        const numero = `REC-${Date.now()}`
+        // Utilise le vrai numero de facture genere par le serveur — pas un
+        // horodatage local (etait le cas avant le 13/07/2026, ce qui
+        // n'avait aucun rapport avec le vrai numeroFacture stocke en base).
+        const numero = json.data?.numeroFacture || `REC-${Date.now()}`
         setRecu({ montantTotal: totalNet, monnaie: modePaiement === 'CREDIT' ? 0 : monnaie, montantPaye: parseFloat(montantPayeEffectif) || 0, lignes: [...panier], numero, remise })
         setPanier([])
         setMontantPaye('')
@@ -368,7 +409,16 @@ export default function VentesPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client (optionnel)</label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-sm font-medium text-gray-700">Client (optionnel)</label>
+              <button
+                type="button"
+                onClick={() => setNouveauClientOuvert(true)}
+                className="text-xs text-green-600 hover:underline"
+              >
+                + Nouveau
+              </button>
+            </div>
             <select value={clientId} onChange={(e) => setClientId(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
               <option value="">Client anonyme</option>
@@ -377,6 +427,49 @@ export default function VentesPage() {
               ))}
             </select>
           </div>
+
+          {nouveauClientOuvert && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => !nouveauClientSaving && setNouveauClientOuvert(false)} />
+              <div className="relative bg-white rounded-xl shadow-lg w-full max-w-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Nouveau client rapide</h3>
+                <div className="space-y-3 mb-4">
+                  <input
+                    type="text"
+                    placeholder="Nom *"
+                    autoFocus
+                    value={nouveauClientForm.nom}
+                    onChange={(e) => setNouveauClientForm({ ...nouveauClientForm, nom: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && creerClientRapide()}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Telephone (optionnel)"
+                    value={nouveauClientForm.telephone}
+                    onChange={(e) => setNouveauClientForm({ ...nouveauClientForm, telephone: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && creerClientRapide()}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setNouveauClientOuvert(false)}
+                    className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={creerClientRapide}
+                    disabled={nouveauClientSaving}
+                    className="px-4 py-2 rounded-lg text-sm bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {nouveauClientSaving ? 'Creation...' : 'Creer et selectionner'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Mode de paiement</label>
