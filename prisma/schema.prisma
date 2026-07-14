@@ -54,15 +54,17 @@ enum TypeMouvement {
 // ─── Modèles ─────────────────────────────────────────────────────────────────
 
 model Pharmacie {
-  id            String    @id @default(cuid())
-  nom           String
-  adresse       String?
-  telephone     String?
-  email         String?
-  licenceActive Boolean   @default(true)
-  licenceExpire DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                     String    @id @default(cuid())
+  nom                    String
+  adresse                String?
+  telephone              String?
+  email                  String?
+  numeroRegistreCommerce String?
+  logoUrl                String?
+  licenceActive          Boolean   @default(true)
+  licenceExpire          DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   users          User[]
   medicaments    Medicament[]
@@ -81,6 +83,7 @@ model User {
   id          String   @id @default(cuid())
   nom         String
   email       String   @unique
+  telephone   String?
   password    String
   role        Role     @default(CAISSIER)
   actif       Boolean  @default(true)
@@ -100,18 +103,21 @@ model User {
 }
 
 model Medicament {
-  id           String   @id @default(cuid())
-  nom          String
-  description  String?
-  categorie    String?
-  unite        String   @default("comprime")
-  prixVente    Float
-  prixAchat    Float?   // Prix de référence pour calcul CMV — décision volontaire v2.1
-  stockMinimum Int      @default(10)
-  actif        Boolean  @default(true)
-  pharmacieId  String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  nom                   String
+  description           String?
+  categorie             String?
+  unite                 String   @default("comprime")
+  prixVente             Float
+  prixAchat             Float? // Prix de référence pour calcul CMV — décision volontaire v2.1
+  codeBarre             String?
+  dci                   String? // Dénomination Commune Internationale — pour suggestion d'équivalents génériques
+  ordonnanceObligatoire Boolean  @default(false)
+  stockMinimum          Int      @default(10)
+  actif                 Boolean  @default(true)
+  pharmacieId           String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   pharmacie        Pharmacie         @relation(fields: [pharmacieId], references: [id])
   lots             Lot[]
@@ -120,73 +126,91 @@ model Medicament {
   lignesInventaire LigneInventaire[]
   mouvements       MouvementStock[]
 
+  @@unique([pharmacieId, codeBarre])
   @@index([pharmacieId])
   @@index([actif])
 }
 
 model Lot {
-  id             String   @id @default(cuid())
-  numeroLot      String?
-  datePeremption DateTime
-  quantite       Int
-  prixAchat      Float?   // Prix réel de cette livraison
-  actif          Boolean  @default(true)
-  medicamentId   String
-  pharmacieId    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  numeroLot             String?
+  datePeremption        DateTime
+  quantite              Int
+  prixAchat             Float? // Prix réel de cette livraison
+  actif                 Boolean  @default(true)
+  medicamentId          String
+  pharmacieId           String
+  fournisseurId         String?
+  commandeFournisseurId String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  medicament  Medicament   @relation(fields: [medicamentId], references: [id])
-  pharmacie   Pharmacie    @relation(fields: [pharmacieId], references: [id])
-  lignesVente LigneVente[]
+  medicament          Medicament           @relation(fields: [medicamentId], references: [id])
+  pharmacie           Pharmacie            @relation(fields: [pharmacieId], references: [id])
+  fournisseur         Fournisseur?         @relation(fields: [fournisseurId], references: [id], onDelete: SetNull)
+  commandeFournisseur CommandeFournisseur? @relation(fields: [commandeFournisseurId], references: [id], onDelete: SetNull)
+  lignesVente         LigneVente[]
 
   @@index([medicamentId])
   @@index([pharmacieId])
   @@index([actif])
   @@index([datePeremption])
+  @@index([fournisseurId])
+  @@index([commandeFournisseurId])
 }
 
 model Fournisseur {
-  id             String   @id @default(cuid())
-  nom            String
-  contact        String?
-  telephone      String?
-  email          String?
-  delaiLivraison Int?
-  actif          Boolean  @default(true)
-  pharmacieId    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                String   @id @default(cuid())
+  nom               String
+  adresse           String?
+  contact           String?
+  telephone         String?
+  email             String?
+  delaiLivraison    Int?
+  numeroFournisseur Int?
+  actif             Boolean  @default(true)
+  pharmacieId       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   pharmacie Pharmacie             @relation(fields: [pharmacieId], references: [id])
   commandes CommandeFournisseur[]
+  lots      Lot[]
 
+  @@unique([pharmacieId, numeroFournisseur])
   @@index([pharmacieId])
 }
 
 model CommandeFournisseur {
-  id            String         @id @default(cuid())
-  statut        StatutCommande @default(BROUILLON)
-  montantTotal  Float          @default(0)
-  pharmacieId   String
-  fournisseurId String
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id                  String         @id @default(cuid())
+  statut              StatutCommande @default(BROUILLON)
+  montantTotal        Float          @default(0)
+  numeroCommande      String?
+  dateLivraisonPrevue DateTime?
+  dateReception       DateTime?
+  pharmacieId         String
+  fournisseurId       String
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 
-  pharmacie   Pharmacie       @relation(fields: [pharmacieId], references: [id])
-  fournisseur Fournisseur     @relation(fields: [fournisseurId], references: [id])
+  pharmacie   Pharmacie        @relation(fields: [pharmacieId], references: [id])
+  fournisseur Fournisseur      @relation(fields: [fournisseurId], references: [id])
   lignes      LigneCommande[]
+  lots        Lot[]
+  mouvements  MouvementStock[]
 
+  @@unique([pharmacieId, numeroCommande])
   @@index([pharmacieId])
   @@index([statut])
 }
 
 model LigneCommande {
-  id           String  @id @default(cuid())
-  quantite     Int
-  prixUnitaire Float
-  commandeId   String
-  medicamentId String?
+  id            String  @id @default(cuid())
+  quantite      Int
+  quantiteRecue Int?
+  prixUnitaire  Float
+  commandeId    String
+  medicamentId  String?
 
   commande   CommandeFournisseur @relation(fields: [commandeId], references: [id], onDelete: Cascade)
   medicament Medicament?         @relation(fields: [medicamentId], references: [id], onDelete: SetNull)
@@ -197,24 +221,28 @@ model LigneCommande {
 
 model Vente {
   id              String       @id @default(cuid())
+  numeroFacture   String?
   montantTotal    Float
   montantPaye     Float
   monnaie         Float        @default(0)
   remise          Float        @default(0)
   modePaiement    ModePaiement @default(ESPECES)
   statut          StatutVente  @default(COMPLETE)
+  motifAnnulation String?
   pharmacieId     String
   userId          String
   clientId        String?
   sessionCaisseId String?
   createdAt       DateTime     @default(now())
 
-  pharmacie     Pharmacie      @relation(fields: [pharmacieId], references: [id])
-  user          User           @relation(fields: [userId], references: [id])
-  client        Client?        @relation(fields: [clientId], references: [id])
-  sessionCaisse SessionCaisse? @relation(fields: [sessionCaisseId], references: [id])
+  pharmacie     Pharmacie        @relation(fields: [pharmacieId], references: [id])
+  user          User             @relation(fields: [userId], references: [id])
+  client        Client?          @relation(fields: [clientId], references: [id])
+  sessionCaisse SessionCaisse?   @relation(fields: [sessionCaisseId], references: [id])
   lignes        LigneVente[]
+  mouvements    MouvementStock[]
 
+  @@unique([pharmacieId, numeroFacture])
   @@index([pharmacieId])
   @@index([userId])
   @@index([statut])
@@ -240,6 +268,7 @@ model LigneVente {
 
 model Client {
   id            String   @id @default(cuid())
+  numeroClient  Int?
   nom           String
   telephone     String?
   email         String?
@@ -253,6 +282,7 @@ model Client {
   pharmacie Pharmacie @relation(fields: [pharmacieId], references: [id])
   ventes    Vente[]
 
+  @@unique([pharmacieId, numeroClient])
   @@index([pharmacieId])
 }
 
@@ -286,9 +316,10 @@ model Inventaire {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  pharmacie Pharmacie         @relation(fields: [pharmacieId], references: [id])
-  user      User              @relation(fields: [userId], references: [id])
-  lignes    LigneInventaire[]
+  pharmacie  Pharmacie         @relation(fields: [pharmacieId], references: [id])
+  user       User              @relation(fields: [userId], references: [id])
+  lignes     LigneInventaire[]
+  mouvements MouvementStock[]
 
   @@index([pharmacieId])
 }
@@ -309,14 +340,15 @@ model LigneInventaire {
 }
 
 model Depense {
-  id          String   @id @default(cuid())
-  libelle     String
-  montant     Float
-  categorie   String?
-  archivee    Boolean  @default(false)
-  userId      String?
-  pharmacieId String
-  createdAt   DateTime @default(now())
+  id                 String   @id @default(cuid())
+  libelle            String
+  montant            Float
+  categorie          String?
+  archivee           Boolean  @default(false)
+  pieceJustificative String?
+  userId             String?
+  pharmacieId        String
+  createdAt          DateTime @default(now())
 
   pharmacie Pharmacie @relation(fields: [pharmacieId], references: [id])
   user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -332,14 +364,29 @@ model MouvementStock {
   quantite     Int
   medicamentId String
   userId       String?
+  // Lien vers l'objet source du mouvement — un seul rempli selon le type
+  // (ex: venteId pour une SORTIE liee a une vente, commandeId pour une
+  // ENTREE liee a une reception de commande, inventaireId pour un
+  // AJUSTEMENT issu d'un inventaire). Permet d'afficher l'origine exacte
+  // de chaque mouvement (prevu Phase 3.8) au lieu de la deviner par
+  // type + horodatage.
+  venteId      String?
+  commandeId   String?
+  inventaireId String?
   createdAt    DateTime      @default(now())
 
-  medicament Medicament @relation(fields: [medicamentId], references: [id])
-  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  medicament Medicament           @relation(fields: [medicamentId], references: [id])
+  user       User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  vente      Vente?               @relation(fields: [venteId], references: [id], onDelete: SetNull)
+  commande   CommandeFournisseur? @relation(fields: [commandeId], references: [id], onDelete: SetNull)
+  inventaire Inventaire?          @relation(fields: [inventaireId], references: [id], onDelete: SetNull)
 
   @@index([medicamentId])
   @@index([userId])
   @@index([createdAt])
+  @@index([venteId])
+  @@index([commandeId])
+  @@index([inventaireId])
 }
 
 model AuditLog {
@@ -356,6 +403,7 @@ model AuditLog {
   @@index([pharmacieId])
   @@index([createdAt])
 }
+
 model TentativeConnexion {
   id        String   @id @default(cuid())
   cle       String
