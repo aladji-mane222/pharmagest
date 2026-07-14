@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { genererNumeroCommande } from '@/lib/numerotation'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -61,23 +62,27 @@ export async function POST(request: Request) {
     0
   )
 
-  const commande = await prisma.commandeFournisseur.create({
-    data: {
-      pharmacieId,
-      fournisseurId,
-      montantTotal,
-      lignes: {
-        create: lignes.map((l: { medicamentId: string; quantite: number; prixUnitaire: number }) => ({
-          medicamentId: l.medicamentId, // ← corrigé : était absent
-          quantite: l.quantite,
-          prixUnitaire: l.prixUnitaire,
-        })),
+  const commande = await prisma.$transaction(async (tx) => {
+    const numeroCommande = await genererNumeroCommande(tx, pharmacieId)
+    return tx.commandeFournisseur.create({
+      data: {
+        numeroCommande,
+        pharmacieId,
+        fournisseurId,
+        montantTotal,
+        lignes: {
+          create: lignes.map((l: { medicamentId: string; quantite: number; prixUnitaire: number }) => ({
+            medicamentId: l.medicamentId, // ← corrigé : était absent
+            quantite: l.quantite,
+            prixUnitaire: l.prixUnitaire,
+          })),
+        },
       },
-    },
-    include: {
-      lignes: { include: { medicament: { select: { nom: true } } } },
-      fournisseur: true,
-    },
+      include: {
+        lignes: { include: { medicament: { select: { nom: true } } } },
+        fournisseur: true,
+      },
+    })
   })
 
   await createAuditLog({
