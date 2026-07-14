@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { genererNumeroFournisseur } from '@/lib/numerotation'
 import type { LignePreview } from '@/components/ui/ImportModal'
 
 const MAX_LIGNES = 5000
@@ -229,7 +230,7 @@ export async function POST(request: Request) {
         await tx.fournisseur.update({ where: { id: idExistant }, data: donnees })
         misAJour++
       } else {
-        await tx.fournisseur.create({ data: { ...donnees, pharmacieId } })
+        await tx.fournisseur.create({ data: { ...donnees, numeroFournisseur: await genererNumeroFournisseur(tx, pharmacieId), pharmacieId } })
         crees++
       }
     }

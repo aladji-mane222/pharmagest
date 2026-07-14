@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { genererNumeroClient } from '@/lib/numerotation'
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions)
@@ -83,14 +84,18 @@ export async function POST(request: Request) {
     }
   }
 
-  const client = await prisma.client.create({
-    data: {
-      nom,
-      telephone: telephone || null,
-      email: email || null,
-      plafondCredit: plafondCredit ? parseFloat(plafondCredit) : 50000,
-      pharmacieId: session.user.pharmacieId,
-    },
+  const client = await prisma.$transaction(async (tx) => {
+    const numeroClient = await genererNumeroClient(tx, session.user.pharmacieId)
+    return tx.client.create({
+      data: {
+        numeroClient,
+        nom,
+        telephone: telephone || null,
+        email: email || null,
+        plafondCredit: plafondCredit ? parseFloat(plafondCredit) : 50000,
+        pharmacieId: session.user.pharmacieId,
+      },
+    })
   })
 
   await createAuditLog({

@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { genererNumeroFournisseur } from '@/lib/numerotation'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -87,15 +88,19 @@ export async function POST(request: Request) {
     return apiError(`Un fournisseur avec ce nom existe deja (${doublonNom.nom})`, 409)
   }
 
-  const fournisseur = await prisma.fournisseur.create({
-    data: {
-      nom,
-      contact: contact || null,
-      telephone: telephone || null,
-      email: email || null,
-      delaiLivraison: delaiLivraison ? parseInt(delaiLivraison) : null,
-      pharmacieId: session.user.pharmacieId,
-    },
+  const fournisseur = await prisma.$transaction(async (tx) => {
+    const numeroFournisseur = await genererNumeroFournisseur(tx, session.user.pharmacieId)
+    return tx.fournisseur.create({
+      data: {
+        numeroFournisseur,
+        nom,
+        contact: contact || null,
+        telephone: telephone || null,
+        email: email || null,
+        delaiLivraison: delaiLivraison ? parseInt(delaiLivraison) : null,
+        pharmacieId: session.user.pharmacieId,
+      },
+    })
   })
 
   await createAuditLog({
