@@ -6,9 +6,11 @@ import { useSession } from 'next-auth/react'
 import { formatMontant } from '@/lib/utils'
 import ImportModal, { ImportField } from '@/components/ui/ImportModal'
 import { useToast } from '@/components/ui/Toast'
+import { formaterNumeroClient } from '@/lib/numerotation'
 
 interface Client {
   id: string
+  numeroClient: number | null
   nom: string
   telephone: string | null
   email: string | null
@@ -196,6 +198,9 @@ export default function ClientsPage() {
                   <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50">
                     <td className="px-6 py-4 font-medium text-gray-800">
                       {c.nom}
+                      {formaterNumeroClient(c.numeroClient) && (
+                        <span className="text-xs text-gray-400 font-normal ml-2">{formaterNumeroClient(c.numeroClient)}</span>
+                      )}
                       {c.soldeCredit > 0 && (
                         <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs font-medium ml-2">
                           Crédit

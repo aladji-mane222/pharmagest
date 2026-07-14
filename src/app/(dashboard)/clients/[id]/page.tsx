@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
 import { Modal, useToast } from '@/components/ui'
+import { formaterNumeroClient } from '@/lib/numerotation'
 
 interface LigneVente {
   id: string
@@ -26,6 +27,7 @@ interface Vente {
 
 interface Client {
   id: string
+  numeroClient: number | null
   nom: string
   telephone: string | null
   email: string | null
@@ -180,6 +182,9 @@ export default function ClientDetailPage() {
         <div className="flex items-center gap-4">
           <Link href="/clients" className="text-gray-400 hover:text-gray-700 text-sm">← Clients</Link>
           <h1 className="text-2xl font-bold text-gray-800">{client.nom}</h1>
+          {formaterNumeroClient(client.numeroClient) && (
+            <span className="text-gray-400 text-sm">{formaterNumeroClient(client.numeroClient)}</span>
+          )}
           {!client.actif && (
             <span className="px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">Archivé</span>
           )}
