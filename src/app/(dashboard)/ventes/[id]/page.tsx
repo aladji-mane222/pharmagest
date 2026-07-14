@@ -15,12 +15,14 @@ interface LigneVente {
 
 interface Vente {
   id: string
+  numeroFacture: string | null
   montantTotal: number
   montantPaye: number
   monnaie: number
   remise: number
   modePaiement: string
   statut: string
+  motifAnnulation: string | null
   createdAt: string
   user: { nom: string }
   client: { id: string; nom: string; telephone: string | null } | null
@@ -115,7 +117,12 @@ export default function VenteDetailPage() {
             className="text-gray-400 hover:text-gray-700 transition-colors text-sm">
             ← Historique
           </Link>
-          <h1 className="text-2xl font-bold text-gray-800">Détail de la vente</h1>
+          <h1 className="text-2xl font-bold text-gray-800">
+            Détail de la vente
+            {vente.numeroFacture && (
+              <span className="text-gray-400 font-normal ml-2">— {vente.numeroFacture}</span>
+            )}
+          </h1>
         </div>
         {isAdmin && vente.statut !== 'ANNULEE' && (
           <button
@@ -137,6 +144,9 @@ export default function VenteDetailPage() {
             {STATUT_LABEL[vente.statut] ?? vente.statut}
           </span>
         </div>
+        {vente.statut === 'ANNULEE' && vente.motifAnnulation && (
+          <p className="text-sm text-gray-500 mb-2">Motif : {vente.motifAnnulation}</p>
+        )}
 
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
