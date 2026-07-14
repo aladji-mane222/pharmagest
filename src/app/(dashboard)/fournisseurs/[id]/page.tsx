@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatDateTime } from '@/lib/utils'
 import { Modal, useToast } from '@/components/ui'
+import { formaterNumeroFournisseur } from '@/lib/numerotation'
 
 interface Commande {
   id: string
@@ -16,6 +17,7 @@ interface Commande {
 
 interface Fournisseur {
   id: string
+  numeroFournisseur: number | null
   nom: string
   contact: string | null
   telephone: string | null
@@ -152,6 +154,9 @@ export default function FournisseurDetailPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             {fournisseur.nom}
+            {formaterNumeroFournisseur(fournisseur.numeroFournisseur) && (
+              <span className="text-sm text-gray-400 font-normal">{formaterNumeroFournisseur(fournisseur.numeroFournisseur)}</span>
+            )}
             {!fournisseur.actif && (
               <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500 font-normal">Archivé</span>
             )}
