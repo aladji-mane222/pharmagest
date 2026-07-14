@@ -23,27 +23,94 @@ interface Medicament {
   prixAchat: number | null
   stockMinimum: number
   stockTotal: number
+  codeBarre: string | null
+  dci: string | null
+  ordonnanceObligatoire: boolean
   lots: Lot[]
 }
 
 export default function FicheMedicamentPage() {
   const { id } = useParams()
   const router = useRouter()
+  const { showToast } = useToast()
+
   const [med, setMed] = useState<Medicament | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetch(`/api/medicaments/${id}`)
-      .then((res) => res.json())
-      .then((json) => {
-        setMed(json.data)
-        setLoading(false)
-      })
-  }, [id])
+  const [modeEdition, setModeEdition] = useState(false)
+  const [form, setForm] = useState({
+    nom: '',
+    description: '',
+    categorie: '',
+    unite: 'comprime',
+    prixVente: '',
+    prixAchat: '',
+    stockMinimum: '10',
+    codeBarre: '',
+    dci: '',
+    ordonnanceObligatoire: false,
+  })
+  const [saving, setSaving] = useState(false)
+  const [erreurEdition, setErreurEdition] = useState('')
 
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [archiving, setArchiving] = useState(false)
-  const { showToast } = useToast()
+
+  const charger = () => {
+    setLoading(true)
+    fetch(`/api/medicaments/${id}`)
+      .then((res) => res.json())
+      .then((json) => {
+        const m = json.data as Medicament
+        setMed(m)
+        setForm({
+          nom: m.nom || '',
+          description: m.description || '',
+          categorie: m.categorie || '',
+          unite: m.unite || 'comprime',
+          prixVente: m.prixVente?.toString() || '',
+          prixAchat: m.prixAchat?.toString() || '',
+          stockMinimum: m.stockMinimum?.toString() || '10',
+          codeBarre: m.codeBarre || '',
+          dci: m.dci || '',
+          ordonnanceObligatoire: !!m.ordonnanceObligatoire,
+        })
+        setLoading(false)
+      })
+  }
+
+  useEffect(() => {
+    if (id) charger()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  const enregistrer = async () => {
+    if (!form.nom.trim() || !form.prixVente) {
+      setErreurEdition('Nom et prix de vente requis')
+      return
+    }
+    setSaving(true)
+    setErreurEdition('')
+    try {
+      const res = await fetch(`/api/medicaments/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setErreurEdition(json.error || 'Erreur lors de la modification')
+        return
+      }
+      showToast('Médicament modifié', 'success')
+      setModeEdition(false)
+      charger()
+    } catch {
+      setErreurEdition('Erreur réseau')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const handleArchiver = async () => {
     setArchiving(true)
@@ -70,15 +137,17 @@ export default function FicheMedicamentPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">{med.nom}</h1>
         <div className="flex gap-2">
-          <button
-            onClick={() => router.push(`/medicaments/${id}/modifier`)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-          >
-            Modifier
-          </button>
+          {!modeEdition && (
+            <button
+              onClick={() => setModeEdition(true)}
+              className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-200 text-sm font-medium"
+            >
+              Modifier
+            </button>
+          )}
           <button
             onClick={() => setConfirmArchive(true)}
-            className="bg-red-100 text-red-600 px-4 py-2 rounded-lg hover:bg-red-200"
+            className="bg-red-100 text-red-600 px-4 py-2 rounded-lg hover:bg-red-200 text-sm font-medium"
           >
             Archiver
           </button>
@@ -95,28 +164,170 @@ export default function FicheMedicamentPage() {
       <div className="grid grid-cols-2 gap-6 mb-6">
         <div className="bg-white rounded-xl shadow p-6">
           <h2 className="font-semibold text-gray-700 mb-4">Informations</h2>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Categorie</dt>
-              <dd className="font-medium">{med.categorie || '-'}</dd>
+
+          {modeEdition ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Nom *</label>
+                <input
+                  type="text"
+                  value={form.nom}
+                  onChange={(e) => setForm({ ...form, nom: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Categorie</label>
+                <input
+                  type="text"
+                  value={form.categorie}
+                  onChange={(e) => setForm({ ...form, categorie: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Prix de vente (GNF) *</label>
+                  <input
+                    type="number"
+                    value={form.prixVente}
+                    onChange={(e) => setForm({ ...form, prixVente: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Prix d achat (GNF)</label>
+                  <input
+                    type="number"
+                    value={form.prixAchat}
+                    onChange={(e) => setForm({ ...form, prixAchat: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Unite</label>
+                  <select
+                    value={form.unite}
+                    onChange={(e) => setForm({ ...form, unite: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value="comprime">Comprime</option>
+                    <option value="flacon">Flacon</option>
+                    <option value="ampoule">Ampoule</option>
+                    <option value="boite">Boite</option>
+                    <option value="sachet">Sachet</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Stock minimum</label>
+                  <input
+                    type="number"
+                    value={form.stockMinimum}
+                    onChange={(e) => setForm({ ...form, stockMinimum: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Code-barres</label>
+                  <input
+                    type="text"
+                    value={form.codeBarre}
+                    onChange={(e) => setForm({ ...form, codeBarre: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    placeholder="Scanner ou saisir le code"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">DCI (nom generique)</label>
+                  <input
+                    type="text"
+                    value={form.dci}
+                    onChange={(e) => setForm({ ...form, dci: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    placeholder="Ex: Paracetamol"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="ordonnanceObligatoire"
+                  checked={form.ordonnanceObligatoire}
+                  onChange={(e) => setForm({ ...form, ordonnanceObligatoire: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                />
+                <label htmlFor="ordonnanceObligatoire" className="text-xs font-medium text-gray-600">
+                  Vente sur ordonnance uniquement
+                </label>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  rows={3}
+                />
+              </div>
+
+              {erreurEdition && <p className="text-red-500 text-xs">{erreurEdition}</p>}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={enregistrer}
+                  disabled={saving}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
+                >
+                  {saving ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+                <button
+                  onClick={() => { setModeEdition(false); setErreurEdition(''); charger() }}
+                  className="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 text-sm"
+                >
+                  Annuler
+                </button>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Unite</dt>
-              <dd className="font-medium">{med.unite}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Prix de vente</dt>
-              <dd className="font-medium text-green-600">{formatMontant(med.prixVente)}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Prix d achat</dt>
-              <dd className="font-medium">{med.prixAchat ? formatMontant(med.prixAchat) : '-'}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Stock minimum</dt>
-              <dd className="font-medium">{med.stockMinimum}</dd>
-            </div>
-          </dl>
+          ) : (
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Categorie</dt>
+                <dd className="font-medium">{med.categorie || '-'}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Unite</dt>
+                <dd className="font-medium">{med.unite}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Prix de vente</dt>
+                <dd className="font-medium text-green-600">{formatMontant(med.prixVente)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Prix d achat</dt>
+                <dd className="font-medium">{med.prixAchat ? formatMontant(med.prixAchat) : '-'}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Stock minimum</dt>
+                <dd className="font-medium">{med.stockMinimum}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Code-barres</dt>
+                <dd className="font-medium">{med.codeBarre || '-'}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">DCI</dt>
+                <dd className="font-medium">{med.dci || '-'}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Ordonnance</dt>
+                <dd className="font-medium">{med.ordonnanceObligatoire ? 'Obligatoire' : 'Libre'}</dd>
+              </div>
+            </dl>
+          )}
         </div>
 
         <div className="bg-white rounded-xl shadow p-6">
@@ -147,12 +358,6 @@ export default function FicheMedicamentPage() {
             </thead>
             <tbody>
               {med.lots.map((lot) => {
-                // Signale un prix d'achat de lot anormal : soit superieur au
-                // prix de vente (perte garantie sur ce lot), soit nettement
-                // au-dessus du prix de reference du medicament (>20%) — aide
-                // a repérer une erreur de saisie ou une vraie hausse
-                // fournisseur a traiter (ajuster le prix de vente ou verifier
-                // aupres du fournisseur).
                 const prixAchatSuperieurVente = lot.prixAchat !== null && lot.prixAchat > med.prixVente
                 const prixAchatEleve =
                   !prixAchatSuperieurVente &&
