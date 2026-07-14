@@ -6,9 +6,11 @@ import { useSession } from 'next-auth/react'
 import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import ImportModal, { ImportField } from '@/components/ui/ImportModal'
+import { formaterNumeroFournisseur } from '@/lib/numerotation'
 
 interface Fournisseur {
   id: string
+  numeroFournisseur: number | null
   nom: string
   contact: string | null
   telephone: string | null
@@ -212,6 +214,9 @@ export default function FournisseursPage() {
                     <Link href={`/fournisseurs/${f.id}`} className="hover:underline hover:text-mint-dark">
                       {f.nom}
                     </Link>
+                    {formaterNumeroFournisseur(f.numeroFournisseur) && (
+                      <span className="text-xs text-gray-400 ml-2">{formaterNumeroFournisseur(f.numeroFournisseur)}</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-gray-600">{f.contact || '-'}</td>
                   <td className="px-6 py-4 text-gray-600">{f.telephone || '-'}</td>
