@@ -5,6 +5,7 @@ import { Prisma, ModePaiement } from '@prisma/client'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { decrementerLotFifo } from '@/lib/fifo'
 import { createAuditLog } from '@/lib/audit'
+import { genererNumeroFacture } from '@/lib/numerotation'
 
 interface LigneVenteInput {
   medicamentId: string
@@ -191,8 +192,10 @@ export async function POST(request: Request) {
   const vente = await prisma.$transaction(
     async (tx) => {
     // 1. Créer la vente
+    const numeroFacture = await genererNumeroFacture(tx, pharmacieId)
     const v = await tx.vente.create({
       data: {
+        numeroFacture,
         montantTotal,
         montantPaye: montantPayeFloat,
         monnaie,
@@ -223,6 +226,7 @@ export async function POST(request: Request) {
           quantite:    ligne.quantite,
           medicamentId: ligne.medicamentId,
           userId,
+          venteId:     v.id,
         },
       })
     }

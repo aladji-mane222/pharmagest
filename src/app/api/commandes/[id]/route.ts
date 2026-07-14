@@ -51,32 +51,37 @@ export async function PATCH(request: Request, { params }: { params: { id: string
           continue
         }
 
-        // Créer le lot avec pharmacieId obligatoire
+        // Créer le lot avec pharmacieId obligatoire, relie a la commande et
+        // au fournisseur d'origine pour la tracabilite (rappel de lot,
+        // Phase 2BIS)
         await tx.lot.create({
           data: {
             medicamentId: ligne.medicamentId,
             pharmacieId,
+            fournisseurId: commande.fournisseurId,
+            commandeFournisseurId: commande.id,
             quantite: ligne.quantite,
             prixAchat: ligne.prixUnitaire,
             datePeremption: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
           },
         })
 
-        // Créer le MouvementStock ENTREE pour traçabilité
+        // Créer le MouvementStock ENTREE pour traçabilité, relie a la commande
         await tx.mouvementStock.create({
           data: {
             type: 'ENTREE',
             quantite: ligne.quantite,
             medicamentId: ligne.medicamentId,
             userId,
+            commandeId: commande.id,
           },
         })
       }
 
-      // Mettre à jour le statut de la commande
+      // Mettre à jour le statut de la commande et sa date de reception reelle
       await tx.commandeFournisseur.update({
         where: { id: params.id },
-        data: { statut: 'RECUE' },
+        data: { statut: 'RECUE', dateReception: new Date() },
       })
     })
 
