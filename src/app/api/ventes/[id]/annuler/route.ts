@@ -32,7 +32,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     // a. Marquer la vente annulée
     const v = await tx.vente.update({
       where: { id: params.id },
-      data: { statut: 'ANNULEE' },
+      data: { statut: 'ANNULEE', motifAnnulation: motif || null },
     })
 
     // b. Remise en stock pour chaque ligne
