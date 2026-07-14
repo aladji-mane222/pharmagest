@@ -15,6 +15,9 @@ export default function NouveauMedicamentPage() {
     prixVente: '',
     prixAchat: '',
     stockMinimum: '10',
+    codeBarre: '',
+    dci: '',
+    ordonnanceObligatoire: false,
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -114,6 +117,42 @@ export default function NouveauMedicamentPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Code-barres</label>
+            <input
+              type="text"
+              value={form.codeBarre}
+              onChange={(e) => setForm({ ...form, codeBarre: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              placeholder="Scanner ou saisir le code"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">DCI (nom generique)</label>
+            <input
+              type="text"
+              value={form.dci}
+              onChange={(e) => setForm({ ...form, dci: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              placeholder="Ex: Paracetamol"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="ordonnanceObligatoire"
+            checked={form.ordonnanceObligatoire}
+            onChange={(e) => setForm({ ...form, ordonnanceObligatoire: e.target.checked })}
+            className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+          />
+          <label htmlFor="ordonnanceObligatoire" className="text-sm font-medium text-gray-700">
+            Vente sur ordonnance uniquement
+          </label>
         </div>
 
         <div>

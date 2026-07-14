@@ -30,7 +30,36 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   if (!medicament) return apiError('Medicament non trouve', 404)
 
   const body = await request.json()
-  const { nom, description, categorie, unite, prixVente, prixAchat, stockMinimum } = body
+  const {
+    nom,
+    description,
+    categorie,
+    unite,
+    prixVente,
+    prixAchat,
+    stockMinimum,
+    codeBarre,
+    dci,
+    ordonnanceObligatoire,
+  } = body
+
+  // Le code-barres est unique par pharmacie (@@unique([pharmacieId, codeBarre])
+  // en base) — on verifie cote code avant l'update pour renvoyer un message
+  // clair plutot que de laisser Prisma remonter une erreur P2002 brute.
+  // On exclut ce medicament lui-meme (permet de re-sauvegarder sans y toucher).
+  if (codeBarre !== undefined && codeBarre !== null && codeBarre.trim()) {
+    const conflit = await prisma.medicament.findFirst({
+      where: {
+        pharmacieId: session.user.pharmacieId,
+        codeBarre: codeBarre.trim(),
+        id: { not: params.id },
+      },
+      select: { nom: true },
+    })
+    if (conflit) {
+      return apiError(`Ce code-barres est deja utilise par "${conflit.nom}"`, 409)
+    }
+  }
 
   const updated = await prisma.medicament.update({
     where: { id: params.id },
@@ -42,6 +71,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       ...(prixVente && { prixVente: parseFloat(prixVente) }),
       ...(prixAchat !== undefined && { prixAchat: prixAchat ? parseFloat(prixAchat) : null }),
       ...(stockMinimum && { stockMinimum: parseInt(stockMinimum) }),
+      ...(codeBarre !== undefined && { codeBarre: codeBarre && codeBarre.trim() ? codeBarre.trim() : null }),
+      ...(dci !== undefined && { dci: dci && dci.trim() ? dci.trim() : null }),
+      ...(ordonnanceObligatoire !== undefined && { ordonnanceObligatoire: !!ordonnanceObligatoire }),
     },
   })
 

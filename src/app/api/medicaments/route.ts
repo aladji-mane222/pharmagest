@@ -74,9 +74,30 @@ export async function POST(request: Request) {
 
   const pharmacieId = session.user.pharmacieId
   const body = await request.json()
-  const { nom, description, categorie, unite, prixVente, prixAchat, stockMinimum } = body
+  const {
+    nom,
+    description,
+    categorie,
+    unite,
+    prixVente,
+    prixAchat,
+    stockMinimum,
+    codeBarre,
+    dci,
+    ordonnanceObligatoire,
+  } = body
 
   if (!nom || !prixVente) return apiError('Nom et prix de vente requis', 400)
+
+  if (codeBarre && codeBarre.trim()) {
+    const conflit = await prisma.medicament.findFirst({
+      where: { pharmacieId, codeBarre: codeBarre.trim() },
+      select: { nom: true },
+    })
+    if (conflit) {
+      return apiError(`Ce code-barres est deja utilise par "${conflit.nom}"`, 409)
+    }
+  }
 
   const medicament = await prisma.medicament.create({
     data: {
@@ -87,6 +108,9 @@ export async function POST(request: Request) {
       prixVente: parseFloat(prixVente),
       prixAchat: prixAchat ? parseFloat(prixAchat) : null,
       stockMinimum: stockMinimum ? parseInt(stockMinimum) : 10,
+      codeBarre: codeBarre && codeBarre.trim() ? codeBarre.trim() : null,
+      dci: dci && dci.trim() ? dci.trim() : null,
+      ordonnanceObligatoire: !!ordonnanceObligatoire,
       pharmacieId,
     },
   })
