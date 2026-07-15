@@ -33,7 +33,22 @@ interface LigneEntree {
   prixVente: string
   prixAchat: string
   stockMinimum: string
+  codeBarre: string
+  dci: string
+  ordonnanceObligatoire: string
   [key: string]: string
+}
+
+/**
+ * Parse une valeur texte de tableur en booleen, tolerant sur le format
+ * (une pharmacienne peut taper "oui"/"Oui"/"OUI"/"1"/"x"/"true") plutot que
+ * d'exiger un format strict — coherent avec le reste du parsing d'import
+ * qui tolere virgule/point pour les nombres.
+ */
+function estVrai(valeur: string | undefined): boolean {
+  if (!valeur) return false
+  const v = valeur.trim().toLowerCase()
+  return v === 'oui' || v === 'true' || v === '1' || v === 'x' || v === 'vrai'
 }
 
 /**
@@ -83,10 +98,17 @@ export async function POST(request: Request) {
   // ─── Catalogue existant de la pharmacie (pour la detection de doublons) ──
   const medicamentsExistants = await prisma.medicament.findMany({
     where: { pharmacieId, actif: true },
-    select: { id: true, nom: true },
+    select: { id: true, nom: true, codeBarre: true },
   })
   const nomsExistants = new Map(
     medicamentsExistants.map((m) => [normaliserNom(m.nom), m.id])
+  )
+  // codeBarre est optionnel : seules les lignes non-null entrent dans la map,
+  // sinon plusieurs medicaments sans code-barres se marcheraient dessus.
+  const codesBarresExistants = new Map(
+    medicamentsExistants
+      .filter((m) => m.codeBarre)
+      .map((m) => [m.codeBarre as string, { id: m.id, nom: m.nom }])
   )
 
   if (mode === 'preview') {
@@ -97,6 +119,7 @@ export async function POST(request: Request) {
     }
 
     const nomsVusDansLeFichier = new Set<string>()
+    const codesBarresVusDansLeFichier = new Set<string>()
     const resultats: LignePreview[] = lignes.map((valeurs, index) => {
       const erreur = validerLigne(valeurs)
       if (erreur) {
@@ -113,6 +136,22 @@ export async function POST(request: Request) {
         return { index, valeurs, statut: 'doublon', message: 'Doublon dans le fichier importe' }
       }
       nomsVusDansLeFichier.add(nomNormalise)
+
+      // Code-barres : contrainte unique en base (@@unique([pharmacieId,
+      // codeBarre])) donc un conflit ici ferait echouer la creation — on le
+      // signale comme erreur bloquante plutot que de laisser la transaction
+      // planter au moment de la confirmation.
+      const codeBarre = valeurs.codeBarre?.trim()
+      if (codeBarre) {
+        const conflit = codesBarresExistants.get(codeBarre)
+        if (conflit) {
+          return { index, valeurs, statut: 'erreur', message: `Code-barres deja utilise par "${conflit.nom}"` }
+        }
+        if (codesBarresVusDansLeFichier.has(codeBarre)) {
+          return { index, valeurs, statut: 'erreur', message: 'Code-barres en double dans le fichier' }
+        }
+        codesBarresVusDansLeFichier.add(codeBarre)
+      }
 
       return { index, valeurs, statut: 'ok' }
     })
@@ -132,6 +171,12 @@ export async function POST(request: Request) {
   let ignores = 0
   let erreurs = 0
 
+  // Re-verification defensive des codes-barres au moment de la confirmation :
+  // le catalogue a pu changer depuis la preview (import concurrent, ajout
+  // manuel entre-temps) — sans ca, la contrainte unique en base ferait
+  // planter toute la transaction sur une seule ligne en conflit.
+  const codesBarresVusDansLeFichierConfirm = new Set<string>()
+
   await prisma.$transaction(
     async (tx) => {
     for (const { valeurs, action } of lignes) {
@@ -149,6 +194,17 @@ export async function POST(request: Request) {
       const nomNormalise = normaliserNom(valeurs.nom)
       const idExistant = nomsExistants.get(nomNormalise)
 
+      const codeBarre = valeurs.codeBarre?.trim() || null
+      if (codeBarre) {
+        const conflit = codesBarresExistants.get(codeBarre)
+        const conflitReel = conflit && conflit.id !== idExistant
+        if (conflitReel || codesBarresVusDansLeFichierConfirm.has(codeBarre)) {
+          erreurs++
+          continue
+        }
+        codesBarresVusDansLeFichierConfirm.add(codeBarre)
+      }
+
       const donnees = {
         nom: valeurs.nom.trim(),
         categorie: valeurs.categorie?.trim() || null,
@@ -160,6 +216,9 @@ export async function POST(request: Request) {
         stockMinimum: valeurs.stockMinimum?.trim()
           ? parseInt(valeurs.stockMinimum, 10)
           : 10,
+        codeBarre,
+        dci: valeurs.dci?.trim() || null,
+        ordonnanceObligatoire: estVrai(valeurs.ordonnanceObligatoire),
       }
 
       if (action === 'mettreAJour' && idExistant) {

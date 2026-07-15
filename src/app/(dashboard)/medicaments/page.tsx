@@ -23,6 +23,9 @@ const CHAMPS_IMPORT: ImportField[] = [
   { key: 'prixAchat', label: 'Prix d\'achat', guessKeywords: ['prix achat', 'pu achat', 'prix d\'achat', 'achat'] },
   { key: 'unite', label: 'Unite', guessKeywords: ['unite', 'unit'] },
   { key: 'stockMinimum', label: 'Stock minimum', guessKeywords: ['stock min', 'seuil', 'stock minimum'] },
+  { key: 'codeBarre', label: 'Code-barres', guessKeywords: ['code-barres', 'code barre', 'codebarre', 'ean', 'gencode'] },
+  { key: 'dci', label: 'DCI', guessKeywords: ['dci', 'nom generique', 'denomination commune'] },
+  { key: 'ordonnanceObligatoire', label: 'Ordonnance obligatoire', guessKeywords: ['ordonnance', 'prescription'] },
 ]
 
 export default function MedicamentsPage() {
