@@ -1,3 +1,4 @@
+// CIBLE: src/lib/utils.ts
 // Formater un montant en Francs Guinéens
 export function formatMontant(montant: number): string {
   return new Intl.NumberFormat('fr-GN', {
@@ -60,6 +61,6 @@ export function apiSuccess(data: unknown, status = 200) {
   return Response.json({ success: true, data }, { status })
 }
 
-export function apiError(message: string, status = 400) {
-  return Response.json({ success: false, error: message }, { status })
+export function apiError(message: string, status = 400, details?: unknown) {
+  return Response.json({ success: false, error: message, ...(details !== undefined && { details }) }, { status })
 }

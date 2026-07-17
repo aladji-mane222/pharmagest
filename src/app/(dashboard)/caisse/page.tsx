@@ -3,8 +3,7 @@
 
 import { useEffect, useState } from 'react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
-import Modal from '@/components/ui/Modal'
-import { useToast } from '@/components/ui/Toast'
+import { Modal, useToast, Button, Card, Badge, PageHeader, EmptyState } from '@/components/ui'
 
 interface SessionCaisse {
   id: string
@@ -130,19 +129,18 @@ export default function CaissePage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Caisse</h1>
+      <PageHeader title="Caisse" description="Ouverture, cloture et suivi des sessions" />
 
       <div className="grid grid-cols-2 gap-6 mb-8">
 
         {/* ── Session actuelle ── */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold text-gray-700 mb-4">Session actuelle</h2>
+        <Card>
+          <h2 className="font-semibold text-navy mb-4">Session actuelle</h2>
 
           {sessionActive ? (
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-green-600 font-medium">Session ouverte</span>
+                <Badge variant="success">● Session ouverte</Badge>
               </div>
 
               <div className="space-y-1 mb-4 text-sm text-gray-500">
@@ -152,7 +150,7 @@ export default function CaissePage() {
               </div>
 
               {/* Totaux encaissé / attendu */}
-              <div className="bg-gray-50 rounded-lg p-3 mb-4 space-y-1 text-sm">
+              <div className="bg-app-bg rounded-card p-3 mb-4 space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Total encaissé (tous modes)</span>
                   <span className="font-semibold text-green-600">{formatMontant(totalEncaisse)}</span>
@@ -187,13 +185,9 @@ export default function CaissePage() {
                   onWheel={(e) => (e.target as HTMLInputElement).blur()}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
-                <button
-                  onClick={() => setConfirmFermer(true)}
-                  disabled={saving}
-                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50"
-                >
+                <Button variant="danger" onClick={() => setConfirmFermer(true)} loading={saving}>
                   Fermer
-                </button>
+                </Button>
               </div>
 
               {/* Écart en temps réel — seuil : 0 = équilibré, jusqu'à 5000 GNF = petit écart
@@ -204,10 +198,10 @@ export default function CaissePage() {
                 const abs = Math.abs(ecart)
                 const niveau =
                   abs === 0 ? 'equilibre' : abs <= SEUIL_PETIT_ECART ? 'petit' : 'important'
-                const style = {
-                  equilibre: 'bg-green-50 text-green-700',
-                  petit: 'bg-orange-50 text-orange-700',
-                  important: 'bg-red-50 text-red-700',
+                const styleTokens = {
+                  equilibre: 'bg-success-bg text-success-text',
+                  petit: 'bg-warning-bg text-warning-text',
+                  important: 'bg-danger-bg text-danger-text',
                 }[niveau]
                 const texte =
                   niveau === 'equilibre'
@@ -216,7 +210,7 @@ export default function CaissePage() {
                       ? `▲ Excédent : +${formatMontant(ecart)}${niveau === 'important' ? ' — écart important' : ''}`
                       : `▼ Manque : ${formatMontant(ecart)}${niveau === 'important' ? ' — écart important' : ''}`
                 return (
-                  <div className={`text-sm font-medium px-3 py-2 rounded-lg ${style}`}>
+                  <div className={`text-sm font-medium px-3 py-2 rounded-card ${styleTokens}`}>
                     {texte}
                   </div>
                 )
@@ -225,8 +219,7 @@ export default function CaissePage() {
           ) : (
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <span className="w-3 h-3 bg-gray-300 rounded-full" />
-                <span className="text-gray-500">Aucune session ouverte</span>
+                <Badge variant="neutral">Aucune session ouverte</Badge>
               </div>
               <div className="flex gap-3">
                 <input
@@ -235,15 +228,11 @@ export default function CaissePage() {
                   value={montantOuverture}
                   onChange={(e) => setMontantOuverture(e.target.value)}
                   onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint"
                 />
-                <button
-                  onClick={ouvrirSession}
-                  disabled={saving}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                >
-                  {saving ? 'Ouverture...' : 'Ouvrir'}
-                </button>
+                <Button variant="primary" onClick={ouvrirSession} loading={saving}>
+                  Ouvrir
+                </Button>
               </div>
               {suggestionOuverture && (
                 <p className="text-xs text-gray-400 mt-2">
@@ -254,24 +243,22 @@ export default function CaissePage() {
               )}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* ── Historique ── */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold text-gray-700 mb-4">Historique sessions</h2>
+        <Card>
+          <h2 className="font-semibold text-navy mb-4">Historique sessions</h2>
           {historique.length === 0 ? (
-            <p className="text-gray-400 text-sm">Aucune session</p>
+            <EmptyState icon="🗒️" title="Aucune session" description="L'historique des sessions caisse apparaitra ici." />
           ) : (
             <ul className="space-y-3">
               {historique.slice(0, 5).map((s) => (
-                <li key={s.id} className="border rounded-lg p-3 text-sm">
+                <li key={s.id} className="border border-gray-100 rounded-card p-3 text-sm">
                   <div className="flex justify-between mb-1">
-                    <span className="font-medium">{s.user.nom}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs ${
-                      !s.dateCloture ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                    }`}>
+                    <span className="font-medium text-navy">{s.user.nom}</span>
+                    <Badge variant={!s.dateCloture ? 'success' : 'neutral'}>
                       {!s.dateCloture ? 'OUVERTE' : 'FERMÉE'}
-                    </span>
+                    </Badge>
                   </div>
                   <p className="text-gray-500">{formatDateTime(s.dateOuverture)}</p>
                   {s.montantCloture != null && (
@@ -281,7 +268,7 @@ export default function CaissePage() {
               ))}
             </ul>
           )}
-        </div>
+        </Card>
 
       </div>
 
