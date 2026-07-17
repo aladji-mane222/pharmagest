@@ -9,7 +9,7 @@ export async function GET() {
 
   const pharmacie = await prisma.pharmacie.findUnique({
     where: { id: session.user.pharmacieId },
-    select: { id: true, nom: true, adresse: true, telephone: true, email: true },
+    select: { id: true, nom: true, adresse: true, telephone: true, email: true, formatRecu: true },
   })
 
   return apiSuccess(pharmacie)
@@ -21,7 +21,12 @@ export async function PATCH(request: Request) {
   if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
 
   const body = await request.json()
-  const { nom, adresse, telephone, email } = body
+  const { nom, adresse, telephone, email, formatRecu } = body
+
+  const formatsValides = ['A4', 'THERMIQUE_58', 'THERMIQUE_80']
+  if (formatRecu !== undefined && !formatsValides.includes(formatRecu)) {
+    return apiError('Format de recu invalide', 400)
+  }
 
   const pharmacie = await prisma.pharmacie.update({
     where: { id: session.user.pharmacieId },
@@ -30,6 +35,7 @@ export async function PATCH(request: Request) {
       ...(adresse !== undefined && { adresse }),
       ...(telephone !== undefined && { telephone }),
       ...(email !== undefined && { email }),
+      ...(formatRecu !== undefined && { formatRecu }),
     },
   })
 

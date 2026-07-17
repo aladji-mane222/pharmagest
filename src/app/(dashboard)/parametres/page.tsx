@@ -9,6 +9,7 @@ interface Pharmacie {
   adresse: string | null
   telephone: string | null
   email: string | null
+  formatRecu: 'A4' | 'THERMIQUE_58' | 'THERMIQUE_80'
 }
 
 export default function ParametresPage() {
@@ -17,7 +18,7 @@ export default function ParametresPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [form, setForm] = useState({ nom: '', adresse: '', telephone: '', email: '' })
+  const [form, setForm] = useState({ nom: '', adresse: '', telephone: '', email: '', formatRecu: 'A4' })
 
   useEffect(() => {
     fetch('/api/parametres')
@@ -30,6 +31,7 @@ export default function ParametresPage() {
             adresse: json.data.adresse || '',
             telephone: json.data.telephone || '',
             email: json.data.email || '',
+            formatRecu: json.data.formatRecu || 'A4',
           })
         }
         setLoading(false)
@@ -79,6 +81,21 @@ export default function ParametresPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Format d&apos;impression du recu</label>
+            <select
+              value={form.formatRecu}
+              onChange={(e) => setForm({ ...form, formatRecu: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="A4">Feuille A4 / PDF standard</option>
+              <option value="THERMIQUE_58">Imprimante thermique 58mm</option>
+              <option value="THERMIQUE_80">Imprimante thermique 80mm</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Determine la mise en page du recu imprime depuis la caisse.
+            </p>
           </div>
           {success && <p className="text-green-600 text-sm">Parametres sauvegardes !</p>}
           <button type="submit" disabled={saving}
