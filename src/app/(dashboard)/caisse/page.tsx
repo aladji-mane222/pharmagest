@@ -1,3 +1,4 @@
+// CIBLE: src/app/(dashboard)/caisse/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -21,8 +22,10 @@ export default function CaissePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [montantOuverture, setMontantOuverture] = useState('')
+  const [suggestionOuverture, setSuggestionOuverture] = useState<{ montant: number; nomUser: string; date: string } | null>(null)
   const [montantCloture, setMontantCloture] = useState('')
   const [totalEncaisse, setTotalEncaisse] = useState(0)
+  const [parMode, setParMode] = useState<{ modePaiement: string; total: number }[]>([])
   const [confirmFermer, setConfirmFermer] = useState(false)
   const { showToast } = useToast()
 
@@ -33,6 +36,17 @@ export default function CaissePage() {
       .then((json) => {
         setSessionActive(json.data?.sessionActive || null)
         setHistorique(json.data?.historique || [])
+        const derniere = json.data?.derniereSessionFermee
+        if (derniere && derniere.montantCloture !== null) {
+          setSuggestionOuverture({
+            montant: derniere.montantCloture,
+            nomUser: derniere.user?.nom || 'un autre utilisateur',
+            date: derniere.dateCloture,
+          })
+          // Pre-rempli mais reste un champ texte normal, entierement modifiable —
+          // le caissier compte l'argent reel et corrige si besoin.
+          setMontantOuverture(String(derniere.montantCloture))
+        }
         setLoading(false)
       })
   }, [])
@@ -41,16 +55,37 @@ export default function CaissePage() {
   useEffect(() => {
     if (!sessionActive?.id) {
       setTotalEncaisse(0)
+      setParMode([])
       return
     }
     fetch(`/api/ventes?sessionCaisseId=${sessionActive.id}`)
       .then((res) => res.json())
-      .then((json) => setTotalEncaisse(json.data?.totalEncaisse ?? 0))
+      .then((json) => {
+        setTotalEncaisse(json.data?.totalEncaisse ?? 0)
+        setParMode(json.data?.parMode ?? [])
+      })
   }, [sessionActive?.id])
 
-  const totalAttendu = (sessionActive?.montantOuverture ?? 0) + totalEncaisse
+  // Le tiroir ne contient physiquement que les especes — le mobile money,
+  // la carte, etc. sont recus mais jamais dans la caisse. Compter tous les
+  // modes dans le "total attendu en especes" aurait cree un faux "manque"
+  // a chaque vente payee en mobile money.
+  const totalEspeces = parMode.find((m) => m.modePaiement === 'ESPECES')?.total ?? 0
+  const totalAttendu = (sessionActive?.montantOuverture ?? 0) + totalEspeces
   const montantClotureNum = parseFloat(montantCloture) || 0
   const ecart = montantCloture !== '' ? montantClotureNum - totalAttendu : null
+
+  const libelleModePaiement = (mode: string) => {
+    const libelles: Record<string, string> = {
+      ESPECES: 'Especes',
+      MOBILE_MONEY: 'Mobile Money',
+      ORANGE_MONEY: 'Orange Money',
+      MTN_MONEY: 'MTN Money',
+      PAIEMENT_MARCHAND: 'Paiement Marchand',
+      CARTE: 'Carte',
+    }
+    return libelles[mode] || mode
+  }
 
   const ouvrirSession = async () => {
     setSaving(true)
@@ -119,13 +154,27 @@ export default function CaissePage() {
               {/* Totaux encaissé / attendu */}
               <div className="bg-gray-50 rounded-lg p-3 mb-4 space-y-1 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Total encaissé</span>
+                  <span className="text-gray-500">Total encaissé (tous modes)</span>
                   <span className="font-semibold text-green-600">{formatMontant(totalEncaisse)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Total attendu en caisse</span>
+                {parMode.length > 0 && (
+                  <div className="pl-3 space-y-0.5 border-l-2 border-gray-200 ml-1">
+                    {parMode.map((m) => (
+                      <div key={m.modePaiement} className="flex justify-between text-gray-400">
+                        <span>{libelleModePaiement(m.modePaiement)}</span>
+                        <span>{formatMontant(m.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex justify-between pt-1">
+                  <span className="text-gray-500">Total attendu en especes</span>
                   <span className="font-semibold text-blue-600">{formatMontant(totalAttendu)}</span>
                 </div>
+                <p className="text-xs text-gray-400">
+                  Ouverture + especes recues uniquement — le mobile money et la carte ne sont
+                  jamais dans le tiroir.
+                </p>
               </div>
 
               {/* Clôture */}
@@ -135,6 +184,7 @@ export default function CaissePage() {
                   placeholder="Montant compté en caisse"
                   value={montantCloture}
                   onChange={(e) => setMontantCloture(e.target.value)}
+                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
                 <button
@@ -146,22 +196,31 @@ export default function CaissePage() {
                 </button>
               </div>
 
-              {/* Écart en temps réel */}
-              {ecart !== null && (
-                <div className={`text-sm font-medium px-3 py-2 rounded-lg ${
-                  ecart === 0
-                    ? 'bg-gray-100 text-gray-600'
-                    : ecart > 0
-                      ? 'bg-green-50 text-green-700'
-                      : 'bg-red-50 text-red-700'
-                }`}>
-                  {ecart === 0
+              {/* Écart en temps réel — seuil : 0 = équilibré, jusqu'à 5000 GNF = petit écart
+                  (marge d'erreur typique de comptage manuel), au-dela = écart important a
+                  investiguer. Pas encore configurable par pharmacie (prevu Phase 6). */}
+              {ecart !== null && (() => {
+                const SEUIL_PETIT_ECART = 5000
+                const abs = Math.abs(ecart)
+                const niveau =
+                  abs === 0 ? 'equilibre' : abs <= SEUIL_PETIT_ECART ? 'petit' : 'important'
+                const style = {
+                  equilibre: 'bg-green-50 text-green-700',
+                  petit: 'bg-orange-50 text-orange-700',
+                  important: 'bg-red-50 text-red-700',
+                }[niveau]
+                const texte =
+                  niveau === 'equilibre'
                     ? '✓ Caisse équilibrée'
                     : ecart > 0
-                      ? `▲ Excédent : +${formatMontant(ecart)}`
-                      : `▼ Manque : ${formatMontant(ecart)}`}
-                </div>
-              )}
+                      ? `▲ Excédent : +${formatMontant(ecart)}${niveau === 'important' ? ' — écart important' : ''}`
+                      : `▼ Manque : ${formatMontant(ecart)}${niveau === 'important' ? ' — écart important' : ''}`
+                return (
+                  <div className={`text-sm font-medium px-3 py-2 rounded-lg ${style}`}>
+                    {texte}
+                  </div>
+                )
+              })()}
             </div>
           ) : (
             <div>
@@ -175,6 +234,7 @@ export default function CaissePage() {
                   placeholder="Montant d'ouverture"
                   value={montantOuverture}
                   onChange={(e) => setMontantOuverture(e.target.value)}
+                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <button
@@ -185,6 +245,13 @@ export default function CaissePage() {
                   {saving ? 'Ouverture...' : 'Ouvrir'}
                 </button>
               </div>
+              {suggestionOuverture && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Suggestion : {formatMontant(suggestionOuverture.montant)} — montant compte a la
+                  derniere fermeture ({suggestionOuverture.nomUser}, {formatDateTime(suggestionOuverture.date)}).
+                  Comptez le tiroir et corrigez si besoin, ce n&apos;est qu&apos;une proposition.
+                </p>
+              )}
             </div>
           )}
         </div>

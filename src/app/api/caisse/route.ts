@@ -1,3 +1,4 @@
+// CIBLE: src/app/api/caisse/route.ts
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -29,7 +30,17 @@ export async function GET() {
     take: 10,
   })
 
-  return apiSuccess({ sessionActive, historique })
+  // Suggestion de montant d'ouverture : ce qui etait reellement dans le tiroir
+  // a la derniere fermeture, peu importe qui a ferme — l'argent ne disparait
+  // pas entre deux caissiers. Reste une suggestion affichee, jamais appliquee
+  // automatiquement : le caissier compte et confirme ou corrige.
+  const derniereSessionFermee = await prisma.sessionCaisse.findFirst({
+    where: { pharmacieId, dateCloture: { not: null } },
+    orderBy: { dateCloture: 'desc' },
+    select: { montantCloture: true, dateCloture: true, user: { select: { nom: true } } },
+  })
+
+  return apiSuccess({ sessionActive, historique, derniereSessionFermee })
 }
 
 export async function POST(request: Request) {
@@ -42,6 +53,14 @@ export async function POST(request: Request) {
   const { action, montantOuverture, montantCloture, noteCloture } = body
 
   if (action === 'ouvrir') {
+    const montant = parseFloat(montantOuverture)
+    if (montantOuverture === undefined || montantOuverture === '' || Number.isNaN(montant)) {
+      return apiError('Montant d\'ouverture invalide', 400)
+    }
+    if (montant < 0) {
+      return apiError('Le montant d\'ouverture ne peut pas etre negatif', 400)
+    }
+
     // Vérifier uniquement la session de CE caissier, pas de toute la pharmacie
     const existante = await prisma.sessionCaisse.findFirst({
       where: {
@@ -55,7 +74,7 @@ export async function POST(request: Request) {
 
     const nouvelleSession = await prisma.sessionCaisse.create({
       data: {
-        montantOuverture: parseFloat(montantOuverture) || 0,
+        montantOuverture: montant,
         userId,
         pharmacieId,
         actif: true,
@@ -65,7 +84,7 @@ export async function POST(request: Request) {
 
     await createAuditLog({
       action: 'CAISSE_OUVERTE',
-      details: { sessionId: nouvelleSession.id, montantOuverture },
+      details: { sessionId: nouvelleSession.id, montantOuverture: montant },
       userId,
       pharmacieId,
     })
@@ -85,13 +104,20 @@ export async function POST(request: Request) {
     })
     if (!sessionOuverte) return apiError('Vous n\'avez aucune session ouverte', 400)
 
+    const montantFinal = parseFloat(montantCloture)
+    if (montantCloture === undefined || montantCloture === '' || Number.isNaN(montantFinal)) {
+      return apiError('Montant de cloture invalide', 400)
+    }
+    if (montantFinal < 0) {
+      return apiError('Le montant de cloture ne peut pas etre negatif', 400)
+    }
+
     const ventes = await prisma.vente.aggregate({
       where: { sessionCaisseId: sessionOuverte.id, statut: 'COMPLETE' },
       _sum: { montantPaye: true },
     })
 
     const totalVentes = ventes._sum.montantPaye ?? 0
-    const montantFinal = parseFloat(montantCloture) || 0
 
     const sessionFermee = await prisma.sessionCaisse.update({
       where: { id: sessionOuverte.id },
