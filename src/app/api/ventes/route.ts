@@ -1,4 +1,3 @@
-// CIBLE: src/app/api/ventes/route.ts
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -88,7 +87,12 @@ export async function GET(request: Request) {
         CASE WHEN c.id IS NOT NULL
           THEN json_build_object('id', c.id, 'nom', c.nom)
           ELSE NULL
-        END as client
+        END as client,
+        COALESCE(
+          (SELECT json_agg(json_build_object('modePaiement', pv."modePaiement", 'montant', pv.montant))
+           FROM "PaiementVente" pv WHERE pv."venteId" = v.id),
+          '[]'
+        ) as paiements
       FROM "Vente" v
       JOIN "User" u ON u.id = v."userId"
       LEFT JOIN "Client" c ON c.id = v."clientId"

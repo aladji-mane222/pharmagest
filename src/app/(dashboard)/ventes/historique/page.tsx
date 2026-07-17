@@ -10,6 +10,7 @@ interface Vente {
   montantTotal: number
   montantPaye: number
   modePaiement: string
+  paiements?: { modePaiement: string; montant: number }[]
   statut: string
   createdAt: string
   user: { nom: string }
@@ -36,6 +37,7 @@ const MODE_LABELS: Record<string, string> = {
   PAIEMENT_MARCHAND: 'Paiement Marchand',
   CARTE:             'Carte',
   CREDIT:            'Crédit',
+  MIXTE:             'Mixte',
 }
 
 const LIMITE = 20
@@ -185,6 +187,11 @@ export default function HistoriqueVentesPage() {
                   <td className="px-6 py-4 text-gray-600">{v.client?.nom || '—'}</td>
                   <td className="px-6 py-4 text-gray-600">
                     {MODE_LABELS[v.modePaiement] ?? v.modePaiement}
+                    {v.modePaiement === 'MIXTE' && v.paiements && v.paiements.length > 0 && (
+                      <span className="block text-xs text-gray-400">
+                        {v.paiements.map((p) => `${MODE_LABELS[p.modePaiement] ?? p.modePaiement} ${formatMontant(p.montant)}`).join(' + ')}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right font-medium text-green-600">
                     {formatMontant(v.montantTotal)}

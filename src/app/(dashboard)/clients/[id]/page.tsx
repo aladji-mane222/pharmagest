@@ -60,6 +60,7 @@ export default function ClientDetailPage() {
 
   // Remboursement
   const [montantRemb, setMontantRemb] = useState('')
+  const [modeRemb,    setModeRemb]    = useState('ESPECES')
   const [noteRemb,    setNoteRemb]    = useState('')
   const [savingRemb,  setSavingRemb]  = useState(false)
   const [errRemb,     setErrRemb]     = useState<string | null>(null)
@@ -104,7 +105,7 @@ export default function ClientDetailPage() {
     const res  = await fetch(`/api/clients/${id}/rembourser`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ montant, note: noteRemb }),
+      body:    JSON.stringify({ montant, modePaiement: modeRemb, note: noteRemb }),
     })
     const json = await res.json()
     if (res.ok) {
@@ -311,7 +312,7 @@ export default function ClientDetailPage() {
       {isAdmin && client.actif && client.soldeCredit > 0 && (
         <div className="bg-white rounded-xl shadow p-6 mb-6">
           <h2 className="font-semibold text-gray-700 mb-4">Enregistrer un remboursement</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Montant (GNF) — max {formatMontant(client.soldeCredit)}
@@ -320,9 +321,28 @@ export default function ClientDetailPage() {
                 type="number"
                 value={montantRemb}
                 onChange={(e) => setMontantRemb(e.target.value)}
+                onWheel={(e) => (e.target as HTMLInputElement).blur()}
                 max={client.soldeCredit}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 placeholder="0" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Mode de paiement</label>
+              <select
+                value={modeRemb}
+                onChange={(e) => setModeRemb(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="ESPECES">Especes</option>
+                <option value="MOBILE_MONEY">Mobile Money</option>
+                <option value="ORANGE_MONEY">Orange Money</option>
+                <option value="MTN_MONEY">MTN Money</option>
+                <option value="PAIEMENT_MARCHAND">Paiement Marchand</option>
+                <option value="CARTE">Carte</option>
+              </select>
+              {modeRemb === 'ESPECES' && (
+                <p className="text-xs text-gray-400 mt-1">Necessite une session caisse ouverte</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Note (optionnel)</label>
@@ -330,7 +350,7 @@ export default function ClientDetailPage() {
                 value={noteRemb}
                 onChange={(e) => setNoteRemb(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="Ex: versement espèces" />
+                placeholder="Ex: versement du 17/07" />
             </div>
           </div>
           {errRemb && <p className="text-red-500 text-sm mt-2">{errRemb}</p>}
