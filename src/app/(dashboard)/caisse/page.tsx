@@ -15,6 +15,15 @@ interface SessionCaisse {
 }
 
 export default function CaissePage() {
+  const formaterDuree = (debut: string, fin: string | null) => {
+    const debutMs = new Date(debut).getTime()
+    const finMs = fin ? new Date(fin).getTime() : Date.now()
+    const minutes = Math.max(0, Math.round((finMs - debutMs) / 60000))
+    const h = Math.floor(minutes / 60)
+    const m = minutes % 60
+    if (h === 0) return `${m} min`
+    return `${h}h${m > 0 ? ` ${m}min` : ''}`
+  }
   const [sessionActive, setSessionActive] = useState<SessionCaisse | null>(null)
   const [historique, setHistorique] = useState<SessionCaisse[]>([])
   const [loading, setLoading] = useState(true)
@@ -268,6 +277,10 @@ export default function CaissePage() {
                     </Badge>
                   </div>
                   <p className="text-gray-500">{formatDateTime(s.dateOuverture)}</p>
+                  <p className="text-gray-400 text-xs">
+                    Duree : {formaterDuree(s.dateOuverture, s.dateCloture)}
+                    {!s.dateCloture && ' (en cours)'}
+                  </p>
                   {s.montantCloture != null && (
                     <p className="text-blue-600 font-medium">{formatMontant(s.montantCloture)}</p>
                   )}
