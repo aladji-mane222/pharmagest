@@ -1,3 +1,4 @@
+// CIBLE: src/app/api/ventes/route.ts
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -34,9 +35,24 @@ export async function GET(request: Request) {
       _sum: { montantPaye: true },
       _count: true,
     })
+
+    // Repartition par mode : lit PaiementVente (source de verite pour les
+    // paiements mixtes), pas Vente.modePaiement qui n'est qu'un resume.
+    // Une vente entierement a credit n'a aucune ligne PaiementVente donc
+    // n'apparait pas ici — normal, rien n'a ete encaisse dans le tiroir.
+    const parModeRaw = await prisma.paiementVente.groupBy({
+      by: ['modePaiement'],
+      where: { vente: { sessionCaisseId, pharmacieId, statut: 'COMPLETE' } },
+      _sum: { montant: true },
+    })
+
     return apiSuccess({
       totalEncaisse: agg._sum.montantPaye ?? 0,
       nbVentes: agg._count,
+      parMode: parModeRaw.map((m) => ({
+        modePaiement: m.modePaiement,
+        total: m._sum.montant ?? 0,
+      })),
     })
   }
 
@@ -98,15 +114,28 @@ export async function POST(request: Request) {
   if (!session) return apiError('Non autorise', 401)
 
   const body = await request.json()
-  const { lignes, modePaiement, montantPaye, clientId, remise = 0 } = body as {
+  const { lignes, paiements, clientId, remise = 0 } = body as {
     lignes: { medicamentId: string; quantite: number }[]
-    modePaiement?: string
-    montantPaye: string
+    paiements?: { modePaiement: string; montant: number }[]
     clientId?: string
     remise?: number
   }
 
   if (!lignes || lignes.length === 0) return apiError('Aucun article dans la vente', 400)
+
+  // paiements peut etre vide (vente entierement a credit, comme avant).
+  // CREDIT n'est jamais une ligne de paiement — c'est toujours la part
+  // implicite non couverte par les lignes reellement encaissees.
+  const MODES_VALIDES = ['ESPECES', 'MOBILE_MONEY', 'CARTE', 'ORANGE_MONEY', 'MTN_MONEY', 'PAIEMENT_MARCHAND']
+  const lignesPaiement = paiements || []
+  for (const p of lignesPaiement) {
+    if (!MODES_VALIDES.includes(p.modePaiement)) {
+      return apiError(`Mode de paiement invalide: ${p.modePaiement}`, 400)
+    }
+    if (!(p.montant > 0)) {
+      return apiError('Chaque ligne de paiement doit avoir un montant superieur a 0', 400)
+    }
+  }
 
   const pharmacieId = session.user.pharmacieId
   const userId = session.user.id
@@ -162,11 +191,46 @@ export async function POST(request: Request) {
   // comme entièrement payée. Conséquence réelle observée : le plafond de
   // crédit n'était jamais vérifié et le solde crédit du client n'était
   // jamais incrémenté pour TOUTE vente à crédit total depuis l'origine.
-  const montantPayeParse = parseFloat(montantPaye)
-  const montantPayeFloat = Number.isNaN(montantPayeParse) ? montantTotal : montantPayeParse
+  const montantPayeFloat = lignesPaiement.reduce((acc, p) => acc + p.montant, 0)
+
+  // Un trop-percu ne peut etre rendu qu'en especes (impossible de "rendre
+  // la monnaie" sur un paiement mobile money/carte deja transfere). Donc la
+  // part non-especes ne doit jamais depasser le total a payer — sinon
+  // c'est une saisie a corriger, pas un exces normal.
+  const montantNonEspeces = lignesPaiement
+    .filter((p) => p.modePaiement !== 'ESPECES')
+    .reduce((acc, p) => acc + p.montant, 0)
+  if (montantNonEspeces > montantTotal) {
+    return apiError(
+      'Le montant paye en mobile money/carte depasse le total de la vente — ' +
+      'un trop-percu ne peut etre rendu qu\'en especes, verifiez les montants saisis',
+      400
+    )
+  }
+
   const statut = montantPayeFloat >= montantTotal ? 'COMPLETE' : 'PARTIELLE'
   const monnaie = Math.max(0, montantPayeFloat - montantTotal)
   const resteADu = Math.max(0, montantTotal - montantPayeFloat)
+
+  // Une vente ne peut pas simplement "manquer" d'argent sans etre rattachee
+  // a un client — sinon la dette n'est trackee nulle part et disparait.
+  if (resteADu > 0 && !clientId) {
+    return apiError(
+      `Il reste ${resteADu} GNF non couvert par les paiements saisis — ` +
+      'selectionnez un client pour mettre le reste sur son compte credit',
+      400
+    )
+  }
+
+  // Champ resume historique : le mode unique si une seule ligne (comportement
+  // identique a avant), CREDIT si rien n'a ete encaisse, MIXTE si plusieurs
+  // modes ont ete combines.
+  const modePaiementResume: ModePaiement =
+    lignesPaiement.length === 0
+      ? 'CREDIT'
+      : lignesPaiement.length === 1
+        ? (lignesPaiement[0].modePaiement as ModePaiement)
+        : 'MIXTE'
 
   // Vérification plafond crédit
   if (clientId && resteADu > 0) {
@@ -200,12 +264,12 @@ export async function POST(request: Request) {
         montantPaye: montantPayeFloat,
         monnaie,
         remise,
-        modePaiement: (modePaiement || 'ESPECES') as ModePaiement,
         statut,
         pharmacieId,
         userId,
         clientId: clientId || null,
         sessionCaisseId: sessionCaisse.id,
+        modePaiement: modePaiementResume,
         lignes: {
           create: lignesAvecPrix.map((l) => ({
             medicamentId: l.medicamentId,
@@ -213,6 +277,14 @@ export async function POST(request: Request) {
             prixUnitaire: l.prixUnitaire,
           })),
         },
+        ...(lignesPaiement.length > 0 && {
+          paiements: {
+            create: lignesPaiement.map((p) => ({
+              modePaiement: p.modePaiement as ModePaiement,
+              montant: p.montant,
+            })),
+          },
+        }),
       },
       include: { lignes: true },
     })
