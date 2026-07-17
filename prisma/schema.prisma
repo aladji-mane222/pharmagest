@@ -16,6 +16,12 @@ enum Role {
   CAISSIER
 }
 
+enum FormatRecu {
+  A4
+  THERMIQUE_58
+  THERMIQUE_80
+}
+
 enum ModePaiement {
   ESPECES
   MOBILE_MONEY
@@ -24,6 +30,7 @@ enum ModePaiement {
   ORANGE_MONEY
   MTN_MONEY
   PAIEMENT_MARCHAND
+  MIXTE
 }
 
 enum StatutVente {
@@ -61,6 +68,7 @@ model Pharmacie {
   email                  String?
   numeroRegistreCommerce String?
   logoUrl                String?
+  formatRecu             FormatRecu @default(A4)
   licenceActive          Boolean   @default(true)
   licenceExpire          DateTime?
   createdAt              DateTime  @default(now())
@@ -241,12 +249,33 @@ model Vente {
   sessionCaisse SessionCaisse?   @relation(fields: [sessionCaisseId], references: [id])
   lignes        LigneVente[]
   mouvements    MouvementStock[]
+  paiements     PaiementVente[]
 
   @@unique([pharmacieId, numeroFacture])
   @@index([pharmacieId])
   @@index([userId])
   @@index([statut])
   @@index([createdAt])
+}
+
+// Une ligne par mode de paiement effectivement recu pour une vente (paiement
+// mixte : ex. 30 000 GNF especes + 70 000 GNF Orange Money sur une meme
+// vente). Le CREDIT n'apparait JAMAIS ici : la part non couverte par ces
+// lignes (montantTotal - somme des paiements) reste calculee implicitement
+// comme aujourd'hui (Vente.montantTotal - Vente.montantPaye), et necessite
+// un clientId. Meme une vente a un seul mode cree toujours une ligne ici,
+// pour que tout calcul de repartition par mode (resume de caisse) lise une
+// seule source, jamais deux logiques differentes selon le nombre de modes.
+model PaiementVente {
+  id           String       @id @default(cuid())
+  venteId      String
+  modePaiement ModePaiement
+  montant      Float
+  createdAt    DateTime     @default(now())
+
+  vente Vente @relation(fields: [venteId], references: [id], onDelete: Cascade)
+
+  @@index([venteId])
 }
 
 model LigneVente {
