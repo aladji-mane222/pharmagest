@@ -1,10 +1,10 @@
 // CIBLE: src/app/(dashboard)/ventes/page.tsx
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { formatMontant } from '@/lib/utils'
-import { useToast } from '@/components/ui'
+import { useToast, Button, Card, Badge, PageHeader, EmptyState } from '@/components/ui'
 
 interface Medicament {
   id: string
@@ -26,11 +26,13 @@ export default function VentesPage() {
   const { showToast } = useToast()
   const [medicaments, setMedicaments] = useState<Medicament[]>([])
   const [search, setSearch] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [panier, setPanier] = useState<LignePanier[]>([])
   const [paiements, setPaiements] = useState<{ id: string; modePaiement: string; montant: string }[]>([
     { id: 'p0', modePaiement: 'ESPECES', montant: '' },
   ])
   const [saving, setSaving] = useState(false)
+  const [lignesEnErreur, setLignesEnErreur] = useState<string[]>([])
   const [recu, setRecu] = useState<{
     montantTotal: number
     monnaie: number
@@ -108,6 +110,10 @@ export default function VentesPage() {
   }, [])
 
   useEffect(() => {
+    searchInputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       if (search.length >= 2) {
         fetch(`/api/medicaments?search=${search}`)
@@ -120,6 +126,19 @@ export default function VentesPage() {
     return () => clearTimeout(timer)
   }, [search])
 
+  // Ajout direct au panier si un seul medicament correspond exactement au nom
+  // tape (insensible a la casse) — evite un clic supplementaire quand le
+  // caissier a tape le nom complet. Se declenche uniquement quand la liste
+  // de resultats change (nouvelle recherche), jamais en boucle : les cas de
+  // sortie anticipee dans ajouterAuPanier (stock 0, quantite deja au max) ne
+  // modifient ni search ni medicaments, donc l'effet ne se redeclenche pas.
+  useEffect(() => {
+    if (medicaments.length === 1 && medicaments[0].nom.toLowerCase() === search.trim().toLowerCase()) {
+      ajouterAuPanier(medicaments[0])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [medicaments])
+
   const ajouterAuPanier = (med: Medicament) => {
     if (med.stockTotal === 0) return
     const existant = panier.find((l) => l.medicamentId === med.id)
@@ -131,6 +150,7 @@ export default function VentesPage() {
     }
     setSearch('')
     setMedicaments([])
+    searchInputRef.current?.focus()
   }
 
   const modifierQuantite = (medicamentId: string, quantite: number) => {
@@ -139,6 +159,7 @@ export default function VentesPage() {
     } else {
       setPanier(panier.map((l) => l.medicamentId === medicamentId ? { ...l, quantite } : l))
     }
+    setLignesEnErreur((prev) => prev.filter((id) => id !== medicamentId))
   }
 
   const montantTotal = panier.reduce((sum, l) => sum + l.prixUnitaire * l.quantite, 0)
@@ -175,6 +196,7 @@ export default function VentesPage() {
       return
     }
     setSaving(true)
+    setLignesEnErreur([])
 
     const lignesPaiementValides = paiements
       .filter((p) => parseFloat(p.montant) > 0)
@@ -192,7 +214,11 @@ export default function VentesPage() {
         }),
       })
 
-      let json: { error?: string; data?: { numeroFacture?: string } } = {}
+      let json: {
+        error?: string
+        data?: { numeroFacture?: string }
+        details?: { medicamentsEnRupture?: { medicamentId: string }[] }
+      } = {}
       try {
         json = await res.json()
       } catch {
@@ -223,6 +249,8 @@ export default function VentesPage() {
         setRemise(0)
       } else {
         showToast(json.error || 'Erreur lors de la vente — reessaie dans quelques secondes', 'error')
+        const idsEnRupture = json.details?.medicamentsEnRupture?.map((m) => m.medicamentId) || []
+        if (idsEnRupture.length > 0) setLignesEnErreur(idsEnRupture)
       }
     } catch {
       showToast('Erreur reseau — la vente n\'a peut-etre pas ete enregistree, verifie l\'historique avant de reessayer', 'error')
@@ -230,6 +258,30 @@ export default function VentesPage() {
       setSaving(false)
     }
   }
+
+  // Raccourci Entree pour valider la vente. Un ref garde toujours la derniere
+  // version de validerVente (qui capture panier/paiements/clientId a jour) —
+  // sans ca, un listener enregistre une seule fois au montage utiliserait
+  // pour toujours le panier vide du premier rendu.
+  const validerVenteRef = useRef(validerVente)
+  validerVenteRef.current = validerVente
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return
+      const cible = e.target as HTMLElement
+      if (cible.tagName === 'TEXTAREA') return
+      // Si la recherche a encore des resultats affiches, on laisse le
+      // caissier cliquer la bonne ligne plutot que de valider la vente
+      // par erreur en pleine frappe.
+      if (cible === searchInputRef.current && medicaments.length > 0) return
+      if (panier.length === 0 || saving) return
+      e.preventDefault()
+      validerVenteRef.current()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [panier.length, saving, medicaments.length])
 
   const libelleModePaiement = (mode: string) => {
     const libelles: Record<string, string> = {
@@ -243,12 +295,6 @@ export default function VentesPage() {
     return libelles[mode] || mode
   }
 
-  const stockCouleur = (stock: number) => {
-    if (stock === 0) return 'text-red-500'
-    if (stock <= 10) return 'text-orange-500'
-    return 'text-green-600'
-  }
-
   const stockLabel = (stock: number) => {
     if (stock === 0) return 'Rupture'
     return `Stock: ${stock}`
@@ -256,12 +302,12 @@ export default function VentesPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-gray-800 mb-4">Point de Vente</h1>
+      <PageHeader title="Point de vente" description="Recherche, panier et encaissement" />
 
       {sessionCaisse === false && (
-        <div className="mb-5 bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center justify-between">
-          <span className="text-red-700 font-medium text-sm">⚠️ Aucune session caisse ouverte — les ventes ne peuvent pas être enregistrées</span>
-          <Link href="/caisse" className="text-sm font-medium text-red-600 underline hover:text-red-800">
+        <div className="mb-5 bg-danger-bg border border-danger/20 rounded-card px-4 py-3 flex items-center justify-between">
+          <span className="text-danger-text font-medium text-sm">⚠️ Aucune session caisse ouverte — les ventes ne peuvent pas être enregistrées</span>
+          <Link href="/caisse" className="text-sm font-medium text-danger-text underline hover:opacity-80">
             Ouvrir la caisse →
           </Link>
         </div>
@@ -394,23 +440,24 @@ export default function VentesPage() {
         <div className="col-span-2 space-y-4">
           <div className="relative">
             <input type="text" placeholder="Rechercher un medicament (min 2 lettres)..."
+              ref={searchInputRef}
               value={search} onChange={(e) => setSearch(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-lg" />
+              className="w-full px-4 py-3 border border-gray-200 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint text-lg" />
             {medicaments.length > 0 && (
-              <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 mt-1">
+              <div className="absolute top-full left-0 right-0 bg-white border border-gray-100 rounded-card shadow-md z-10 mt-1 overflow-hidden">
                 {medicaments.map((med) => (
                   <button
                     key={med.id}
                     onClick={() => ajouterAuPanier(med)}
                     disabled={med.stockTotal === 0}
-                    className="w-full text-left px-4 py-3 hover:bg-green-50 border-b last:border-0 flex justify-between items-center disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full text-left px-4 py-3 hover:bg-app-bg border-b border-gray-100 last:border-0 flex justify-between items-center disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <span className="font-medium">{med.nom}</span>
+                    <span className="font-medium text-navy">{med.nom}</span>
                     <div className="flex items-center gap-3">
-                      <span className={`text-xs font-semibold ${stockCouleur(med.stockTotal)}`}>
+                      <Badge variant={med.stockTotal === 0 ? 'danger' : med.stockTotal <= 10 ? 'warning' : 'success'}>
                         {stockLabel(med.stockTotal)}
-                      </span>
-                      <span className="text-green-600">{formatMontant(med.prixVente)}</span>
+                      </Badge>
+                      <span className="text-navy font-medium">{formatMontant(med.prixVente)}</span>
                     </div>
                   </button>
                 ))}
@@ -418,27 +465,36 @@ export default function VentesPage() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl shadow overflow-hidden">
+          <Card padding="none" className="overflow-hidden">
             {panier.length === 0 ? (
-              <div className="p-12 text-center text-gray-400">
-                <p className="text-4xl mb-2">🛒</p>
-                <p>Recherchez un medicament pour commencer</p>
-              </div>
+              <EmptyState icon="🛒" title="Panier vide" description="Recherchez un medicament pour commencer une vente." />
             ) : (
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-app-bg border-b border-gray-100">
                   <tr>
-                    <th className="text-left px-4 py-3 text-gray-600">Medicament</th>
-                    <th className="text-center px-4 py-3 text-gray-600">Quantite</th>
-                    <th className="text-right px-4 py-3 text-gray-600">Prix unit.</th>
-                    <th className="text-right px-4 py-3 text-gray-600">Total</th>
+                    <th className="text-left px-4 py-3 text-navy/70 font-medium">Medicament</th>
+                    <th className="text-center px-4 py-3 text-navy/70 font-medium">Quantite</th>
+                    <th className="text-right px-4 py-3 text-navy/70 font-medium">Prix unit.</th>
+                    <th className="text-right px-4 py-3 text-navy/70 font-medium">Total</th>
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {panier.map((ligne) => (
-                    <tr key={ligne.medicamentId} className="border-b last:border-0">
-                      <td className="px-4 py-3 font-medium">{ligne.nom}</td>
+                  {panier.map((ligne) => {
+                    const enErreur = lignesEnErreur.includes(ligne.medicamentId)
+                    return (
+                    <tr
+                      key={ligne.medicamentId}
+                      className={`border-b last:border-0 ${enErreur ? 'bg-red-50' : ''}`}
+                    >
+                      <td className="px-4 py-3 font-medium">
+                        {ligne.nom}
+                        {enErreur && (
+                          <span className="block text-xs text-red-500 font-normal">
+                            Stock insuffisant — reduis la quantite
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex flex-col items-center gap-0.5">
                           <input
@@ -467,15 +523,16 @@ export default function VentesPage() {
                           className="text-red-400 hover:text-red-600">✕</button>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             )}
-          </div>
+          </Card>
         </div>
 
-        <div className="bg-white rounded-xl shadow p-6 space-y-4 h-fit">
-          <h2 className="font-semibold text-gray-700 text-lg">Paiement</h2>
+        <Card className="space-y-4 h-fit sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+          <h2 className="font-semibold text-navy text-lg">Paiement</h2>
 
           <div className="border-t pt-4">
             {remise > 0 && (
@@ -647,14 +704,17 @@ export default function VentesPage() {
             </div>
           )}
 
-          <button
+          <Button
+            variant="primary"
+            size="lg"
             onClick={validerVente}
-            disabled={saving || panier.length === 0 || sessionCaisse === false}
-            className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium text-lg disabled:cursor-not-allowed"
+            loading={saving}
+            disabled={panier.length === 0 || sessionCaisse === false}
+            className="w-full"
           >
-            {saving ? 'Enregistrement...' : sessionCaisse === false ? 'Session caisse requise' : 'Valider la vente'}
-          </button>
-        </div>
+            {sessionCaisse === false ? 'Session caisse requise' : 'Valider la vente'}
+          </Button>
+        </Card>
       </div>
     </div>
   )

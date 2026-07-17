@@ -155,6 +155,7 @@ export async function POST(request: Request) {
 
   // Vérification stock avant transaction (Bug #3)
   const ruptures: string[] = []
+  const medicamentsEnRupture: { medicamentId: string; nom: string; disponible: number; demande: number }[] = []
   for (const ligne of lignes) {
     const medicament = medicamentMap.get(ligne.medicamentId)
     if (!medicament) return apiError(`Medicament non trouve: ${ligne.medicamentId}`, 404)
@@ -166,10 +167,16 @@ export async function POST(request: Request) {
     const stockTotal = agg._sum.quantite ?? 0
     if (stockTotal < ligne.quantite) {
       ruptures.push(`${medicament.nom}: ${stockTotal} disponible(s), ${ligne.quantite} demande(s)`)
+      medicamentsEnRupture.push({
+        medicamentId: ligne.medicamentId,
+        nom: medicament.nom,
+        disponible: stockTotal,
+        demande: ligne.quantite,
+      })
     }
   }
   if (ruptures.length > 0) {
-    return apiError(`Stock insuffisant — ${ruptures.join(' | ')}`, 400)
+    return apiError(`Stock insuffisant — ${ruptures.join(' | ')}`, 400, { medicamentsEnRupture })
   }
 
   let sommeLignes = 0
