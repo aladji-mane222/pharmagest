@@ -1,3 +1,4 @@
+// CIBLE: src/app/(dashboard)/ventes/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -26,10 +27,20 @@ export default function VentesPage() {
   const [medicaments, setMedicaments] = useState<Medicament[]>([])
   const [search, setSearch] = useState('')
   const [panier, setPanier] = useState<LignePanier[]>([])
-  const [modePaiement, setModePaiement] = useState('ESPECES')
-  const [montantPaye, setMontantPaye] = useState('')
+  const [paiements, setPaiements] = useState<{ id: string; modePaiement: string; montant: string }[]>([
+    { id: 'p0', modePaiement: 'ESPECES', montant: '' },
+  ])
   const [saving, setSaving] = useState(false)
-  const [recu, setRecu] = useState<{ montantTotal: number; monnaie: number; montantPaye: number; lignes: LignePanier[]; numero: string; remise: number } | null>(null)
+  const [recu, setRecu] = useState<{
+    montantTotal: number
+    monnaie: number
+    paiements: { modePaiement: string; montant: number }[]
+    resteADu: number
+    clientNom: string | null
+    lignes: LignePanier[]
+    numero: string
+    remise: number
+  } | null>(null)
   const [clients, setClients] = useState<{ id: string; nom: string }[]>([])
   const [clientId, setClientId] = useState('')
   const [nouveauClientOuvert, setNouveauClientOuvert] = useState(false)
@@ -37,6 +48,7 @@ export default function VentesPage() {
   const [nouveauClientSaving, setNouveauClientSaving] = useState(false)
   const [remise, setRemise] = useState(0)
   const [nomPharmacie, setNomPharmacie] = useState('Ma Pharmacie')
+  const [formatRecu, setFormatRecu] = useState<'A4' | 'THERMIQUE_58' | 'THERMIQUE_80'>('A4')
   const [sessionCaisse, setSessionCaisse] = useState<boolean | null>(null)
 
   const chargerClients = () => {
@@ -84,6 +96,8 @@ export default function VentesPage() {
       .then((json) => {
         const nom = json.data?.nom ?? json.data?.pharmacie?.nom
         if (nom) setNomPharmacie(nom)
+        const format = json.data?.formatRecu ?? json.data?.pharmacie?.formatRecu
+        if (format) setFormatRecu(format)
       })
       .catch(() => {})
 
@@ -129,15 +143,42 @@ export default function VentesPage() {
 
   const montantTotal = panier.reduce((sum, l) => sum + l.prixUnitaire * l.quantite, 0)
   const totalNet = Math.max(0, montantTotal - remise)
-  const montantPayeFloat = parseFloat(montantPaye) || 0
-  const monnaie = Math.max(0, montantPayeFloat - totalNet)
+
+  const ajouterLignePaiement = () => {
+    setPaiements([...paiements, { id: `p${Date.now()}`, modePaiement: 'ESPECES', montant: '' }])
+  }
+  const retirerLignePaiement = (id: string) => {
+    setPaiements(paiements.filter((p) => p.id !== id))
+  }
+  const modifierLignePaiement = (id: string, champ: 'modePaiement' | 'montant', valeur: string) => {
+    setPaiements(paiements.map((p) => (p.id === id ? { ...p, [champ]: valeur } : p)))
+  }
+
+  const totalPaiements = paiements.reduce((sum, p) => sum + (parseFloat(p.montant) || 0), 0)
+  const montantNonEspeces = paiements
+    .filter((p) => p.modePaiement !== 'ESPECES')
+    .reduce((sum, p) => sum + (parseFloat(p.montant) || 0), 0)
+  // Un trop-percu ne peut etre rendu qu'en especes — meme calcul que le
+  // backend, affiche ici pour que le caissier voie l'erreur avant de valider.
+  const nonEspecesDepasseLeTotal = montantNonEspeces > totalNet
+  const monnaie = Math.max(0, totalPaiements - totalNet)
+  const resteADu = Math.max(0, totalNet - totalPaiements)
 
   const validerVente = async () => {
     if (panier.length === 0) { showToast('Panier vide', 'error'); return }
-    if (modePaiement !== 'CREDIT' && !montantPaye) { showToast('Entrer le montant payé', 'error'); return }
+    if (nonEspecesDepasseLeTotal) {
+      showToast('Le montant paye en mobile money/carte depasse le total — un trop-percu ne peut etre rendu qu\'en especes', 'error')
+      return
+    }
+    if (resteADu > 0 && !clientId) {
+      showToast(`Il reste ${formatMontant(resteADu)} non couvert — selectionne un client pour le mettre sur son compte credit`, 'error')
+      return
+    }
     setSaving(true)
 
-    const montantPayeEffectif = modePaiement === 'CREDIT' ? '0' : montantPaye
+    const lignesPaiementValides = paiements
+      .filter((p) => parseFloat(p.montant) > 0)
+      .map((p) => ({ modePaiement: p.modePaiement, montant: parseFloat(p.montant) }))
 
     try {
       const res = await fetch('/api/ventes', {
@@ -145,8 +186,7 @@ export default function VentesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           lignes: panier.map((l) => ({ medicamentId: l.medicamentId, quantite: l.quantite })),
-          modePaiement,
-          montantPaye: montantPayeEffectif,
+          paiements: lignesPaiementValides,
           clientId: clientId || null,
           remise,
         }),
@@ -167,9 +207,18 @@ export default function VentesPage() {
         // horodatage local (etait le cas avant le 13/07/2026, ce qui
         // n'avait aucun rapport avec le vrai numeroFacture stocke en base).
         const numero = json.data?.numeroFacture || `REC-${Date.now()}`
-        setRecu({ montantTotal: totalNet, monnaie: modePaiement === 'CREDIT' ? 0 : monnaie, montantPaye: parseFloat(montantPayeEffectif) || 0, lignes: [...panier], numero, remise })
+        setRecu({
+          montantTotal: totalNet,
+          monnaie,
+          paiements: lignesPaiementValides,
+          resteADu,
+          clientNom: clients.find((c) => c.id === clientId)?.nom || null,
+          lignes: [...panier],
+          numero,
+          remise,
+        })
         setPanier([])
-        setMontantPaye('')
+        setPaiements([{ id: 'p0', modePaiement: 'ESPECES', montant: '' }])
         setClientId('')
         setRemise(0)
       } else {
@@ -180,6 +229,18 @@ export default function VentesPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const libelleModePaiement = (mode: string) => {
+    const libelles: Record<string, string> = {
+      ESPECES: 'Especes',
+      MOBILE_MONEY: 'Mobile Money',
+      ORANGE_MONEY: 'Orange Money',
+      MTN_MONEY: 'MTN Money',
+      PAIEMENT_MARCHAND: 'Paiement Marchand',
+      CARTE: 'Carte',
+    }
+    return libelles[mode] || mode
   }
 
   const stockCouleur = (stock: number) => {
@@ -212,13 +273,19 @@ export default function VentesPage() {
             @media print {
               body * { visibility: hidden; }
               .recu-print, .recu-print * { visibility: visible; }
+              .no-print { display: none !important; }
               .recu-print {
                 position: fixed;
                 top: 0; left: 0;
-                width: 100%;
-                padding: 20px;
+                ${formatRecu === 'A4'
+                  ? 'width: 100%; padding: 20px;'
+                  : formatRecu === 'THERMIQUE_58'
+                  ? 'width: 48mm; padding: 4px; font-size: 10px; line-height: 1.3;'
+                  : 'width: 72mm; padding: 6px; font-size: 11px; line-height: 1.3;'}
               }
-              .no-print { display: none !important; }
+              ${formatRecu !== 'A4'
+                ? `@page { size: ${formatRecu === 'THERMIQUE_58' ? '58mm' : '80mm'} auto; margin: 0; }`
+                : ''}
             }
           `}</style>
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -231,22 +298,22 @@ export default function VentesPage() {
                   <p className="text-xs text-gray-400 mt-1">Recu {recu.numero}</p>
                   <p className="text-xs text-gray-400">{new Date().toLocaleString('fr-FR')}</p>
                 </div>
-                <table className="w-full text-sm mb-4 border-t pt-2">
-                  <thead><tr className="border-b">
-                    <th className="text-left py-1 text-gray-500">Article</th>
-                    <th className="text-center py-1 text-gray-500">Qte</th>
-                    <th className="text-right py-1 text-gray-500">Total</th>
-                  </tr></thead>
-                  <tbody>
-                    {recu.lignes.map((l) => (
-                      <tr key={l.medicamentId} className="border-b">
-                        <td className="py-1">{l.nom}</td>
-                        <td className="py-1 text-center">{l.quantite}</td>
-                        <td className="py-1 text-right">{formatMontant(l.prixUnitaire * l.quantite)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {/* Liste empilee plutot qu'un tableau a colonnes fixes : une structure
+                    unique qui tient aussi bien sur A4 que sur une bande thermique de
+                    48mm, sans risque de colonnes coupees ou de texte qui deborde. */}
+                <div className="border-t pt-2 mb-2 space-y-2">
+                  {recu.lignes.map((l) => (
+                    <div key={l.medicamentId}>
+                      <p className="leading-snug">{l.nom}</p>
+                      <div className="flex justify-between text-gray-500">
+                        <span>{l.quantite} x {formatMontant(l.prixUnitaire)}</span>
+                        <span className="font-medium text-gray-800">
+                          {formatMontant(l.prixUnitaire * l.quantite)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
                 <div className="space-y-1 text-sm border-t pt-2">
                   {recu.remise > 0 && (
                     <div className="flex justify-between text-orange-500">
@@ -258,22 +325,22 @@ export default function VentesPage() {
                     <span>Total</span>
                     <span>{formatMontant(recu.montantTotal)}</span>
                   </div>
-                  {modePaiement !== 'CREDIT' && (
-                    <>
-                      <div className="flex justify-between text-gray-600">
-                        <span>Montant recu</span>
-                        <span>{formatMontant(recu.montantPaye)}</span>
-                      </div>
-                      <div className="flex justify-between text-gray-600">
-                        <span>Monnaie</span>
-                        <span>{formatMontant(recu.monnaie)}</span>
-                      </div>
-                    </>
+                  {recu.paiements.map((p, i) => (
+                    <div key={i} className="flex justify-between text-gray-600">
+                      <span>{libelleModePaiement(p.modePaiement)}</span>
+                      <span>{formatMontant(p.montant)}</span>
+                    </div>
+                  ))}
+                  {recu.monnaie > 0 && (
+                    <div className="flex justify-between text-gray-600">
+                      <span>Monnaie</span>
+                      <span>{formatMontant(recu.monnaie)}</span>
+                    </div>
                   )}
-                  {modePaiement === 'CREDIT' && (
+                  {recu.resteADu > 0 && (
                     <div className="flex justify-between text-red-600 font-medium">
-                      <span>Montant du (credit)</span>
-                      <span>{formatMontant(recu.montantTotal)}</span>
+                      <span>Reste a payer (credit{recu.clientNom ? ` — ${recu.clientNom}` : ''})</span>
+                      <span>{formatMontant(recu.resteADu)}</span>
                     </div>
                   )}
                 </div>
@@ -294,7 +361,19 @@ export default function VentesPage() {
                       `- ${l.nom} x${l.quantite} = ${(l.prixUnitaire * l.quantite).toLocaleString()} GNF`
                     ).join('%0A') || ''
 
-                    const message = `*RECU - ${nomPharmacie}*%0A%0ARecu: ${recu?.numero || ''}%0ADate: ${new Date().toLocaleString('fr-FR')}%0A%0A*Articles:*%0A${lignesTexte}%0A%0A*Total: ${recu?.montantTotal?.toLocaleString()} GNF*%0AMontant recu: ${recu?.montantPaye?.toLocaleString()} GNF%0AMonnaie: ${recu?.monnaie?.toLocaleString()} GNF%0A%0AMerci de votre confiance!`
+                    const paiementsTexte = recu?.paiements?.map(p =>
+                      `${libelleModePaiement(p.modePaiement)}: ${p.montant.toLocaleString()} GNF`
+                    ).join('%0A') || ''
+
+                    const clientTexte = recu?.clientNom ? `%0AClient: ${recu.clientNom}` : ''
+                    const monnaieTexte = (recu?.monnaie ?? 0) > 0
+                      ? `%0AMonnaie: ${recu!.monnaie.toLocaleString()} GNF`
+                      : ''
+                    const creditTexte = (recu?.resteADu ?? 0) > 0
+                      ? `%0AReste a payer (credit): ${recu!.resteADu.toLocaleString()} GNF`
+                      : ''
+
+                    const message = `*RECU - ${nomPharmacie}*%0A%0ARecu: ${recu?.numero || ''}%0ADate: ${new Date().toLocaleString('fr-FR')}${clientTexte}%0A%0A*Articles:*%0A${lignesTexte}%0A%0A*Total: ${recu?.montantTotal?.toLocaleString()} GNF*%0A${paiementsTexte}${monnaieTexte}${creditTexte}%0A%0AMerci de votre confiance!`
 
                     window.open(`https://wa.me/${numero}?text=${message}`, '_blank')
                   }}
@@ -361,15 +440,24 @@ export default function VentesPage() {
                     <tr key={ligne.medicamentId} className="border-b last:border-0">
                       <td className="px-4 py-3 font-medium">{ligne.nom}</td>
                       <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => modifierQuantite(ligne.medicamentId, ligne.quantite - 1)}
-                            className="w-7 h-7 bg-gray-100 rounded-full hover:bg-gray-200 font-bold">-</button>
-                          <span className="w-8 text-center">{ligne.quantite}</span>
-                          <button
-                            onClick={() => modifierQuantite(ligne.medicamentId, ligne.quantite + 1)}
-                            disabled={ligne.quantite >= ligne.stockTotal}
-                            className="w-7 h-7 bg-gray-100 rounded-full hover:bg-gray-200 font-bold disabled:opacity-30 disabled:cursor-not-allowed"
-                          >+</button>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <input
+                            type="number"
+                            min={1}
+                            max={ligne.stockTotal}
+                            value={ligne.quantite}
+                            onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                            onChange={(e) => {
+                              const valeur = parseInt(e.target.value, 10)
+                              if (Number.isNaN(valeur)) return
+                              modifierQuantite(
+                                ligne.medicamentId,
+                                Math.min(Math.max(valeur, 0), ligne.stockTotal)
+                              )
+                            }}
+                            className="w-16 text-center px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                          />
+                          <span className="text-xs text-gray-400">/ {ligne.stockTotal} dispo</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right text-gray-600">{formatMontant(ligne.prixUnitaire)}</td>
@@ -472,24 +560,52 @@ export default function VentesPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mode de paiement</label>
-            <select value={modePaiement} onChange={(e) => setModePaiement(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
-              <option value="ESPECES">Especes</option>
-              <option value="MOBILE_MONEY">Mobile Money</option>
-              <option value="ORANGE_MONEY">Orange Money</option>
-              <option value="MTN_MONEY">MTN Money</option>
-              <option value="PAIEMENT_MARCHAND">Paiement Marchand</option>
-              <option value="CARTE">Carte</option>
-              <option value="CREDIT">Credit</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Montant recu (GNF)</label>
-            <input type="number" value={montantPaye} onChange={(e) => setMontantPaye(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-lg"
-              placeholder="0" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Paiement</label>
+            <div className="space-y-2">
+              {paiements.map((p) => (
+                <div key={p.id} className="flex gap-2">
+                  <select
+                    value={p.modePaiement}
+                    onChange={(e) => modifierLignePaiement(p.id, 'modePaiement', e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                  >
+                    <option value="ESPECES">Especes</option>
+                    <option value="MOBILE_MONEY">Mobile Money</option>
+                    <option value="ORANGE_MONEY">Orange Money</option>
+                    <option value="MTN_MONEY">MTN Money</option>
+                    <option value="PAIEMENT_MARCHAND">Paiement Marchand</option>
+                    <option value="CARTE">Carte</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={p.montant}
+                    onChange={(e) => modifierLignePaiement(p.id, 'montant', e.target.value)}
+                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                    placeholder="0"
+                    className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                  />
+                  {paiements.length > 1 && (
+                    <button
+                      onClick={() => retirerLignePaiement(p.id)}
+                      className="text-red-400 hover:text-red-600 px-1"
+                      title="Retirer ce mode de paiement"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={ajouterLignePaiement}
+              className="text-sm text-green-600 hover:text-green-700 font-medium mt-2"
+            >
+              + Ajouter un mode de paiement
+            </button>
+            <p className="text-xs text-gray-400 mt-2">
+              Rien saisi ou pas assez ? Le reste sera mis sur le compte credit du client
+              selectionne. Laissez tout vide pour une vente entierement a credit.
+            </p>
           </div>
 
           <div>
@@ -500,15 +616,34 @@ export default function VentesPage() {
               max={montantTotal}
               value={remise || ''}
               onChange={(e) => setRemise(Math.max(0, Math.min(Number(e.target.value), montantTotal)))}
+              onWheel={(e) => (e.target as HTMLInputElement).blur()}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="0"
             />
           </div>
 
-          {montantPayeFloat > 0 && (
+          {nonEspecesDepasseLeTotal && (
+            <div className="bg-red-50 text-red-600 text-sm rounded-lg p-3">
+              Le mobile money/carte saisi depasse le total — un trop-percu ne peut etre
+              rendu qu&apos;en especes, corrigez les montants.
+            </div>
+          )}
+
+          {!nonEspecesDepasseLeTotal && monnaie > 0 && (
             <div className="bg-green-50 rounded-lg p-3 text-center">
               <p className="text-sm text-gray-500">Monnaie a rendre</p>
               <p className="text-2xl font-bold text-green-600">{formatMontant(monnaie)}</p>
+            </div>
+          )}
+
+          {!nonEspecesDepasseLeTotal && resteADu > 0 && (
+            <div className={`rounded-lg p-3 text-center ${clientId ? 'bg-orange-50' : 'bg-red-50'}`}>
+              <p className="text-sm text-gray-500">
+                Reste a mettre en credit {clientId ? '' : '— selectionnez un client ci-dessus'}
+              </p>
+              <p className={`text-2xl font-bold ${clientId ? 'text-orange-600' : 'text-red-600'}`}>
+                {formatMontant(resteADu)}
+              </p>
             </div>
           )}
 
