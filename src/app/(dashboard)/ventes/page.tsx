@@ -344,7 +344,7 @@ export default function VentesPage() {
                   : 'width: 72mm; padding: 6px; font-size: 11px; line-height: 1.3;'}
               }
               ${formatRecu !== 'A4'
-                ? `@page { size: ${formatRecu === 'THERMIQUE_58' ? '58mm' : '80mm'} auto; margin: 0; }`
+                ? `@page { size: ${formatRecu === 'THERMIQUE_58' ? '58mm 1000mm' : '80mm 1000mm'}; margin: 0; }`
                 : ''}
             }
           `}</style>
