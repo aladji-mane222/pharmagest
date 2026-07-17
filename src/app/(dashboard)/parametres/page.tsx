@@ -1,7 +1,9 @@
+// CIBLE: src/app/(dashboard)/parametres/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import { useToast } from '@/components/ui'
 
 interface Pharmacie {
   id: string
@@ -14,6 +16,8 @@ interface Pharmacie {
 
 export default function ParametresPage() {
   const { data: session } = useSession()
+  const { showToast } = useToast()
+  const estAdmin = session?.user?.role !== 'CAISSIER'
   const [, setPharmacie] = useState<Pharmacie | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -49,6 +53,9 @@ export default function ParametresPage() {
     if (res.ok) {
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
+    } else {
+      const json = await res.json().catch(() => ({}))
+      showToast(json.error || 'Erreur lors de la sauvegarde des parametres', 'error')
     }
     setSaving(false)
   }
@@ -61,6 +68,12 @@ export default function ParametresPage() {
 
       <div className="bg-white rounded-xl shadow p-6 mb-6">
         <h2 className="font-semibold text-gray-700 mb-4">Informations de la pharmacie</h2>
+        {!estAdmin && (
+          <div className="bg-orange-50 text-orange-700 text-sm rounded-lg px-4 py-3 mb-4">
+            Reserve aux administrateurs — tu peux consulter mais pas modifier ces reglages.
+          </div>
+        )}
+        <fieldset disabled={!estAdmin} className="contents">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nom de la pharmacie</label>
@@ -103,6 +116,7 @@ export default function ParametresPage() {
             {saving ? 'Sauvegarde...' : 'Sauvegarder'}
           </button>
         </form>
+        </fieldset>
       </div>
 
       <div className="bg-white rounded-xl shadow p-6">

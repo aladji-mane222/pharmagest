@@ -1,4 +1,3 @@
-// CIBLE: src/app/(dashboard)/ventes/page.tsx
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -165,8 +164,23 @@ export default function VentesPage() {
   const montantTotal = panier.reduce((sum, l) => sum + l.prixUnitaire * l.quantite, 0)
   const totalNet = Math.max(0, montantTotal - remise)
 
+  const MODES_PAIEMENT: { value: string; label: string }[] = [
+    { value: 'ESPECES', label: 'Especes' },
+    { value: 'MOBILE_MONEY', label: 'Mobile Money' },
+    { value: 'ORANGE_MONEY', label: 'Orange Money' },
+    { value: 'MTN_MONEY', label: 'MTN Money' },
+    { value: 'PAIEMENT_MARCHAND', label: 'Paiement Marchand' },
+    { value: 'CARTE', label: 'Carte' },
+  ]
+
   const ajouterLignePaiement = () => {
-    setPaiements([...paiements, { id: `p${Date.now()}`, modePaiement: 'ESPECES', montant: '' }])
+    const modesUtilises = paiements.map((p) => p.modePaiement)
+    const modeDisponible = MODES_PAIEMENT.find((m) => !modesUtilises.includes(m.value))
+    if (!modeDisponible) {
+      showToast('Tous les modes de paiement sont deja utilises dans cette vente', 'error')
+      return
+    }
+    setPaiements([...paiements, { id: `p${Date.now()}`, modePaiement: modeDisponible.value, montant: '' }])
   }
   const retirerLignePaiement = (id: string) => {
     setPaiements(paiements.filter((p) => p.id !== id))
@@ -334,13 +348,20 @@ export default function VentesPage() {
                 : ''}
             }
           `}</style>
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-8 max-w-md w-full">
+          <div className="fixed inset-0 bg-navy/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-card shadow-lg p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+              {/* Confirmation a l'ecran uniquement — un client ne doit jamais voir
+                  "Vente enregistree !" sur son reçu papier, ce message est pour le
+                  caissier, pas pour la zone imprimable. */}
+              <div className="text-center mb-4 no-print">
+                <div className="w-14 h-14 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-3">
+                  <span className="text-2xl">✅</span>
+                </div>
+                <h2 className="text-xl font-bold text-navy">Vente enregistree !</h2>
+              </div>
               <div className="recu-print">
                 <div className="text-center mb-4">
-                  <p className="font-bold text-lg text-gray-900">{nomPharmacie}</p>
-                  <div className="text-3xl my-2">✅</div>
-                  <h2 className="text-xl font-bold text-gray-800">Vente enregistree !</h2>
+                  <p className="font-bold text-lg text-navy">{nomPharmacie}</p>
                   <p className="text-xs text-gray-400 mt-1">Recu {recu.numero}</p>
                   <p className="text-xs text-gray-400">{new Date().toLocaleString('fr-FR')}</p>
                 </div>
@@ -393,11 +414,13 @@ export default function VentesPage() {
                 <p className="text-center text-xs text-gray-400 mt-4">Merci de votre confiance !</p>
               </div>
               <div className="mt-6 space-y-3 no-print">
-                <button
-                  onClick={() => window.print()}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 w-full">
+                <p className="text-xs text-gray-400 text-center">
+                  Format d'impression actif : {formatRecu === 'A4' ? 'A4 / PDF standard' : formatRecu === 'THERMIQUE_58' ? 'Thermique 58mm' : 'Thermique 80mm'}
+                  {' '}(<Link href="/parametres" className="underline hover:text-mint">changer</Link>)
+                </p>
+                <Button variant="primary" className="w-full" onClick={() => window.print()}>
                   🖨️ Imprimer le recu
-                </button>
+                </Button>
                 <button
                   onClick={() => {
                     const numero = prompt('Entrez le numéro WhatsApp du client (ex: 224620000000) :')
@@ -423,13 +446,12 @@ export default function VentesPage() {
 
                     window.open(`https://wa.me/${numero}?text=${message}`, '_blank')
                   }}
-                  className="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 w-full">
+                  className="w-full bg-[#25D366] text-white px-6 py-2.5 rounded-card font-medium hover:opacity-90 transition-opacity">
                   📱 Envoyer par WhatsApp
                 </button>
-                <button onClick={() => setRecu(null)}
-                  className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-200 w-full">
+                <Button variant="ghost" className="w-full" onClick={() => setRecu(null)}>
                   Nouvelle vente
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -626,12 +648,11 @@ export default function VentesPage() {
                     onChange={(e) => modifierLignePaiement(p.id, 'modePaiement', e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                   >
-                    <option value="ESPECES">Especes</option>
-                    <option value="MOBILE_MONEY">Mobile Money</option>
-                    <option value="ORANGE_MONEY">Orange Money</option>
-                    <option value="MTN_MONEY">MTN Money</option>
-                    <option value="PAIEMENT_MARCHAND">Paiement Marchand</option>
-                    <option value="CARTE">Carte</option>
+                    {MODES_PAIEMENT.filter(
+                      (m) => m.value === p.modePaiement || !paiements.some((autre) => autre.id !== p.id && autre.modePaiement === m.value)
+                    ).map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
                   </select>
                   <input
                     type="number"

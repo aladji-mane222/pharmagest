@@ -1,4 +1,3 @@
-// CIBLE: src/app/api/caisse/route.ts
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -40,7 +39,21 @@ export async function GET() {
     select: { montantCloture: true, dateCloture: true, user: { select: { nom: true } } },
   })
 
-  return apiSuccess({ sessionActive, historique, derniereSessionFermee })
+  // Remboursements de credit encaisses en especes pendant CETTE session —
+  // cet argent entre physiquement dans le tiroir au meme titre qu'une vente,
+  // donc il doit etre compte dans le "total attendu en especes" a la
+  // cloture, sinon la caisse affichera un faux excedent a chaque
+  // remboursement.
+  let remboursementsEspeces = 0
+  if (sessionActive) {
+    const aggRemb = await prisma.remboursementCredit.aggregate({
+      where: { sessionCaisseId: sessionActive.id, modePaiement: 'ESPECES' },
+      _sum: { montant: true },
+    })
+    remboursementsEspeces = aggRemb._sum.montant ?? 0
+  }
+
+  return apiSuccess({ sessionActive, historique, derniereSessionFermee, remboursementsEspeces })
 }
 
 export async function POST(request: Request) {

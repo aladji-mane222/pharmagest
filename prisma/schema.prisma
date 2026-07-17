@@ -1,3 +1,4 @@
+// CIBLE: prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -85,6 +86,7 @@ model Pharmacie {
   commandes      CommandeFournisseur[]
   auditLogs      AuditLog[]
   lots           Lot[]
+  remboursements RemboursementCredit[]
 }
 
 model User {
@@ -106,6 +108,7 @@ model User {
   depenses       Depense[]
   mouvements     MouvementStock[]
   auditLogs      AuditLog[]
+  remboursements RemboursementCredit[]
 
   @@index([pharmacieId])
 }
@@ -308,11 +311,38 @@ model Client {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  pharmacie Pharmacie @relation(fields: [pharmacieId], references: [id])
-  ventes    Vente[]
+  pharmacie      Pharmacie             @relation(fields: [pharmacieId], references: [id])
+  ventes         Vente[]
+  remboursements RemboursementCredit[]
 
   @@unique([pharmacieId, numeroClient])
   @@index([pharmacieId])
+}
+
+// Remboursement d'un solde credit client. Separe de PaiementVente (qui suit
+// l'argent recu au moment d'une vente) car un remboursement n'est jamais
+// rattache a une vente precise — juste au client et, si paye en especes, a
+// la session de caisse (l'argent entre physiquement dans le tiroir et doit
+// compter dans le "total attendu en especes" a la cloture).
+model RemboursementCredit {
+  id              String   @id @default(cuid())
+  clientId        String
+  montant         Float
+  modePaiement    ModePaiement
+  userId          String
+  pharmacieId     String
+  sessionCaisseId String?
+  note            String?
+  createdAt       DateTime @default(now())
+
+  client        Client         @relation(fields: [clientId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
+  pharmacie     Pharmacie      @relation(fields: [pharmacieId], references: [id])
+  sessionCaisse SessionCaisse? @relation(fields: [sessionCaisseId], references: [id])
+
+  @@index([clientId])
+  @@index([pharmacieId])
+  @@index([sessionCaisseId])
 }
 
 model SessionCaisse {
@@ -331,6 +361,7 @@ model SessionCaisse {
   pharmacie Pharmacie @relation(fields: [pharmacieId], references: [id])
   user      User      @relation(fields: [userId], references: [id])
   ventes    Vente[]
+  remboursements RemboursementCredit[]
 
   @@index([pharmacieId])
   @@index([userId])

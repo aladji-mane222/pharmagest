@@ -21,6 +21,7 @@ interface Vente {
   monnaie: number
   remise: number
   modePaiement: string
+  paiements?: { modePaiement: string; montant: number }[]
   statut: string
   motifAnnulation: string | null
   createdAt: string
@@ -37,6 +38,7 @@ const MODE_LABELS: Record<string, string> = {
   PAIEMENT_MARCHAND: 'Paiement Marchand',
   CARTE:             'Carte',
   CREDIT:            'Crédit',
+  MIXTE:             'Mixte',
 }
 
 const STATUT_STYLE: Record<string, string> = {
@@ -156,6 +158,13 @@ export default function VenteDetailPage() {
           <div>
             <p className="text-gray-500">Mode de paiement</p>
             <p className="font-medium text-gray-800">{MODE_LABELS[vente.modePaiement] ?? vente.modePaiement}</p>
+            {vente.modePaiement === 'MIXTE' && vente.paiements && vente.paiements.length > 0 && (
+              <ul className="text-sm text-gray-500 mt-1">
+                {vente.paiements.map((p, i) => (
+                  <li key={i}>{MODE_LABELS[p.modePaiement] ?? p.modePaiement} : {formatMontant(p.montant)}</li>
+                ))}
+              </ul>
+            )}
           </div>
           {vente.client && (
             <div>

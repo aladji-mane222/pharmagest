@@ -13,6 +13,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       lignes: { include: { medicament: true } },
       client: true,
       user: { select: { nom: true } },
+      paiements: true,
     },
   })
 

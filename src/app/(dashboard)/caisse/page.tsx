@@ -1,4 +1,3 @@
-// CIBLE: src/app/(dashboard)/caisse/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -25,6 +24,7 @@ export default function CaissePage() {
   const [montantCloture, setMontantCloture] = useState('')
   const [totalEncaisse, setTotalEncaisse] = useState(0)
   const [parMode, setParMode] = useState<{ modePaiement: string; total: number }[]>([])
+  const [remboursementsEspeces, setRemboursementsEspeces] = useState(0)
   const [confirmFermer, setConfirmFermer] = useState(false)
   const { showToast } = useToast()
 
@@ -35,6 +35,7 @@ export default function CaissePage() {
       .then((json) => {
         setSessionActive(json.data?.sessionActive || null)
         setHistorique(json.data?.historique || [])
+        setRemboursementsEspeces(json.data?.remboursementsEspeces ?? 0)
         const derniere = json.data?.derniereSessionFermee
         if (derniere && derniere.montantCloture !== null) {
           setSuggestionOuverture({
@@ -70,7 +71,7 @@ export default function CaissePage() {
   // modes dans le "total attendu en especes" aurait cree un faux "manque"
   // a chaque vente payee en mobile money.
   const totalEspeces = parMode.find((m) => m.modePaiement === 'ESPECES')?.total ?? 0
-  const totalAttendu = (sessionActive?.montantOuverture ?? 0) + totalEspeces
+  const totalAttendu = (sessionActive?.montantOuverture ?? 0) + totalEspeces + remboursementsEspeces
   const montantClotureNum = parseFloat(montantCloture) || 0
   const ecart = montantCloture !== '' ? montantClotureNum - totalAttendu : null
 
@@ -165,13 +166,19 @@ export default function CaissePage() {
                     ))}
                   </div>
                 )}
+                {remboursementsEspeces > 0 && (
+                  <div className="flex justify-between text-gray-400 pl-1">
+                    <span>+ Remboursements credit (especes)</span>
+                    <span>{formatMontant(remboursementsEspeces)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between pt-1">
                   <span className="text-gray-500">Total attendu en especes</span>
                   <span className="font-semibold text-blue-600">{formatMontant(totalAttendu)}</span>
                 </div>
                 <p className="text-xs text-gray-400">
-                  Ouverture + especes recues uniquement — le mobile money et la carte ne sont
-                  jamais dans le tiroir.
+                  Ouverture + especes recues (ventes et remboursements credit) — le mobile money
+                  et la carte ne sont jamais dans le tiroir.
                 </p>
               </div>
 
