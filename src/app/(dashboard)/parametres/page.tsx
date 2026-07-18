@@ -1,4 +1,3 @@
-// CIBLE: src/app/(dashboard)/parametres/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -12,6 +11,7 @@ interface Pharmacie {
   telephone: string | null
   email: string | null
   formatRecu: 'A4' | 'THERMIQUE_58' | 'THERMIQUE_80'
+  dureeMaxSessionCaisseH: number | null
 }
 
 export default function ParametresPage() {
@@ -22,7 +22,7 @@ export default function ParametresPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [form, setForm] = useState({ nom: '', adresse: '', telephone: '', email: '', formatRecu: 'A4' })
+  const [form, setForm] = useState({ nom: '', adresse: '', telephone: '', email: '', formatRecu: 'A4', dureeMaxSessionCaisseH: '' })
 
   useEffect(() => {
     fetch('/api/parametres')
@@ -36,6 +36,7 @@ export default function ParametresPage() {
             telephone: json.data.telephone || '',
             email: json.data.email || '',
             formatRecu: json.data.formatRecu || 'A4',
+            dureeMaxSessionCaisseH: json.data.dureeMaxSessionCaisseH != null ? String(json.data.dureeMaxSessionCaisseH) : '',
           })
         }
         setLoading(false)
@@ -116,6 +117,43 @@ export default function ParametresPage() {
             {saving ? 'Sauvegarde...' : 'Sauvegarder'}
           </button>
         </form>
+        </fieldset>
+      </div>
+
+      <div className="bg-white rounded-xl shadow p-6 mb-6">
+        <h2 className="font-semibold text-gray-700 mb-4">Securite caisse</h2>
+        {!estAdmin && (
+          <div className="bg-orange-50 text-orange-700 text-sm rounded-lg px-4 py-3 mb-4">
+            Reserve aux administrateurs — tu peux consulter mais pas modifier ce reglage.
+          </div>
+        )}
+        <fieldset disabled={!estAdmin} className="contents">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Duree max d&apos;une session caisse (heures)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={form.dureeMaxSessionCaisseH}
+                onChange={(e) => setForm({ ...form, dureeMaxSessionCaisseH: e.target.value })}
+                onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                placeholder="Illimite si vide"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Au-dela de cette duree, une alerte s&apos;affiche sur la page Caisse pour rappeler
+                de fermer la session — utile pour reperer une session oubliee ouverte ou un
+                caissier trop longtemps sur la meme session. Laisser vide pour aucune limite.
+              </p>
+            </div>
+            {success && <p className="text-green-600 text-sm">Parametres sauvegardes !</p>}
+            <button type="submit" disabled={saving}
+              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
+              {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+            </button>
+          </form>
         </fieldset>
       </div>
 

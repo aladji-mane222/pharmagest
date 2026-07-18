@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
+import { useToast, Modal } from '@/components/ui'
+import { imprimerRecu, construireMessageWhatsApp, DonneesRecu } from '@/lib/recu'
 
 interface LigneVente {
   id: string
@@ -57,6 +59,7 @@ export default function VenteDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN'
+  const { showToast } = useToast()
 
   const [vente,   setVente]   = useState<Vente | null>(null)
   const [loading, setLoading] = useState(true)
@@ -65,6 +68,8 @@ export default function VenteDetailPage() {
   const [nomPharmacie, setNomPharmacie] = useState('Ma Pharmacie')
   const [formatRecu, setFormatRecu] = useState<'A4' | 'THERMIQUE_58' | 'THERMIQUE_80'>('A4')
   const [showRecu, setShowRecu] = useState(false)
+  const [whatsappOuvert, setWhatsappOuvert] = useState(false)
+  const [whatsappNumero, setWhatsappNumero] = useState('')
 
   // Modal annulation
   const [showModal, setShowModal] = useState(false)
@@ -121,6 +126,21 @@ export default function VenteDetailPage() {
   if (!vente) return null
 
   const resteADu = Math.max(0, vente.montantTotal - vente.montantPaye)
+
+  const donneesRecuPourImpression = (): DonneesRecu => ({
+    nomPharmacie,
+    numero: vente.numeroFacture || vente.id,
+    date: formatDateTime(vente.createdAt),
+    lignes: vente.lignes.map((l) => ({ nom: l.medicament.nom, quantite: l.quantite, prixUnitaire: l.prixUnitaire })),
+    montantTotal: vente.montantTotal,
+    paiements: vente.paiements && vente.paiements.length > 0
+      ? vente.paiements
+      : vente.montantPaye > 0 ? [{ modePaiement: vente.modePaiement, montant: vente.montantPaye }] : [],
+    monnaie: vente.monnaie,
+    resteADu,
+    clientNom: vente.client?.nom || null,
+    formatRecu,
+  })
 
   return (
     <div className="p-8 max-w-3xl">
@@ -315,127 +335,124 @@ export default function VenteDetailPage() {
           que juste apres la vente (Corrige le 17/07 : avant, on ne pouvait
           imprimer ou renvoyer un recu que juste apres l'avoir encaissee). */}
       {showRecu && (
-        <>
-          <style jsx global>{`
-            @media print {
-              body * { visibility: hidden; }
-              .recu-print, .recu-print * { visibility: visible; }
-              .no-print { display: none !important; }
-              .recu-print {
-                position: fixed;
-                top: 0; left: 0;
-                ${formatRecu === 'A4'
-                  ? 'width: 100%; padding: 20px;'
-                  : formatRecu === 'THERMIQUE_58'
-                  ? 'width: 48mm; padding: 4px; font-size: 10px; line-height: 1.3;'
-                  : 'width: 72mm; padding: 6px; font-size: 11px; line-height: 1.3;'}
-              }
-              ${formatRecu !== 'A4'
-                ? `@page { size: ${formatRecu === 'THERMIQUE_58' ? '58mm 1000mm' : '80mm 1000mm'}; margin: 0; }`
-                : ''}
-            }
-          `}</style>
-          <div className="fixed inset-0 bg-navy/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-card shadow-lg p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
-              <div className="recu-print">
-                <div className="text-center mb-4">
-                  <p className="font-bold text-lg text-navy">{nomPharmacie}</p>
-                  <p className="text-xs text-gray-400 mt-1">Recu {vente.numeroFacture || vente.id}</p>
-                  <p className="text-xs text-gray-400">{formatDateTime(vente.createdAt)}</p>
-                </div>
-                <div className="border-t pt-2 mb-2 space-y-2">
-                  {vente.lignes.map((l) => (
-                    <div key={l.id}>
-                      <p className="leading-snug">{l.medicament.nom}</p>
-                      <div className="flex justify-between text-gray-500">
-                        <span>{l.quantite} x {formatMontant(l.prixUnitaire)}</span>
-                        <span className="font-medium text-gray-800">
-                          {formatMontant(l.prixUnitaire * l.quantite)}
-                        </span>
-                      </div>
+        <div className="fixed inset-0 bg-navy/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-card shadow-lg p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div>
+              <div className="text-center mb-4">
+                <p className="font-bold text-lg text-navy">{nomPharmacie}</p>
+                <p className="text-xs text-gray-400 mt-1">Recu {vente.numeroFacture || vente.id}</p>
+                <p className="text-xs text-gray-400">{formatDateTime(vente.createdAt)}</p>
+              </div>
+              <div className="border-t pt-2 mb-2 space-y-2">
+                {vente.lignes.map((l) => (
+                  <div key={l.id}>
+                    <p className="leading-snug">{l.medicament.nom}</p>
+                    <div className="flex justify-between text-gray-500">
+                      <span>{l.quantite} x {formatMontant(l.prixUnitaire)}</span>
+                      <span className="font-medium text-gray-800">
+                        {formatMontant(l.prixUnitaire * l.quantite)}
+                      </span>
                     </div>
-                  ))}
-                </div>
-                <div className="border-t pt-2 space-y-1 text-sm">
-                  <div className="flex justify-between font-bold text-green-600">
-                    <span>Total</span>
-                    <span>{formatMontant(vente.montantTotal)}</span>
                   </div>
-                  {vente.paiements && vente.paiements.length > 0 ? (
-                    vente.paiements.map((p, i) => (
-                      <div key={i} className="flex justify-between text-gray-600">
-                        <span>{MODE_LABELS[p.modePaiement] ?? p.modePaiement}</span>
-                        <span>{formatMontant(p.montant)}</span>
-                      </div>
-                    ))
-                  ) : (
-                    vente.montantPaye > 0 && (
-                      <div className="flex justify-between text-gray-600">
-                        <span>{MODE_LABELS[vente.modePaiement] ?? vente.modePaiement}</span>
-                        <span>{formatMontant(vente.montantPaye)}</span>
-                      </div>
-                    )
-                  )}
-                  {vente.monnaie > 0 && (
-                    <div className="flex justify-between text-gray-600">
-                      <span>Monnaie</span>
-                      <span>{formatMontant(vente.monnaie)}</span>
-                    </div>
-                  )}
-                  {resteADu > 0 && (
-                    <div className="flex justify-between text-red-600 font-medium">
-                      <span>Reste a payer (credit{vente.client ? ` — ${vente.client.nom}` : ''})</span>
-                      <span>{formatMontant(resteADu)}</span>
-                    </div>
-                  )}
+                ))}
+              </div>
+              <div className="border-t pt-2 space-y-1 text-sm">
+                <div className="flex justify-between font-bold text-green-600">
+                  <span>Total</span>
+                  <span>{formatMontant(vente.montantTotal)}</span>
                 </div>
-                <p className="text-center text-xs text-gray-400 mt-4">Merci de votre confiance !</p>
+                {vente.paiements && vente.paiements.length > 0 ? (
+                  vente.paiements.map((p, i) => (
+                    <div key={i} className="flex justify-between text-gray-600">
+                      <span>{MODE_LABELS[p.modePaiement] ?? p.modePaiement}</span>
+                      <span>{formatMontant(p.montant)}</span>
+                    </div>
+                  ))
+                ) : (
+                  vente.montantPaye > 0 && (
+                    <div className="flex justify-between text-gray-600">
+                      <span>{MODE_LABELS[vente.modePaiement] ?? vente.modePaiement}</span>
+                      <span>{formatMontant(vente.montantPaye)}</span>
+                    </div>
+                  )
+                )}
+                {vente.monnaie > 0 && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Monnaie</span>
+                    <span>{formatMontant(vente.monnaie)}</span>
+                  </div>
+                )}
+                {resteADu > 0 && (
+                  <div className="flex justify-between text-red-600 font-medium">
+                    <span>Reste a payer (credit{vente.client ? ` — ${vente.client.nom}` : ''})</span>
+                    <span>{formatMontant(resteADu)}</span>
+                  </div>
+                )}
               </div>
+              <p className="text-center text-xs text-gray-400 mt-4">Merci de votre confiance !</p>
+            </div>
 
-              <div className="mt-6 space-y-3 no-print">
-                <p className="text-xs text-gray-400 text-center">
-                  Format d'impression actif : {formatRecu === 'A4' ? 'A4 / PDF standard' : formatRecu === 'THERMIQUE_58' ? 'Thermique 58mm' : 'Thermique 80mm'}
-                  {' '}(<Link href="/parametres" className="underline hover:text-mint">changer</Link>)
-                </p>
-                <button
-                  onClick={() => window.print()}
-                  className="w-full bg-mint text-navy px-6 py-2.5 rounded-card font-medium hover:opacity-90 transition-opacity">
-                  🖨️ Imprimer le recu
-                </button>
-                <button
-                  onClick={() => {
-                    const numero = prompt('Entrez le numéro WhatsApp du client (ex: 224620000000) :')
-                    if (!numero) return
-
-                    const lignesTexte = vente.lignes.map(l =>
-                      `- ${l.medicament.nom} x${l.quantite} = ${(l.prixUnitaire * l.quantite).toLocaleString()} GNF`
-                    ).join('%0A')
-
-                    const paiementsTexte = (vente.paiements && vente.paiements.length > 0
-                      ? vente.paiements
-                      : vente.montantPaye > 0 ? [{ modePaiement: vente.modePaiement, montant: vente.montantPaye }] : []
-                    ).map(p => `${MODE_LABELS[p.modePaiement] ?? p.modePaiement}: ${p.montant.toLocaleString()} GNF`).join('%0A')
-
-                    const clientTexte = vente.client ? `%0AClient: ${vente.client.nom}` : ''
-                    const monnaieTexte = vente.monnaie > 0 ? `%0AMonnaie: ${vente.monnaie.toLocaleString()} GNF` : ''
-                    const creditTexte = resteADu > 0 ? `%0AReste a payer (credit): ${resteADu.toLocaleString()} GNF` : ''
-
-                    const message = `*RECU - ${nomPharmacie}*%0A%0ARecu: ${vente.numeroFacture || vente.id}%0ADate: ${formatDateTime(vente.createdAt)}${clientTexte}%0A%0A*Articles:*%0A${lignesTexte}%0A%0A*Total: ${vente.montantTotal.toLocaleString()} GNF*%0A${paiementsTexte}${monnaieTexte}${creditTexte}%0A%0AMerci de votre confiance!`
-
-                    window.open(`https://wa.me/${numero}?text=${message}`, '_blank')
-                  }}
-                  className="w-full bg-[#25D366] text-white px-6 py-2.5 rounded-card font-medium hover:opacity-90 transition-opacity">
-                  📱 Envoyer par WhatsApp
-                </button>
-                <button onClick={() => setShowRecu(false)}
-                  className="w-full bg-gray-100 text-gray-700 px-6 py-2.5 rounded-card font-medium hover:bg-gray-200">
-                  Fermer
-                </button>
-              </div>
+            <div className="mt-6 space-y-3">
+              <p className="text-xs text-gray-400 text-center">
+                Format d'impression actif : {formatRecu === 'A4' ? 'A4 / PDF standard' : formatRecu === 'THERMIQUE_58' ? 'Thermique 58mm' : 'Thermique 80mm'}
+                {' '}(<Link href="/parametres" className="underline hover:text-mint">changer</Link>)
+              </p>
+              <button
+                onClick={() => {
+                  try {
+                    imprimerRecu(donneesRecuPourImpression())
+                  } catch {
+                    showToast('Fenetre d\'impression bloquee — autorise les pop-ups pour ce site puis reessaie', 'error')
+                  }
+                }}
+                className="w-full bg-mint text-navy px-6 py-2.5 rounded-card font-medium hover:opacity-90 transition-opacity">
+                🖨️ Imprimer le recu
+              </button>
+              <button
+                onClick={() => {
+                  setWhatsappNumero(vente.client?.telephone || '')
+                  setWhatsappOuvert(true)
+                }}
+                className="w-full bg-[#25D366] text-white px-6 py-2.5 rounded-card font-medium hover:opacity-90 transition-opacity">
+                📱 Envoyer par WhatsApp
+              </button>
+              <button onClick={() => setShowRecu(false)}
+                className="w-full bg-gray-100 text-gray-700 px-6 py-2.5 rounded-card font-medium hover:bg-gray-200">
+                Fermer
+              </button>
             </div>
           </div>
-        </>
+        </div>
       )}
+
+      <Modal
+        open={whatsappOuvert}
+        onClose={() => setWhatsappOuvert(false)}
+        title="Envoyer le recu par WhatsApp"
+        onConfirm={() => {
+          if (!whatsappNumero.trim()) {
+            showToast('Entre un numero WhatsApp', 'error')
+            return
+          }
+          const message = construireMessageWhatsApp(donneesRecuPourImpression())
+          window.open(`https://wa.me/${whatsappNumero.trim()}?text=${message}`, '_blank')
+          setWhatsappOuvert(false)
+        }}
+        confirmLabel="Envoyer"
+      >
+        <label className="block text-sm font-medium text-gray-700 mb-1">Numero WhatsApp du client</label>
+        <input
+          type="tel"
+          autoFocus
+          value={whatsappNumero}
+          onChange={(e) => setWhatsappNumero(e.target.value)}
+          placeholder="Ex: 224620000000"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+        />
+        {vente.client?.telephone && (
+          <p className="text-xs text-gray-400 mt-1">Pre-rempli avec le numero de {vente.client.nom} — modifiable si besoin.</p>
+        )}
+      </Modal>
     </div>
   )
 }
