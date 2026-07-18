@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
 import { useToast, Modal } from '@/components/ui'
-import { imprimerRecu, construireMessageWhatsApp, DonneesRecu } from '@/lib/recu'
+import { ouvrirRecuPDF, telechargerRecuPDF, construireMessageWhatsApp, DonneesRecu } from '@/lib/recu'
 
 interface LigneVente {
   id: string
@@ -394,26 +394,31 @@ export default function VenteDetailPage() {
 
             <div className="mt-6 space-y-3">
               <p className="text-xs text-gray-400 text-center">
-                Format d'impression actif : {formatRecu === 'A4' ? 'A4 / PDF standard' : formatRecu === 'THERMIQUE_58' ? 'Thermique 58mm' : 'Thermique 80mm'}
+                Format actif : {formatRecu === 'A4' ? 'A4' : formatRecu === 'THERMIQUE_58' ? 'Thermique 58mm' : 'Thermique 80mm'}
                 {' '}(<Link href="/parametres" className="underline hover:text-mint">changer</Link>)
+                {' '}— la taille est fixee dans le fichier PDF genere, fiable quelle que soit l'imprimante.
               </p>
-              {formatRecu !== 'A4' && (
-                <p className="text-xs text-orange-500 text-center px-2">
-                  Dans la fenetre d'impression, choisis ton imprimante thermique comme
-                  destination (pas &quot;Enregistrer en PDF&quot;) pour un rendu correct sur le
-                  bon format de papier.
-                </p>
-              )}
               <button
-                onClick={() => {
+                onClick={async () => {
                   try {
-                    imprimerRecu(donneesRecuPourImpression())
+                    await ouvrirRecuPDF(donneesRecuPourImpression())
                   } catch {
-                    showToast('Fenetre d\'impression bloquee — autorise les pop-ups pour ce site puis reessaie', 'error')
+                    showToast('Fenetre bloquee — autorise les pop-ups pour ce site puis reessaie', 'error')
                   }
                 }}
                 className="w-full bg-mint text-navy px-6 py-2.5 rounded-card font-medium hover:opacity-90 transition-opacity">
-                🖨️ Imprimer le recu
+                📄 Ouvrir le recu (PDF)
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await telechargerRecuPDF(donneesRecuPourImpression())
+                  } catch {
+                    showToast('Erreur lors de la generation du PDF', 'error')
+                  }
+                }}
+                className="w-full bg-white text-navy border border-navy/20 px-6 py-2.5 rounded-card font-medium hover:bg-navy/5 transition-colors">
+                ⬇️ Telecharger le PDF
               </button>
               <button
                 onClick={() => {
