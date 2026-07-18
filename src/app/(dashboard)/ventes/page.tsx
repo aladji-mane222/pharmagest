@@ -411,6 +411,13 @@ export default function VentesPage() {
                 Format d'impression actif : {formatRecu === 'A4' ? 'A4 / PDF standard' : formatRecu === 'THERMIQUE_58' ? 'Thermique 58mm' : 'Thermique 80mm'}
                 {' '}(<Link href="/parametres" className="underline hover:text-mint">changer</Link>)
               </p>
+              {formatRecu !== 'A4' && (
+                <p className="text-xs text-orange-500 text-center px-2">
+                  Dans la fenetre d'impression, choisis ton imprimante thermique comme
+                  destination (pas &quot;Enregistrer en PDF&quot;) pour un rendu correct sur le
+                  bon format de papier.
+                </p>
+              )}
               <Button
                 variant="primary"
                 className="w-full"
