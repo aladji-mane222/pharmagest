@@ -1,3 +1,4 @@
+// CIBLE: src/app/(dashboard)/caisse/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -35,7 +36,15 @@ export default function CaissePage() {
   const [parMode, setParMode] = useState<{ modePaiement: string; total: number }[]>([])
   const [remboursementsEspeces, setRemboursementsEspeces] = useState(0)
   const [confirmFermer, setConfirmFermer] = useState(false)
+  const [dureeMaxH, setDureeMaxH] = useState<number | null>(null)
   const { showToast } = useToast()
+
+  useEffect(() => {
+    fetch('/api/parametres')
+      .then((res) => res.json())
+      .then((json) => setDureeMaxH(json.data?.dureeMaxSessionCaisseH ?? null))
+      .catch(() => {})
+  }, [])
 
   // Chargement initial
   useEffect(() => {
@@ -83,6 +92,16 @@ export default function CaissePage() {
   const totalAttendu = (sessionActive?.montantOuverture ?? 0) + totalEspeces + remboursementsEspeces
   const montantClotureNum = parseFloat(montantCloture) || 0
   const ecart = montantCloture !== '' ? montantClotureNum - totalAttendu : null
+
+  // Depassement de la duree max fixee par l'admin dans /parametres. On
+  // n'auto-ferme jamais la session tout seul (perte de controle sur ce qui
+  // se passe reellement dans le tiroir) — juste une alerte visible, pour
+  // reperer une session oubliee ouverte ou un caissier trop longtemps sur
+  // la meme session.
+  const heuresOuverte = sessionActive
+    ? (Date.now() - new Date(sessionActive.dateOuverture).getTime()) / 3600000
+    : 0
+  const depassementDureeMax = !!(sessionActive && dureeMaxH && heuresOuverte > dureeMaxH)
 
   const libelleModePaiement = (mode: string) => {
     const libelles: Record<string, string> = {
@@ -152,6 +171,14 @@ export default function CaissePage() {
               <div className="flex items-center gap-2 mb-4">
                 <Badge variant="success">● Session ouverte</Badge>
               </div>
+
+              {depassementDureeMax && (
+                <div className="bg-danger-bg text-danger-text text-sm rounded-card px-4 py-3 mb-4">
+                  ⚠️ Cette session est ouverte depuis {formaterDuree(sessionActive.dateOuverture, null)},
+                  au-dela de la limite de {dureeMaxH}h fixee dans les parametres — pense a la fermer si
+                  la journee est terminee.
+                </div>
+              )}
 
               <div className="space-y-1 mb-4 text-sm text-gray-500">
                 <p>Ouverte par : <span className="font-medium text-gray-700">{sessionActive.user.nom}</span></p>
@@ -280,6 +307,13 @@ export default function CaissePage() {
                   <p className="text-gray-400 text-xs">
                     Duree : {formaterDuree(s.dateOuverture, s.dateCloture)}
                     {!s.dateCloture && ' (en cours)'}
+                    {dureeMaxH && (() => {
+                      const finMs = s.dateCloture ? new Date(s.dateCloture).getTime() : Date.now()
+                      const heures = (finMs - new Date(s.dateOuverture).getTime()) / 3600000
+                      return heures > dureeMaxH ? (
+                        <span className="text-danger-text font-medium"> — depasse la limite ({dureeMaxH}h)</span>
+                      ) : null
+                    })()}
                   </p>
                   {s.montantCloture != null && (
                     <p className="text-blue-600 font-medium">{formatMontant(s.montantCloture)}</p>

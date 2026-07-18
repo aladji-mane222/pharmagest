@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { formatMontant } from '@/lib/utils'
-import { useToast, Button, Card, Badge, PageHeader, EmptyState } from '@/components/ui'
+import { useToast, Button, Card, Badge, PageHeader, EmptyState, Modal } from '@/components/ui'
+import { imprimerRecu, construireMessageWhatsApp, DonneesRecu } from '@/lib/recu'
 
 interface Medicament {
   id: string
@@ -38,11 +39,14 @@ export default function VentesPage() {
     paiements: { modePaiement: string; montant: number }[]
     resteADu: number
     clientNom: string | null
+    clientTelephone: string | null
     lignes: LignePanier[]
     numero: string
     remise: number
   } | null>(null)
-  const [clients, setClients] = useState<{ id: string; nom: string }[]>([])
+  const [clients, setClients] = useState<{ id: string; nom: string; telephone: string | null }[]>([])
+  const [whatsappOuvert, setWhatsappOuvert] = useState(false)
+  const [whatsappNumero, setWhatsappNumero] = useState('')
   const [clientId, setClientId] = useState('')
   const [nouveauClientOuvert, setNouveauClientOuvert] = useState(false)
   const [nouveauClientForm, setNouveauClientForm] = useState({ nom: '', telephone: '' })
@@ -247,12 +251,14 @@ export default function VentesPage() {
         // horodatage local (etait le cas avant le 13/07/2026, ce qui
         // n'avait aucun rapport avec le vrai numeroFacture stocke en base).
         const numero = json.data?.numeroFacture || `REC-${Date.now()}`
+        const clientSelectionne = clients.find((c) => c.id === clientId)
         setRecu({
           montantTotal: totalNet,
           monnaie,
           paiements: lignesPaiementValides,
           resteADu,
-          clientNom: clients.find((c) => c.id === clientId)?.nom || null,
+          clientNom: clientSelectionne?.nom || null,
+          clientTelephone: clientSelectionne?.telephone || null,
           lignes: [...panier],
           numero,
           remise,
@@ -309,6 +315,19 @@ export default function VentesPage() {
     return libelles[mode] || mode
   }
 
+  const donneesRecuPourImpression = (): DonneesRecu => ({
+    nomPharmacie,
+    numero: recu?.numero || '',
+    date: new Date().toLocaleString('fr-FR'),
+    lignes: (recu?.lignes || []).map((l) => ({ nom: l.nom, quantite: l.quantite, prixUnitaire: l.prixUnitaire })),
+    montantTotal: recu?.montantTotal || 0,
+    paiements: recu?.paiements || [],
+    monnaie: recu?.monnaie || 0,
+    resteADu: recu?.resteADu || 0,
+    clientNom: recu?.clientNom || null,
+    formatRecu,
+  })
+
   const stockLabel = (stock: number) => {
     if (stock === 0) return 'Rupture'
     return `Stock: ${stock}`
@@ -328,134 +347,98 @@ export default function VentesPage() {
       )}
 
       {recu && (
-        <>
-          <style jsx global>{`
-            @media print {
-              body * { visibility: hidden; }
-              .recu-print, .recu-print * { visibility: visible; }
-              .no-print { display: none !important; }
-              .recu-print {
-                position: fixed;
-                top: 0; left: 0;
-                ${formatRecu === 'A4'
-                  ? 'width: 100%; padding: 20px;'
-                  : formatRecu === 'THERMIQUE_58'
-                  ? 'width: 48mm; padding: 4px; font-size: 10px; line-height: 1.3;'
-                  : 'width: 72mm; padding: 6px; font-size: 11px; line-height: 1.3;'}
-              }
-              ${formatRecu !== 'A4'
-                ? `@page { size: ${formatRecu === 'THERMIQUE_58' ? '58mm 1000mm' : '80mm 1000mm'}; margin: 0; }`
-                : ''}
-            }
-          `}</style>
-          <div className="fixed inset-0 bg-navy/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-card shadow-lg p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
-              {/* Confirmation a l'ecran uniquement — un client ne doit jamais voir
-                  "Vente enregistree !" sur son reçu papier, ce message est pour le
-                  caissier, pas pour la zone imprimable. */}
-              <div className="text-center mb-4 no-print">
-                <div className="w-14 h-14 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-3">
-                  <span className="text-2xl">✅</span>
-                </div>
-                <h2 className="text-xl font-bold text-navy">Vente enregistree !</h2>
+        <div className="fixed inset-0 bg-navy/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-card shadow-lg p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="text-center mb-4">
+              <div className="w-14 h-14 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-3">
+                <span className="text-2xl">✅</span>
               </div>
-              <div className="recu-print">
-                <div className="text-center mb-4">
-                  <p className="font-bold text-lg text-navy">{nomPharmacie}</p>
-                  <p className="text-xs text-gray-400 mt-1">Recu {recu.numero}</p>
-                  <p className="text-xs text-gray-400">{new Date().toLocaleString('fr-FR')}</p>
-                </div>
-                {/* Liste empilee plutot qu'un tableau a colonnes fixes : une structure
-                    unique qui tient aussi bien sur A4 que sur une bande thermique de
-                    48mm, sans risque de colonnes coupees ou de texte qui deborde. */}
-                <div className="border-t pt-2 mb-2 space-y-2">
-                  {recu.lignes.map((l) => (
-                    <div key={l.medicamentId}>
-                      <p className="leading-snug">{l.nom}</p>
-                      <div className="flex justify-between text-gray-500">
-                        <span>{l.quantite} x {formatMontant(l.prixUnitaire)}</span>
-                        <span className="font-medium text-gray-800">
-                          {formatMontant(l.prixUnitaire * l.quantite)}
-                        </span>
-                      </div>
+              <h2 className="text-xl font-bold text-navy">Vente enregistree !</h2>
+            </div>
+            <div>
+              <div className="text-center mb-4">
+                <p className="font-bold text-lg text-navy">{nomPharmacie}</p>
+                <p className="text-xs text-gray-400 mt-1">Recu {recu.numero}</p>
+                <p className="text-xs text-gray-400">{new Date().toLocaleString('fr-FR')}</p>
+              </div>
+              <div className="border-t pt-2 mb-2 space-y-2">
+                {recu.lignes.map((l) => (
+                  <div key={l.medicamentId}>
+                    <p className="leading-snug">{l.nom}</p>
+                    <div className="flex justify-between text-gray-500">
+                      <span>{l.quantite} x {formatMontant(l.prixUnitaire)}</span>
+                      <span className="font-medium text-gray-800">
+                        {formatMontant(l.prixUnitaire * l.quantite)}
+                      </span>
                     </div>
-                  ))}
-                </div>
-                <div className="space-y-1 text-sm border-t pt-2">
-                  {recu.remise > 0 && (
-                    <div className="flex justify-between text-orange-500">
-                      <span>Remise</span>
-                      <span>-{formatMontant(recu.remise)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold text-green-600">
-                    <span>Total</span>
-                    <span>{formatMontant(recu.montantTotal)}</span>
                   </div>
-                  {recu.paiements.map((p, i) => (
-                    <div key={i} className="flex justify-between text-gray-600">
-                      <span>{libelleModePaiement(p.modePaiement)}</span>
-                      <span>{formatMontant(p.montant)}</span>
-                    </div>
-                  ))}
-                  {recu.monnaie > 0 && (
-                    <div className="flex justify-between text-gray-600">
-                      <span>Monnaie</span>
-                      <span>{formatMontant(recu.monnaie)}</span>
-                    </div>
-                  )}
-                  {recu.resteADu > 0 && (
-                    <div className="flex justify-between text-red-600 font-medium">
-                      <span>Reste a payer (credit{recu.clientNom ? ` — ${recu.clientNom}` : ''})</span>
-                      <span>{formatMontant(recu.resteADu)}</span>
-                    </div>
-                  )}
+                ))}
+              </div>
+              <div className="space-y-1 text-sm border-t pt-2">
+                {recu.remise > 0 && (
+                  <div className="flex justify-between text-orange-500">
+                    <span>Remise</span>
+                    <span>-{formatMontant(recu.remise)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-green-600">
+                  <span>Total</span>
+                  <span>{formatMontant(recu.montantTotal)}</span>
                 </div>
-                <p className="text-center text-xs text-gray-400 mt-4">Merci de votre confiance !</p>
+                {recu.paiements.map((p, i) => (
+                  <div key={i} className="flex justify-between text-gray-600">
+                    <span>{libelleModePaiement(p.modePaiement)}</span>
+                    <span>{formatMontant(p.montant)}</span>
+                  </div>
+                ))}
+                {recu.monnaie > 0 && (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Monnaie</span>
+                    <span>{formatMontant(recu.monnaie)}</span>
+                  </div>
+                )}
+                {recu.resteADu > 0 && (
+                  <div className="flex justify-between text-red-600 font-medium">
+                    <span>Reste a payer (credit{recu.clientNom ? ` — ${recu.clientNom}` : ''})</span>
+                    <span>{formatMontant(recu.resteADu)}</span>
+                  </div>
+                )}
               </div>
-              <div className="mt-6 space-y-3 no-print">
-                <p className="text-xs text-gray-400 text-center">
-                  Format d'impression actif : {formatRecu === 'A4' ? 'A4 / PDF standard' : formatRecu === 'THERMIQUE_58' ? 'Thermique 58mm' : 'Thermique 80mm'}
-                  {' '}(<Link href="/parametres" className="underline hover:text-mint">changer</Link>)
-                </p>
-                <Button variant="primary" className="w-full" onClick={() => window.print()}>
-                  🖨️ Imprimer le recu
-                </Button>
-                <button
-                  onClick={() => {
-                    const numero = prompt('Entrez le numéro WhatsApp du client (ex: 224620000000) :')
-                    if (!numero) return
-
-                    const lignesTexte = recu?.lignes?.map(l =>
-                      `- ${l.nom} x${l.quantite} = ${(l.prixUnitaire * l.quantite).toLocaleString()} GNF`
-                    ).join('%0A') || ''
-
-                    const paiementsTexte = recu?.paiements?.map(p =>
-                      `${libelleModePaiement(p.modePaiement)}: ${p.montant.toLocaleString()} GNF`
-                    ).join('%0A') || ''
-
-                    const clientTexte = recu?.clientNom ? `%0AClient: ${recu.clientNom}` : ''
-                    const monnaieTexte = (recu?.monnaie ?? 0) > 0
-                      ? `%0AMonnaie: ${recu!.monnaie.toLocaleString()} GNF`
-                      : ''
-                    const creditTexte = (recu?.resteADu ?? 0) > 0
-                      ? `%0AReste a payer (credit): ${recu!.resteADu.toLocaleString()} GNF`
-                      : ''
-
-                    const message = `*RECU - ${nomPharmacie}*%0A%0ARecu: ${recu?.numero || ''}%0ADate: ${new Date().toLocaleString('fr-FR')}${clientTexte}%0A%0A*Articles:*%0A${lignesTexte}%0A%0A*Total: ${recu?.montantTotal?.toLocaleString()} GNF*%0A${paiementsTexte}${monnaieTexte}${creditTexte}%0A%0AMerci de votre confiance!`
-
-                    window.open(`https://wa.me/${numero}?text=${message}`, '_blank')
-                  }}
-                  className="w-full bg-[#25D366] text-white px-6 py-2.5 rounded-card font-medium hover:opacity-90 transition-opacity">
-                  📱 Envoyer par WhatsApp
-                </button>
-                <Button variant="ghost" className="w-full" onClick={() => setRecu(null)}>
-                  Nouvelle vente
-                </Button>
-              </div>
+              <p className="text-center text-xs text-gray-400 mt-4">Merci de votre confiance !</p>
+            </div>
+            <div className="mt-6 space-y-3">
+              <p className="text-xs text-gray-400 text-center">
+                Format d'impression actif : {formatRecu === 'A4' ? 'A4 / PDF standard' : formatRecu === 'THERMIQUE_58' ? 'Thermique 58mm' : 'Thermique 80mm'}
+                {' '}(<Link href="/parametres" className="underline hover:text-mint">changer</Link>)
+              </p>
+              <Button
+                variant="primary"
+                className="w-full"
+                onClick={() => {
+                  try {
+                    imprimerRecu(donneesRecuPourImpression())
+                  } catch {
+                    showToast('Fenetre d\'impression bloquee — autorise les pop-ups pour ce site puis reessaie', 'error')
+                  }
+                }}
+              >
+                🖨️ Imprimer le recu
+              </Button>
+              <Button
+                className="w-full bg-[#25D366] text-white hover:opacity-90"
+                onClick={() => {
+                  setWhatsappNumero(recu.clientTelephone || '')
+                  setWhatsappOuvert(true)
+                }}
+              >
+                📱 Envoyer par WhatsApp
+              </Button>
+              <Button variant="ghost" className="w-full" onClick={() => setRecu(null)}>
+                Nouvelle vente
+              </Button>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       <div className="grid grid-cols-3 gap-6">
@@ -737,6 +720,40 @@ export default function VentesPage() {
           </Button>
         </Card>
       </div>
+
+      {/* Modale WhatsApp — remplace un prompt() natif du navigateur (retire
+          le 17/07/2026). Le numero est pre-rempli avec celui du client
+          selectionne s'il en a un, mais reste modifiable : utile si ce
+          n'est pas un client enregistre, ou si on veut envoyer sur un
+          autre numero (ex: le proche qui vient chercher les medicaments). */}
+      <Modal
+        open={whatsappOuvert}
+        onClose={() => setWhatsappOuvert(false)}
+        title="Envoyer le recu par WhatsApp"
+        onConfirm={() => {
+          if (!whatsappNumero.trim()) {
+            showToast('Entre un numero WhatsApp', 'error')
+            return
+          }
+          const message = construireMessageWhatsApp(donneesRecuPourImpression())
+          window.open(`https://wa.me/${whatsappNumero.trim()}?text=${message}`, '_blank')
+          setWhatsappOuvert(false)
+        }}
+        confirmLabel="Envoyer"
+      >
+        <label className="block text-sm font-medium text-gray-700 mb-1">Numero WhatsApp du client</label>
+        <input
+          type="tel"
+          autoFocus
+          value={whatsappNumero}
+          onChange={(e) => setWhatsappNumero(e.target.value)}
+          placeholder="Ex: 224620000000"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+        />
+        {recu?.clientTelephone && (
+          <p className="text-xs text-gray-400 mt-1">Pre-rempli avec le numero de {recu.clientNom} — modifiable si besoin.</p>
+        )}
+      </Modal>
     </div>
   )
 }
