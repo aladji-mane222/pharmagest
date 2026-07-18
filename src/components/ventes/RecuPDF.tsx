@@ -13,14 +13,57 @@ const MM = 2.83465
 // taille qu'on lui donne, point final. Le surplus de hauteur (le recu ne
 // remplit presque jamais toute la page) reste juste blanc — pas de risque
 // de mise a l'echelle foireuse comme avec l'ancienne approche.
-const TAILLES: Record<DonneesRecu['formatRecu'], 'A4' | [number, number]> = {
-  A4: 'A4',
-  THERMIQUE_58: [58 * MM, 1000 * MM],
-  THERMIQUE_80: [80 * MM, 1000 * MM],
+// Hauteur de page pour les formats thermiques : calculee a partir du
+// contenu reel (nombre d'articles, de lignes de paiement, etc.) plutot
+// qu'une valeur fixe arbitraire. Avant, une hauteur fixe de 1000mm avait
+// ete choisie par prudence pour ne jamais risquer de couper le contenu —
+// mais si le pilote d'impression thermique traite la page comme une taille
+// fixe plutot que du papier continu, ca aurait imprime un metre de papier
+// blanc a chaque reçu. Ici la page fait la taille du contenu, plus une
+// marge de securite raisonnable — jamais de gaspillage, quel que soit le
+// comportement du pilote cote imprimante.
+function hauteurEstimeePt(d: DonneesRecu): number {
+  const ENTETE = 62          // nom pharmacie + numero + date
+  const SEPARATEUR = 12
+  const PAR_ARTICLE = 26     // nom + ligne quantite/prix, par article
+  const LIGNE_TOTAL = 16
+  const PAR_PAIEMENT = 12
+  const PIED_DE_PAGE = 26    // "Merci de votre confiance !" + marge
+  const SECURITE = 40        // marge de securite (retour a la ligne d'un long nom, etc.)
+
+  const hauteur =
+    ENTETE +
+    SEPARATEUR +
+    d.lignes.length * PAR_ARTICLE +
+    SEPARATEUR +
+    LIGNE_TOTAL +
+    d.paiements.length * PAR_PAIEMENT +
+    (d.monnaie > 0 ? PAR_PAIEMENT : 0) +
+    (d.resteADu > 0 ? PAR_PAIEMENT : 0) +
+    PIED_DE_PAGE +
+    SECURITE
+
+  // Plancher raisonnable pour un tout petit reçu (1 seul article) — evite
+  // une page ridiculement courte qui donnerait un rendu ecrase.
+  return Math.max(hauteur, 220)
 }
 
+const tailleRecu = (d: DonneesRecu): 'A4' | [number, number] => {
+  if (d.formatRecu === 'A4') return 'A4'
+  const largeurPt = d.formatRecu === 'THERMIQUE_58' ? 58 * MM : 80 * MM
+  return [largeurPt, hauteurEstimeePt(d)]
+}
+
+// Intl.NumberFormat('fr-FR') utilise un espace insecable fin (U+202F) comme
+// separateur de milliers — glyphe absent de la police Helvetica de base
+// utilisee par react-pdf, ce qui produisait un rendu casse ("2/000" au
+// lieu de "2 000", ou l'espace disparaissait carrement selon les cas).
+// Formatage manuel avec un espace ASCII normal, que la police supporte a
+// coup sur.
 function fmt(n: number): string {
-  return new Intl.NumberFormat('fr-FR').format(Math.round(n)) + ' GNF'
+  const entier = Math.round(n)
+  const avecEspaces = entier.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  return `${avecEspaces} GNF`
 }
 
 export default function RecuPDF({ donnees: d }: { donnees: DonneesRecu }) {
@@ -61,7 +104,7 @@ export default function RecuPDF({ donnees: d }: { donnees: DonneesRecu }) {
 
   return (
     <Document title={`Recu ${d.numero}`} author="PharmaGest">
-      <Page size={TAILLES[d.formatRecu]} style={s.page}>
+      <Page size={tailleRecu(d)} style={s.page}>
         <View style={s.centre}>
           <Text style={s.nomPharmacie}>{d.nomPharmacie}</Text>
           <Text style={s.meta}>Recu {d.numero}</Text>
