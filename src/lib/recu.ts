@@ -45,15 +45,27 @@ function echapperHtml(s: string): string {
  * Imprime le recu dans une fenetre dediee, entierement independante de la
  * page principale.
  *
- * Pourquoi : deux tentatives precedentes (CSS @media print injecte dans la
- * page via styled-jsx, avec @page size en "auto" puis en valeur fixe) ont
- * echoue en conditions reelles — Chrome retombait sur le format de papier
- * par defaut (A4) quel que soit le format choisi, probablement a cause
- * d'une interference avec le reste du CSS/JS de la page (feuilles de style
- * Tailwind, autres regles @media, styled-jsx qui n'injecte pas toujours a
- * temps). Une fenetre dediee avec un document HTML minimal et une seule
- * regle @page, sans aucune autre feuille de style en concurrence, est la
- * technique standard pour ce genre de probleme et donne un resultat fiable.
+ * Historique des tentatives precedentes, pour ne pas relancer les memes
+ * erreurs :
+ * 1) CSS @media print injecte dans la page via styled-jsx — echec, Chrome
+ *    retombait sur A4 quel que soit le format choisi.
+ * 2) Fenetre dediee + @page { size: 80mm 1000mm } — pire : quand la
+ *    destination d'impression (Fichier PDF, imprimante virtuelle) ne
+ *    supporte pas cette taille personnalisee, elle retombe sur A4 mais
+ *    essaie quand meme de faire tenir la hauteur de page declaree (1000mm)
+ *    sur une seule feuille A4 (297mm) — resultat : tout le contenu est
+ *    reduit a une echelle minuscule, illisible.
+ *
+ * Conclusion : forcer une taille de papier personnalisee depuis le CSS
+ * n'est pas fiable ici (ca depend de si la destination choisie dans le
+ * dialogue d'impression du navigateur supporte des formats personnalises).
+ * On ne force donc plus AUCUNE taille de page — seulement les marges — et
+ * on laisse le contenu s'afficher a sa largeur naturelle (etroite pour le
+ * thermique). Sur une imprimante thermique physique selectionnee comme
+ * destination, le pilote Windows definit lui-meme le format 58/80mm et le
+ * rendu sera correct. Sur A4/PDF, le reçu apparait comme une colonne
+ * etroite en haut de la page — lisible, pas de mise a l'echelle foireuse,
+ * juste pas plein cadre (attendu, puisque le format cible est different).
  *
  * Leve une erreur si la fenetre est bloquee par le navigateur (pop-up
  * bloque) — a la charge de l'appelant d'afficher un Toast, pas de alert()
@@ -61,7 +73,6 @@ function echapperHtml(s: string): string {
  */
 export function imprimerRecu(d: DonneesRecu): void {
   const largeur = d.formatRecu === 'A4' ? '100%' : d.formatRecu === 'THERMIQUE_58' ? '48mm' : '72mm'
-  const pageSize = d.formatRecu === 'A4' ? 'A4' : `${d.formatRecu === 'THERMIQUE_58' ? '58mm' : '80mm'} 1000mm`
   const fontSize = d.formatRecu === 'A4' ? '14px' : d.formatRecu === 'THERMIQUE_58' ? '10px' : '11px'
   const padding = d.formatRecu === 'A4' ? '24px' : '8px'
 
@@ -99,7 +110,7 @@ export function imprimerRecu(d: DonneesRecu): void {
 <meta charset="utf-8" />
 <title>Recu ${echapperHtml(d.numero)}</title>
 <style>
-  @page { size: ${pageSize}; margin: 0; }
+  @page { margin: 0; }
   * { box-sizing: border-box; }
   body {
     font-family: Arial, Helvetica, sans-serif;
