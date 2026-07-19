@@ -2,15 +2,52 @@
 
 import { useEffect, useState } from 'react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
+import Modal from '@/components/ui/Modal'
 
 interface Commande {
   id: string
   statut: string
   montantTotal: number
   createdAt: string
+  dateLivraisonPrevue: string | null
+  dateReception: string | null
   fournisseur: { nom: string }
-  lignes: { id: string; quantite: number; prixUnitaire: number; medicamentId: string }[]
+  lignes: {
+    id: string
+    quantite: number
+    quantiteRecue: number | null
+    prixUnitaire: number
+    medicamentId: string
+    medicament: { nom: string } | null
+  }[]
 }
+
+interface LigneReception {
+  ligneId: string
+  nom: string
+  quantiteCommandee: number
+  quantiteRecue: string
+  datePeremption: string
+}
+
+// Suggestion de date de livraison prevue a la creation : +7 jours,
+// editable/effaçable par l'admin. Si effacee, on envoie null — pas de
+// date fabriquee silencieusement (voir le bug corrige a la reception).
+function suggestionDateLivraison(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 7)
+  return d.toISOString().slice(0, 10)
+}
+
+function joursDeRetard(dateLivraisonPrevue: string | null, dateReference: Date): number {
+  if (!dateLivraisonPrevue) return 0
+  const prevue = new Date(dateLivraisonPrevue)
+  const diffMs = dateReference.getTime() - prevue.getTime()
+  return Math.floor(diffMs / (24 * 60 * 60 * 1000))
+}
+
+// Tolerance de 2 jours avant de considerer une livraison en retard
+const TOLERANCE_RETARD_JOURS = 2
 
 interface Fournisseur {
   id: string
@@ -47,8 +84,15 @@ export default function CommandesPage() {
   const [lignes,        setLignes]        = useState<LigneForm[]>([
     { medicamentId: '', quantite: '1', prixUnitaire: '' },
   ])
+  const [dateLivraisonPrevue, setDateLivraisonPrevue] = useState<string>(suggestionDateLivraison())
   const [saving,        setSaving]        = useState(false)
   const [erreur,        setErreur]        = useState<string | null>(null)
+
+  // ── Modale de reception reelle ──
+  const [commandeAReceptionner, setCommandeAReceptionner] = useState<Commande | null>(null)
+  const [lignesReception,       setLignesReception]       = useState<LigneReception[]>([])
+  const [erreurReception,       setErreurReception]       = useState<string | null>(null)
+  const [savingReception,       setSavingReception]       = useState(false)
 
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestions,     setSuggestions]     = useState<Suggestion[]>([])
@@ -136,6 +180,7 @@ export default function CommandesPage() {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
         fournisseurId,
+        dateLivraisonPrevue: dateLivraisonPrevue || null,
         lignes: lignesValides.map((l) => ({
           medicamentId: l.medicamentId,
           quantite:     parseInt(l.quantite),
@@ -149,6 +194,7 @@ export default function CommandesPage() {
       setShowForm(false)
       setFournisseurId('')
       setLignes([{ medicamentId: '', quantite: '1', prixUnitaire: '' }])
+      setDateLivraisonPrevue(suggestionDateLivraison())
     } else {
       setErreur(json.error || 'Erreur lors de la création')
     }
@@ -166,6 +212,77 @@ export default function CommandesPage() {
     }
   }
 
+  const ouvrirReception = (cmd: Commande) => {
+    setErreurReception(null)
+    setCommandeAReceptionner(cmd)
+    setLignesReception(
+      cmd.lignes.map((l) => ({
+        ligneId: l.id,
+        nom: l.medicament?.nom || 'Médicament',
+        quantiteCommandee: l.quantite,
+        // Pre-rempli avec la quantite commandee par confort, mais reste
+        // modifiable — rien n'est enregistre tant que l'admin ne confirme
+        // pas explicitement chaque ligne.
+        quantiteRecue: String(l.quantite),
+        datePeremption: '',
+      }))
+    )
+  }
+
+  const fermerReception = () => {
+    if (savingReception) return
+    setCommandeAReceptionner(null)
+    setLignesReception([])
+    setErreurReception(null)
+  }
+
+  const confirmerReception = async () => {
+    if (!commandeAReceptionner) return
+    setErreurReception(null)
+
+    for (const l of lignesReception) {
+      if (l.quantiteRecue === '' || parseInt(l.quantiteRecue) < 0) {
+        setErreurReception(`Quantité reçue manquante ou invalide pour ${l.nom}`)
+        return
+      }
+      if (parseInt(l.quantiteRecue) > 0 && !l.datePeremption) {
+        setErreurReception(`Date de péremption manquante pour ${l.nom}`)
+        return
+      }
+    }
+
+    setSavingReception(true)
+    const res = await fetch(`/api/commandes/${commandeAReceptionner.id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        statut: 'RECUE',
+        lignes: lignesReception.map((l) => ({
+          ligneId: l.ligneId,
+          quantiteRecue: parseInt(l.quantiteRecue),
+          datePeremption: l.datePeremption,
+        })),
+      }),
+    })
+    const json = await res.json()
+    if (res.ok) {
+      setCommandes(commandes.map((c) =>
+        c.id === commandeAReceptionner.id ? { ...c, statut: 'RECUE' } : c
+      ))
+      if (json.data?.ecarts?.length > 0) {
+        setErreurReception(
+          `Commande réceptionnée avec ${json.data.ecarts.length} écart(s) de livraison — voir le journal d'audit.`
+        )
+        setTimeout(() => fermerReception(), 2500)
+      } else {
+        fermerReception()
+      }
+    } else {
+      setErreurReception(json.error || 'Erreur lors de la réception')
+    }
+    setSavingReception(false)
+  }
+
   const statutCouleur = (statut: string) => {
     switch (statut) {
       case 'BROUILLON': return 'bg-gray-100 text-gray-700'
@@ -174,6 +291,38 @@ export default function CommandesPage() {
       case 'ANNULEE':   return 'bg-red-100 text-red-700'
       default:          return 'bg-gray-100 text-gray-700'
     }
+  }
+
+  const badgeLivraison = (cmd: Commande) => {
+    if (!cmd.dateLivraisonPrevue) {
+      return <span className="text-gray-300 text-xs">—</span>
+    }
+    if (cmd.statut === 'RECUE' && cmd.dateReception) {
+      const retard = joursDeRetard(cmd.dateLivraisonPrevue, new Date(cmd.dateReception))
+      if (retard > TOLERANCE_RETARD_JOURS) {
+        return (
+          <span className="px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs">
+            Reçue en retard ({retard}j)
+          </span>
+        )
+      }
+      return <span className="px-2 py-1 bg-green-100 text-green-600 rounded-full text-xs">Reçue à temps</span>
+    }
+    if (cmd.statut === 'ENVOYEE') {
+      const retard = joursDeRetard(cmd.dateLivraisonPrevue, new Date())
+      if (retard > TOLERANCE_RETARD_JOURS) {
+        return (
+          <span className="px-2 py-1 bg-orange-100 text-orange-600 rounded-full text-xs">
+            En retard ({retard}j)
+          </span>
+        )
+      }
+    }
+    return (
+      <span className="text-gray-500 text-xs">
+        {new Date(cmd.dateLivraisonPrevue).toLocaleDateString('fr-FR')}
+      </span>
+    )
   }
 
   const couleurStock = (actuel: number) =>
@@ -297,6 +446,22 @@ export default function CommandesPage() {
             </select>
           </div>
 
+          {/* Date de livraison prevue */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date de livraison prévue
+            </label>
+            <input
+              type="date"
+              value={dateLivraisonPrevue}
+              onChange={(e) => setDateLivraisonPrevue(e.target.value)}
+              className="w-full max-w-sm px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Suggestion à titre indicatif (+7 jours) — modifiable, ou effaçable si inconnue.
+            </p>
+          </div>
+
           {/* Lignes de commande */}
           <div className="mb-4">
             <div className="flex justify-between items-center mb-2">
@@ -411,6 +576,7 @@ export default function CommandesPage() {
                 <th className="text-left px-6 py-3 text-gray-600">Fournisseur</th>
                 <th className="text-left px-6 py-3 text-gray-600">Articles</th>
                 <th className="text-right px-6 py-3 text-gray-600">Montant</th>
+                <th className="text-center px-6 py-3 text-gray-600">Livraison</th>
                 <th className="text-center px-6 py-3 text-gray-600">Statut</th>
                 <th className="text-center px-6 py-3 text-gray-600">Actions</th>
               </tr>
@@ -422,6 +588,7 @@ export default function CommandesPage() {
                   <td className="px-6 py-4 font-medium">{cmd.fournisseur.nom}</td>
                   <td className="px-6 py-4 text-gray-500 text-xs">{cmd.lignes.length} ligne{cmd.lignes.length > 1 ? 's' : ''}</td>
                   <td className="px-6 py-4 text-right">{formatMontant(cmd.montantTotal)}</td>
+                  <td className="px-6 py-4 text-center">{badgeLivraison(cmd)}</td>
                   <td className="px-6 py-4 text-center">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${statutCouleur(cmd.statut)}`}>
                       {cmd.statut}
@@ -436,7 +603,7 @@ export default function CommandesPage() {
                         </button>
                       )}
                       {cmd.statut === 'ENVOYEE' && (
-                        <button onClick={() => changerStatut(cmd.id, 'RECUE')}
+                        <button onClick={() => ouvrirReception(cmd)}
                           className="text-green-600 hover:underline text-xs">
                           Réceptionner
                         </button>
@@ -455,6 +622,74 @@ export default function CommandesPage() {
           </table>
         )}
       </div>
+
+      {/* Modale de reception reelle : quantite et date de peremption
+          saisies ligne par ligne, plus aucune valeur inventee. */}
+      <Modal
+        open={!!commandeAReceptionner}
+        onClose={fermerReception}
+        onConfirm={confirmerReception}
+        title={`Réceptionner la commande — ${commandeAReceptionner?.fournisseur.nom || ''}`}
+        confirmLabel="Confirmer la réception"
+        loading={savingReception}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Indiquez la quantité réellement livrée et la date de péremption pour chaque article.
+            Si un article n'a pas été livré du tout, laissez la quantité à 0.
+          </p>
+
+          {lignesReception.map((l, index) => (
+            <div key={l.ligneId} className="border border-gray-200 rounded-lg p-3">
+              <p className="text-sm font-medium text-gray-800 mb-2">
+                {l.nom} <span className="text-gray-400 font-normal">(commandé : {l.quantiteCommandee})</span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Quantité reçue</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={l.quantiteRecue}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setLignesReception((prev) =>
+                        prev.map((p, i) => i === index ? { ...p, quantiteRecue: val } : p)
+                      )
+                    }}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Date de péremption</label>
+                  <input
+                    type="date"
+                    value={l.datePeremption}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setLignesReception((prev) =>
+                        prev.map((p, i) => i === index ? { ...p, datePeremption: val } : p)
+                      )
+                    }}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+              </div>
+              {parseInt(l.quantiteRecue || '0') < l.quantiteCommandee && (
+                <p className="text-xs text-orange-500 mt-1">
+                  ⚠ Écart : {l.quantiteCommandee - (parseInt(l.quantiteRecue) || 0)} unité(s) manquante(s)
+                </p>
+              )}
+            </div>
+          ))}
+
+          {erreurReception && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {erreurReception}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }
