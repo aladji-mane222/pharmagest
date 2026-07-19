@@ -654,3 +654,14 @@ Ajouter Client.numeroClient et Fournisseur.numeroFournisseur (séquentiel par ph
 
 # Tâche à part — Édition en ligne dans la prévisualisation d'import (proposé le 12/07/2026)
 Permettre de corriger une cellule directement dans le tableau de prévisualisation (nom, prix, etc.) sans repasser par le fichier source ou la grille manuelle — utile pour corriger un grand nombre de lignes en erreur d'un coup lors d'un import volumineux (ex: onboarding d'une pharmacie avec un catalogue existant mal formaté).
+
+# Tâche à part — Tableau de bord de surveillance des caissiers (proposé le 19/07/2026)
+Constat actuel : `/caisse` affiche un historique des 5 dernières sessions de caisse toutes pharmacies confondues (tous caissiers mélangés), avec la durée de chaque session et un repère visuel si elle dépasse la durée max fixée par l'admin (`Pharmacie.dureeMaxSessionCaisseH`, ajouté Phase 2). C'est suffisant pour un coup d'œil rapide, mais insuffisant pour un admin qui veut vraiment suivre l'activité de chaque caissier dans le temps (ex: qui ouvre des sessions anormalement longues, qui dépasse la limite régulièrement, comparer les caissiers entre eux sur une période).
+
+À construire, réservé aux rôles ADMIN/SUPER_ADMIN :
+- Une vue dédiée (nouvelle page, ex: `/caisse/historique` ou section dans `/personnel`) listant l'historique complet des sessions, pas seulement les 5 dernières
+- Filtrable par caissier et par période
+- Indicateurs par caissier : nombre de sessions, durée moyenne, nombre de dépassements de la durée max, écarts de caisse moyens/cumulés
+- Réutilise `formaterDuree` et la logique de dépassement déjà écrites dans `caisse/page.tsx` (Phase 2) plutôt que de les dupliquer — à extraire dans un utilitaire partagé si cette page est construite
+
+À rattacher à la Phase 3 (Commandes & Stock) ou à la Phase 5 (Cohérence & guidage), selon ce qui est priorisé au moment de s'y attaquer — pas urgent, mais à ne pas perdre de vue.
