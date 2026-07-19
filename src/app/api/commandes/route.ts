@@ -30,10 +30,23 @@ export async function POST(request: Request) {
   if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
 
   const body = await request.json()
-  const { fournisseurId, lignes } = body
+  const { fournisseurId, lignes, dateLivraisonPrevue } = body
 
   if (!fournisseurId || !lignes || lignes.length === 0) {
     return apiError('Fournisseur et lignes requis', 400)
+  }
+
+  // dateLivraisonPrevue est optionnelle : le formulaire propose une
+  // suggestion (+7j) mais l'admin peut l'effacer. Si absente, on ne
+  // fabrique jamais de date a sa place (voir bug corrige en Phase 3 —
+  // la reception inventait deja une date, on ne reproduit pas le meme
+  // probleme ici). Une commande sans date prevue est simplement exclue
+  // du calcul de retard.
+  let dateLivraisonPrevueParsed: Date | null = null
+  if (dateLivraisonPrevue) {
+    const d = new Date(dateLivraisonPrevue)
+    if (isNaN(d.getTime())) return apiError('Date de livraison prevue invalide', 400)
+    dateLivraisonPrevueParsed = d
   }
 
   const pharmacieId = session.user.pharmacieId
@@ -70,6 +83,7 @@ export async function POST(request: Request) {
         pharmacieId,
         fournisseurId,
         montantTotal,
+        dateLivraisonPrevue: dateLivraisonPrevueParsed,
         lignes: {
           create: lignes.map((l: { medicamentId: string; quantite: number; prixUnitaire: number }) => ({
             medicamentId: l.medicamentId, // ← corrigé : était absent
