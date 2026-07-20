@@ -1,3 +1,4 @@
+
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -32,7 +33,10 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   const commande = await prisma.commandeFournisseur.findFirst({
     where: { id: params.id, pharmacieId },
-    include: { lignes: true },
+    include: {
+      fournisseur: { select: { nom: true } },
+      lignes: { include: { medicament: { select: { nom: true } } } },
+    },
   })
   if (!commande) return apiError('Commande non trouvee', 404)
 
@@ -78,7 +82,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       }
     }
 
-    const ecarts: { ligneId: string; medicamentId: string | null; commande: number; recue: number }[] = []
+    const ecarts: { ligneId: string; medicamentId: string | null; medicamentNom: string; commande: number; recue: number }[] = []
 
     await prisma.$transaction(async (tx) => {
       for (const lr of lignesRecues) {
@@ -95,6 +99,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
           ecarts.push({
             ligneId: ligne.id,
             medicamentId: ligne.medicamentId,
+            medicamentNom: ligne.medicament?.nom || 'Médicament',
             commande: ligne.quantite,
             recue: totalRecu,
           })
@@ -142,7 +147,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     await createAuditLog({
       action: 'COMMANDE_RECEPTIONNEE',
-      details: { commandeId: params.id, nbLignes: commande.lignes.length },
+      details: {
+        numeroCommande: commande.numeroCommande,
+        fournisseurNom: commande.fournisseur.nom,
+        nbLignes: commande.lignes.length,
+      },
       userId,
       pharmacieId,
     })
@@ -152,7 +161,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     if (ecarts.length > 0) {
       await createAuditLog({
         action: 'COMMANDE_ECART_LIVRAISON',
-        details: { commandeId: params.id, ecarts },
+        details: {
+          numeroCommande: commande.numeroCommande,
+          fournisseurNom: commande.fournisseur.nom,
+          ecarts,
+        },
         userId,
         pharmacieId,
       })
@@ -169,7 +182,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   await createAuditLog({
     action: 'COMMANDE_STATUT_CHANGE',
-    details: { commandeId: params.id, statut },
+    details: {
+      numeroCommande: commande.numeroCommande,
+      fournisseurNom: commande.fournisseur.nom,
+      statut,
+    },
     userId,
     pharmacieId,
   })

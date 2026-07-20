@@ -86,6 +86,67 @@ const DESCRIPTIONS_ACTIONS: Record<string, string> = {
   BACKUP_ECHEC:           'La sauvegarde automatique B2 a échoué',
 }
 
+// Traduction des noms de champs bruts stockes dans `details` vers un
+// libelle comprehensible sans avoir a deviner leur sens technique.
+const LABELS_CHAMPS: Record<string, string> = {
+  numeroCommande:    'Commande',
+  fournisseurNom:    'Fournisseur',
+  medicamentNom:     'Médicament',
+  clientNom:         'Client',
+  nom:               'Nom',
+  libelle:           'Libellé',
+  montantTotal:      'Montant total',
+  montant:           'Montant',
+  montantOuverture:  "Montant d'ouverture",
+  montantCloture:    'Montant de clôture',
+  totalVentes:       'Total des ventes',
+  nbLignes:          'Nombre de lignes',
+  lignes:            'Nombre de lignes',
+  quantite:          'Quantité',
+  commande:          'Quantité commandée',
+  recue:             'Quantité reçue',
+  statut:            'Nouveau statut',
+  modePaiement:      'Mode de paiement',
+  crees:             'Créés',
+  misAJour:          'Mis à jour',
+  ignores:           'Ignorés',
+  erreurs:           'Erreurs',
+  total:             'Total de lignes traitées',
+  fichier:           'Fichier',
+  taille:            'Taille',
+  erreur:            'Erreur',
+  role:              'Rôle',
+  changements:       'Modifications apportées',
+}
+
+// Traductions de valeurs pour certains champs precis (le champ "statut"
+// contient un code technique comme ENVOYEE/RECUE, pas un texte lisible)
+const LABELS_STATUTS: Record<string, string> = {
+  BROUILLON: 'Brouillon',
+  ENVOYEE:   'Envoyée',
+  RECUE:     'Reçue',
+  ANNULEE:   'Annulée',
+}
+
+// Une cle se terminant par "Id" est une reference technique interne
+// (cuid) — jamais parlante pour un utilisateur non-developpeur. On la
+// masque de la vue lisible ; elle reste consultable dans le detail
+// technique (JSON) pour le debug.
+function estCleTechnique(cle: string): boolean {
+  return /Id$/.test(cle) || cle === 'ligneId'
+}
+
+function formaterValeurChamp(cle: string, valeur: unknown): string {
+  if (valeur === null || valeur === undefined) return '—'
+  if (typeof valeur === 'boolean') return valeur ? 'Oui' : 'Non'
+  if (cle === 'statut' && typeof valeur === 'string') return LABELS_STATUTS[valeur] ?? valeur
+  if (/montant/i.test(cle) && typeof valeur === 'number') {
+    return `${valeur.toLocaleString('fr-FR')} GNF`
+  }
+  if (typeof valeur === 'object') return JSON.stringify(valeur)
+  return String(valeur)
+}
+
 export default function AuditPage() {
   const [logs,      setLogs]      = useState<AuditLog[]>([])
   const [total,     setTotal]     = useState(0)
@@ -94,8 +155,19 @@ export default function AuditPage() {
   const [dateDebut, setDateDebut] = useState('')
   const [dateFin,   setDateFin]   = useState('')
   const [selected,  setSelected]  = useState<AuditLog | null>(null)
+  const [voirJSON,  setVoirJSON]  = useState(false)
   const [page,      setPage]      = useState(1)
   const LIMITE_PAR_PAGE = 20
+
+  const ouvrirDetail = (log: AuditLog) => {
+    setVoirJSON(false)
+    setSelected(log)
+  }
+
+  // Liste des actions triee par libelle, pour le menu deroulant du filtre
+  const actionsTriees = Object.entries(LABELS_ACTIONS).sort((a, b) =>
+    a[1].localeCompare(b[1], 'fr')
+  )
 
   // Revenir a la page 1 des qu'un filtre change — sinon on peut se
   // retrouver sur une page 3 qui n'existe plus pour le nouveau filtre
@@ -144,13 +216,16 @@ export default function AuditPage() {
       <div className="bg-white rounded-xl shadow p-4 mb-6 flex flex-wrap items-end gap-4">
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Action</label>
-          <input
-            type="text"
-            placeholder="Ex : VENTE, CAISSE..."
+          <select
             value={action}
             onChange={(e) => setAction(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-52"
-          />
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-64"
+          >
+            <option value="">Toutes les actions</option>
+            {actionsTriees.map(([code, label]) => (
+              <option key={code} value={code}>{label}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Du</label>
@@ -182,31 +257,92 @@ export default function AuditPage() {
 
       {/* Modal détail */}
       {selected && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-8 max-w-md w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold">Détail</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] flex flex-col">
+            <div className="flex justify-between items-center p-6 pb-2 shrink-0">
+              <h2 className="text-lg font-bold">{LABELS_ACTIONS[selected.action] ?? selected.action}</h2>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             </div>
-            <p className="text-sm text-gray-500 mb-1">
-              Action : <span className="font-medium text-gray-800">{LABELS_ACTIONS[selected.action] ?? selected.action}</span>
-              {LABELS_ACTIONS[selected.action] && (
-                <span className="ml-2 text-xs text-gray-400 font-mono">{selected.action}</span>
+
+            <div className="px-6 pb-4 overflow-y-auto flex-1 min-h-0">
+              <p className="text-sm text-gray-500 mb-1">Par : <span className="font-medium text-gray-800">{selected.user?.nom || 'Système'}</span></p>
+              <p className="text-sm text-gray-500 mb-4">Date : <span className="font-medium text-gray-800">{formatDateTime(selected.createdAt)}</span></p>
+              {DESCRIPTIONS_ACTIONS[selected.action] && (
+                <p className="text-sm text-gray-600 mb-4">{DESCRIPTIONS_ACTIONS[selected.action]}</p>
               )}
-            </p>
-            <p className="text-sm text-gray-500 mb-1">Par : <span className="font-medium">{selected.user?.nom || 'Système'}</span></p>
-            <p className="text-sm text-gray-500 mb-4">Date : <span className="font-medium">{formatDateTime(selected.createdAt)}</span></p>
-            {DESCRIPTIONS_ACTIONS[selected.action] && (
-              <p className="text-sm text-gray-500 mb-4 italic">{DESCRIPTIONS_ACTIONS[selected.action]}</p>
-            )}
-            {selected.details && (
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-xs font-medium text-gray-500 mb-2">Données :</p>
-                <pre className="text-xs text-gray-700 overflow-auto max-h-48">
-                  {JSON.stringify(selected.details, null, 2)}
-                </pre>
-              </div>
-            )}
+
+              {/* Cas particulier : ecarts de livraison — tableau dedie plutot
+                  qu'un JSON brut avec des identifiants illisibles */}
+              {selected.action === 'COMMANDE_ECART_LIVRAISON' &&
+              Array.isArray((selected.details as any)?.ecarts) ? (
+                <div className="space-y-3">
+                  {(selected.details as any).numeroCommande && (
+                    <p className="text-sm text-gray-700">
+                      Commande <span className="font-medium">{(selected.details as any).numeroCommande}</span>
+                      {(selected.details as any).fournisseurNom && (
+                        <> — {(selected.details as any).fournisseurNom}</>
+                      )}
+                    </p>
+                  )}
+                  <table className="w-full text-sm border border-gray-100 rounded-lg overflow-hidden">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-3 py-2 text-gray-600">Médicament</th>
+                        <th className="text-right px-3 py-2 text-gray-600">Commandé</th>
+                        <th className="text-right px-3 py-2 text-gray-600">Reçu</th>
+                        <th className="text-right px-3 py-2 text-gray-600">Écart</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(selected.details as any).ecarts.map((e: any, i: number) => {
+                        const diff = e.recue - e.commande
+                        return (
+                          <tr key={i} className="border-t border-gray-100">
+                            <td className="px-3 py-2">{e.medicamentNom || 'Médicament'}</td>
+                            <td className="px-3 py-2 text-right">{e.commande}</td>
+                            <td className="px-3 py-2 text-right">{e.recue}</td>
+                            <td className={`px-3 py-2 text-right font-medium ${diff < 0 ? 'text-orange-500' : 'text-blue-500'}`}>
+                              {diff > 0 ? `+${diff}` : diff}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                selected.details && (
+                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg px-3">
+                    {Object.entries(selected.details)
+                      .filter(([cle]) => !estCleTechnique(cle))
+                      .map(([cle, valeur]) => (
+                        <div key={cle} className="flex justify-between gap-4 py-2 text-sm">
+                          <span className="text-gray-500">{LABELS_CHAMPS[cle] ?? cle}</span>
+                          <span className="font-medium text-gray-800 text-right">
+                            {formaterValeurChamp(cle, valeur)}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )
+              )}
+
+              {selected.details && (
+                <div className="mt-4">
+                  <button
+                    onClick={() => setVoirJSON((v) => !v)}
+                    className="text-xs text-gray-400 hover:text-gray-600 underline"
+                  >
+                    {voirJSON ? 'Masquer' : 'Afficher'} les données techniques
+                  </button>
+                  {voirJSON && (
+                    <pre className="mt-2 bg-gray-50 rounded-lg p-3 text-xs text-gray-600 overflow-auto max-h-40">
+                      {JSON.stringify(selected.details, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -242,7 +378,7 @@ export default function AuditPage() {
                   <td className="px-6 py-4 text-gray-600">{log.user?.nom || 'Système'}</td>
                   <td className="px-6 py-4">
                     <button
-                      onClick={() => setSelected(log)}
+                      onClick={() => ouvrirDetail(log)}
                       className="text-green-600 hover:underline text-sm"
                     >
                       Détail
