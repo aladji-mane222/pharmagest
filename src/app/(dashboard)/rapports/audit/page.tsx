@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -28,8 +27,9 @@ const LABELS_ACTIONS: Record<string, string> = {
   MEDICAMENT_MODIFIE:      'Médicament modifié',
   MEDICAMENT_ARCHIVE:      'Médicament archivé',
   COMMANDE_CREEE:          'Commande fournisseur créée',
+  COMMANDE_ENVOYEE:        'Commande envoyée au fournisseur',
+  COMMANDE_ANNULEE:        'Commande annulée',
   COMMANDE_RECEPTIONNEE:   'Commande reçue',
-  COMMANDE_STATUT_CHANGE:  'Statut de commande modifié',
   COMMANDE_ECART_LIVRAISON: 'Écart de livraison constaté',
   INVENTAIRE_LANCE:        'Inventaire lancé',
   INVENTAIRE_VALIDE:       'Inventaire validé',
@@ -49,6 +49,37 @@ const LABELS_ACTIONS: Record<string, string> = {
   BACKUP_ECHEC:            'Échec de sauvegarde',
 }
 
+// Regroupement du menu par prefixe du code d'action (CAISSE_, VENTE_,
+// CLIENT_...) — deja la convention de nommage utilisee partout dans le
+// code, donc PAS une liste a maintenir a la main : toute nouvelle action
+// se classe automatiquement au bon endroit d'apres son propre nom.
+// Fiable par construction, contrairement a une liste de categories
+// figee ou l'oubli d'un item le fait atterrir dans un fourre-tout
+// "Autres" — ce cas ne peut plus arriver ici.
+const LABELS_PREFIXES: Record<string, string> = {
+  VENTE:        'Ventes',
+  CAISSE:       'Caisse',
+  CREDIT:       'Crédits',
+  CLIENT:       'Clients',
+  DEPENSE:      'Dépenses',
+  MEDICAMENT:   'Catalogue médicaments',
+  COMMANDE:     'Commandes fournisseurs',
+  INVENTAIRE:   'Inventaire',
+  FOURNISSEUR:  'Fournisseurs',
+  LOT:          'Lots de stock',
+  USER:         'Personnel',
+  IMPORT:       'Imports en masse',
+  BACKUP:       'Système',
+}
+
+// Ordre d'affichage prefere pour les groupes ; tout prefixe absent de
+// cette liste (nouvelle action avec un prefixe encore jamais vu) est
+// simplement ajoute a la fin, trie alphabetiquement — jamais perdu.
+const ORDRE_PREFIXES = [
+  'VENTE', 'CAISSE', 'CREDIT', 'COMMANDE', 'FOURNISSEUR', 'INVENTAIRE',
+  'LOT', 'MEDICAMENT', 'CLIENT', 'DEPENSE', 'USER', 'IMPORT', 'BACKUP',
+]
+
 const DESCRIPTIONS_ACTIONS: Record<string, string> = {
   CAISSE_OUVERTE:         'Un caissier a ouvert sa session de caisse',
   CAISSE_FERMEE:          'Une session de caisse a été clôturée',
@@ -65,9 +96,10 @@ const DESCRIPTIONS_ACTIONS: Record<string, string> = {
   MEDICAMENT_MODIFIE:     "Les informations d'un médicament ont été modifiées",
   MEDICAMENT_ARCHIVE:     'Un médicament a été archivé du catalogue',
   COMMANDE_CREEE:         'Une commande fournisseur a été créée',
+  COMMANDE_ENVOYEE:       'Une commande a été envoyée au fournisseur, en attente de livraison',
+  COMMANDE_ANNULEE:       'Une commande a été annulée avant réception',
   COMMANDE_RECEPTIONNEE:  'Une commande a été marquée reçue et le stock mis à jour',
-  COMMANDE_STATUT_CHANGE: "Le statut d'une commande a été modifié (envoyée ou annulée)",
-  COMMANDE_ECART_LIVRAISON: "Une ou plusieurs lignes d'une commande ont été livrées en quantité différente de celle commandée (manque ou surplus)",
+  COMMANDE_ECART_LIVRAISON: "Une ou plusieurs lignes d'une commande ont été livrées en quantité différente de celle commandée",
   INVENTAIRE_LANCE:       'Un inventaire a été lancé',
   INVENTAIRE_VALIDE:      'Un inventaire a été validé et le stock ajusté en conséquence',
   INVENTAIRE_ECART:       "Un écart entre le stock théorique et compté a été constaté lors d'un inventaire",
@@ -117,6 +149,34 @@ const LABELS_CHAMPS: Record<string, string> = {
   erreur:            'Erreur',
   role:              'Rôle',
   changements:       'Modifications apportées',
+  motif:             'Motif',
+  numeroFacture:     'Facture',
+  ecart:             'Écart constaté',
+  motifEcart:        "Motif de l'écart",
+}
+
+// Resume specifique et chiffre d'un ecart de livraison — remplace la
+// phrase generique "manque ou surplus" par ce qui s'est reellement passe
+// sur CETTE reception precise (demande explicite : pas de formulation
+// vague qui pourrait s'appliquer a n'importe quel cas).
+function resumeEcartsLivraison(ecarts: { commande: number; recue: number }[]): string {
+  const manques = ecarts.filter((e) => e.recue < e.commande)
+  const surplus = ecarts.filter((e) => e.recue > e.commande)
+  const totalManque = manques.reduce((s, e) => s + (e.commande - e.recue), 0)
+  const totalSurplus = surplus.reduce((s, e) => s + (e.recue - e.commande), 0)
+
+  const parts: string[] = []
+  if (manques.length > 0) {
+    parts.push(
+      `${manques.length} ligne${manques.length > 1 ? 's' : ''} en manque (${totalManque} unité${totalManque > 1 ? 's' : ''} manquante${totalManque > 1 ? 's' : ''} au total)`
+    )
+  }
+  if (surplus.length > 0) {
+    parts.push(
+      `${surplus.length} ligne${surplus.length > 1 ? 's' : ''} en surplus (${totalSurplus} unité${totalSurplus > 1 ? 's' : ''} en trop au total)`
+    )
+  }
+  return parts.join(' et ')
 }
 
 // Traductions de valeurs pour certains champs precis (le champ "statut"
@@ -147,6 +207,36 @@ function formaterValeurChamp(cle: string, valeur: unknown): string {
   return String(valeur)
 }
 
+function ChampsDetail({ objet, profondeur = 0 }: { objet: Record<string, unknown>; profondeur?: number }) {
+  return (
+    <>
+      {Object.entries(objet)
+        .filter(([cle]) => !estCleTechnique(cle))
+        .map(([cle, valeur]) => {
+          const estObjetImbrique =
+            valeur !== null && typeof valeur === 'object' && !Array.isArray(valeur)
+          return (
+            <div key={cle} className={profondeur > 0 ? 'pl-4 border-l-2 border-gray-100' : ''}>
+              {estObjetImbrique ? (
+                <div className="py-2">
+                  <p className="text-sm text-gray-500 mb-1">{LABELS_CHAMPS[cle] ?? cle}</p>
+                  <ChampsDetail objet={valeur as Record<string, unknown>} profondeur={profondeur + 1} />
+                </div>
+              ) : (
+                <div className="flex justify-between gap-4 py-2 text-sm">
+                  <span className="text-gray-500">{LABELS_CHAMPS[cle] ?? cle}</span>
+                  <span className="font-medium text-gray-800 text-right">
+                    {formaterValeurChamp(cle, valeur)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )
+        })}
+    </>
+  )
+}
+
 export default function AuditPage() {
   const [logs,      setLogs]      = useState<AuditLog[]>([])
   const [total,     setTotal]     = useState(0)
@@ -164,10 +254,27 @@ export default function AuditPage() {
     setSelected(log)
   }
 
-  // Liste des actions triee par libelle, pour le menu deroulant du filtre
-  const actionsTriees = Object.entries(LABELS_ACTIONS).sort((a, b) =>
-    a[1].localeCompare(b[1], 'fr')
-  )
+  // Regroupement automatique : chaque code d'action est classe d'apres
+  // son propre prefixe (avant le premier "_"). Aucune liste a jour a
+  // maintenir a la main, aucun risque d'oubli.
+  const groupesParPrefixe = new Map<string, string[]>()
+  for (const code of Object.keys(LABELS_ACTIONS)) {
+    const prefixe = code.split('_')[0]
+    if (!groupesParPrefixe.has(prefixe)) groupesParPrefixe.set(prefixe, [])
+    groupesParPrefixe.get(prefixe)!.push(code)
+  }
+  const prefixesTries = [
+    ...ORDRE_PREFIXES.filter((p) => groupesParPrefixe.has(p)),
+    ...[...groupesParPrefixe.keys()].filter((p) => !ORDRE_PREFIXES.includes(p)).sort(),
+  ]
+  const groupesSelect = prefixesTries.map((prefixe) => ({
+    label: LABELS_PREFIXES[prefixe] ?? prefixe,
+    // Tri alphabetique par libelle a l'interieur du groupe, pour un
+    // parcours facile une fois le groupe ouvert
+    actions: groupesParPrefixe.get(prefixe)!.sort((a, b) =>
+      (LABELS_ACTIONS[a] ?? a).localeCompare(LABELS_ACTIONS[b] ?? b, 'fr')
+    ),
+  }))
 
   // Revenir a la page 1 des qu'un filtre change — sinon on peut se
   // retrouver sur une page 3 qui n'existe plus pour le nouveau filtre
@@ -222,8 +329,12 @@ export default function AuditPage() {
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-64"
           >
             <option value="">Toutes les actions</option>
-            {actionsTriees.map(([code, label]) => (
-              <option key={code} value={code}>{label}</option>
+            {groupesSelect.map((groupe) => (
+              <optgroup key={groupe.label} label={groupe.label}>
+                {groupe.actions.map((code) => (
+                  <option key={code} value={code}>{LABELS_ACTIONS[code] ?? code}</option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
@@ -267,8 +378,14 @@ export default function AuditPage() {
             <div className="px-6 pb-4 overflow-y-auto flex-1 min-h-0">
               <p className="text-sm text-gray-500 mb-1">Par : <span className="font-medium text-gray-800">{selected.user?.nom || 'Système'}</span></p>
               <p className="text-sm text-gray-500 mb-4">Date : <span className="font-medium text-gray-800">{formatDateTime(selected.createdAt)}</span></p>
-              {DESCRIPTIONS_ACTIONS[selected.action] && (
-                <p className="text-sm text-gray-600 mb-4">{DESCRIPTIONS_ACTIONS[selected.action]}</p>
+              {selected.action === 'COMMANDE_ECART_LIVRAISON' && Array.isArray((selected.details as any)?.ecarts) ? (
+                <p className="text-sm text-gray-700 font-medium mb-4">
+                  {resumeEcartsLivraison((selected.details as any).ecarts)}
+                </p>
+              ) : (
+                DESCRIPTIONS_ACTIONS[selected.action] && (
+                  <p className="text-sm text-gray-600 mb-4">{DESCRIPTIONS_ACTIONS[selected.action]}</p>
+                )
               )}
 
               {/* Cas particulier : ecarts de livraison — tableau dedie plutot
@@ -313,16 +430,7 @@ export default function AuditPage() {
               ) : (
                 selected.details && (
                   <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg px-3">
-                    {Object.entries(selected.details)
-                      .filter(([cle]) => !estCleTechnique(cle))
-                      .map(([cle, valeur]) => (
-                        <div key={cle} className="flex justify-between gap-4 py-2 text-sm">
-                          <span className="text-gray-500">{LABELS_CHAMPS[cle] ?? cle}</span>
-                          <span className="font-medium text-gray-800 text-right">
-                            {formaterValeurChamp(cle, valeur)}
-                          </span>
-                        </div>
-                      ))}
+                    <ChampsDetail objet={selected.details as Record<string, unknown>} />
                   </div>
                 )
               )}
