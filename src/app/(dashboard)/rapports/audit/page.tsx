@@ -66,7 +66,7 @@ const DESCRIPTIONS_ACTIONS: Record<string, string> = {
   COMMANDE_CREEE:         'Une commande fournisseur a été créée',
   COMMANDE_RECEPTIONNEE:  'Une commande a été marquée reçue et le stock mis à jour',
   COMMANDE_STATUT_CHANGE: "Le statut d'une commande a été modifié (envoyée ou annulée)",
-  COMMANDE_ECART_LIVRAISON: "Une ou plusieurs lignes d'une commande ont été livrées en quantité inférieure à celle commandée",
+  COMMANDE_ECART_LIVRAISON: "Une ou plusieurs lignes d'une commande ont été livrées en quantité différente de celle commandée (manque ou surplus)",
   INVENTAIRE_LANCE:       'Un inventaire a été lancé',
   INVENTAIRE_VALIDE:      'Un inventaire a été validé et le stock ajusté en conséquence',
   INVENTAIRE_ECART:       "Un écart entre le stock théorique et compté a été constaté lors d'un inventaire",

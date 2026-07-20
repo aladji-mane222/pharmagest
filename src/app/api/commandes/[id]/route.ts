@@ -52,7 +52,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     // differentes en une seule reception (ex: reliquat d'un ancien lot +
     // nouveau lot). Rien n'est invente cote serveur : une ligne peut tres
     // bien n'avoir recu aucun sous-lot (rien de livre pour ce medicament).
-    interface SousLot { quantite: number; datePeremption: string }
+    interface SousLot { quantite: number; datePeremption: string; numeroLot?: string | null }
     const lignesRecues: { ligneId: string; sousLots: SousLot[] }[] = body.lignes || []
 
     if (lignesRecues.length === 0) {
@@ -91,7 +91,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
           continue
         }
 
-        if (totalRecu < ligne.quantite) {
+        if (totalRecu !== ligne.quantite) {
           ecarts.push({
             ligneId: ligne.id,
             medicamentId: ligne.medicamentId,
@@ -117,6 +117,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
               quantite: sl.quantite,
               prixAchat: ligne.prixUnitaire,
               datePeremption: new Date(sl.datePeremption),
+              numeroLot: sl.numeroLot?.trim() || null,
             },
           })
 
