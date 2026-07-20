@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -705,6 +706,7 @@ export default function CommandesPage() {
         title={`Réceptionner la commande — ${commandeAReceptionner?.fournisseur.nom || ''}`}
         confirmLabel="Confirmer la réception"
         loading={savingReception}
+        size="xl"
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-500">

@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -93,6 +94,14 @@ export default function AuditPage() {
   const [dateDebut, setDateDebut] = useState('')
   const [dateFin,   setDateFin]   = useState('')
   const [selected,  setSelected]  = useState<AuditLog | null>(null)
+  const [page,      setPage]      = useState(1)
+  const LIMITE_PAR_PAGE = 20
+
+  // Revenir a la page 1 des qu'un filtre change — sinon on peut se
+  // retrouver sur une page 3 qui n'existe plus pour le nouveau filtre
+  useEffect(() => {
+    setPage(1)
+  }, [action, dateDebut, dateFin])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -101,6 +110,7 @@ export default function AuditPage() {
       if (action)    params.set('action',    action)
       if (dateDebut) params.set('dateDebut', dateDebut)
       if (dateFin)   params.set('dateFin',   dateFin)
+      params.set('page', String(page))
 
       fetch(`/api/audit?${params.toString()}`)
         .then((res) => res.json())
@@ -111,7 +121,9 @@ export default function AuditPage() {
         })
     }, 300)
     return () => clearTimeout(timer)
-  }, [action, dateDebut, dateFin])
+  }, [action, dateDebut, dateFin, page])
+
+  const totalPages = Math.max(1, Math.ceil(total / LIMITE_PAR_PAGE))
 
   const reinitialiser = () => {
     setAction('')
@@ -242,6 +254,28 @@ export default function AuditPage() {
           </table>
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm">
+          <span className="text-gray-500">Page {page} sur {totalPages}</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+            >
+              ← Précédent
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+            >
+              Suivant →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
