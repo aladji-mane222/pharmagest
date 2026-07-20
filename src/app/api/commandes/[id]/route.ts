@@ -45,11 +45,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     // ─── Reception reelle (remplace le bug ou quantite commandee et une
     // date +365j inventee etaient enregistrees automatiquement) ──────────
-    // Le front doit desormais envoyer, pour chaque ligne de la commande,
-    // la quantite reellement livree et la date de peremption reelle du
-    // lot recu. Rien n'est invente cote serveur.
-    const lignesRecues: { ligneId: string; quantiteRecue: number; datePeremption: string }[] =
-      body.lignes || []
+    // Le front envoie, pour chaque ligne de la commande, un ou plusieurs
+    // "sous-lots" recus (quantite + date de peremption). Plusieurs
+    // sous-lots par ligne permettent de couvrir le cas reel ou un
+    // fournisseur livre un meme medicament avec des dates de peremption
+    // differentes en une seule reception (ex: reliquat d'un ancien lot +
+    // nouveau lot). Rien n'est invente cote serveur : une ligne peut tres
+    // bien n'avoir recu aucun sous-lot (rien de livre pour ce medicament).
+    interface SousLot { quantite: number; datePeremption: string }
+    const lignesRecues: { ligneId: string; sousLots: SousLot[] }[] = body.lignes || []
 
     if (lignesRecues.length === 0) {
       return apiError('Aucune ligne de reception fournie', 400)
@@ -60,11 +64,17 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     for (const lr of lignesRecues) {
       const ligne = lignesParId.get(lr.ligneId)
       if (!ligne) return apiError(`Ligne ${lr.ligneId} introuvable sur cette commande`, 400)
-      if (lr.quantiteRecue === undefined || lr.quantiteRecue === null || lr.quantiteRecue < 0) {
-        return apiError('Quantite recue manquante ou invalide sur une ligne', 400)
-      }
-      if (!lr.datePeremption || isNaN(new Date(lr.datePeremption).getTime())) {
-        return apiError('Date de peremption manquante ou invalide sur une ligne', 400)
+      const sousLots = lr.sousLots || []
+      for (const sl of sousLots) {
+        if (sl.quantite === undefined || sl.quantite === null || sl.quantite < 0) {
+          return apiError('Quantite recue manquante ou invalide sur une ligne', 400)
+        }
+        // La date de peremption n'est exigee que si quelque chose est
+        // reellement recu sur ce sous-lot — un sous-lot a 0 (ou une ligne
+        // sans aucun sous-lot) n'a pas de date a fournir.
+        if (sl.quantite > 0 && (!sl.datePeremption || isNaN(new Date(sl.datePeremption).getTime()))) {
+          return apiError('Date de peremption manquante ou invalide sur une ligne recue', 400)
+        }
       }
     }
 
@@ -73,44 +83,47 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     await prisma.$transaction(async (tx) => {
       for (const lr of lignesRecues) {
         const ligne = lignesParId.get(lr.ligneId)!
+        const sousLots = (lr.sousLots || []).filter((sl) => sl.quantite > 0)
+        const totalRecu = sousLots.reduce((s, sl) => s + sl.quantite, 0)
+
         if (!ligne.medicamentId) {
           console.warn(`Ligne ${ligne.id} sans medicamentId — ignoree`)
           continue
         }
 
-        if (lr.quantiteRecue < ligne.quantite) {
+        if (totalRecu < ligne.quantite) {
           ecarts.push({
             ligneId: ligne.id,
             medicamentId: ligne.medicamentId,
             commande: ligne.quantite,
-            recue: lr.quantiteRecue,
+            recue: totalRecu,
           })
         }
 
-        // Enregistrer la quantite reellement recue sur la ligne
+        // Enregistrer la quantite totale reellement recue sur la ligne
         await tx.ligneCommande.update({
           where: { id: ligne.id },
-          data: { quantiteRecue: lr.quantiteRecue },
+          data: { quantiteRecue: totalRecu },
         })
 
-        // Ne creer un lot que si quelque chose a effectivement ete recu
-        if (lr.quantiteRecue > 0) {
+        // Un Lot distinct par sous-lot recu (une date de peremption = un lot)
+        for (const sl of sousLots) {
           await tx.lot.create({
             data: {
               medicamentId: ligne.medicamentId,
               pharmacieId,
               fournisseurId: commande.fournisseurId,
               commandeFournisseurId: commande.id,
-              quantite: lr.quantiteRecue,
+              quantite: sl.quantite,
               prixAchat: ligne.prixUnitaire,
-              datePeremption: new Date(lr.datePeremption),
+              datePeremption: new Date(sl.datePeremption),
             },
           })
 
           await tx.mouvementStock.create({
             data: {
               type: 'ENTREE',
-              quantite: lr.quantiteRecue,
+              quantite: sl.quantite,
               medicamentId: ligne.medicamentId,
               userId,
               commandeId: commande.id,

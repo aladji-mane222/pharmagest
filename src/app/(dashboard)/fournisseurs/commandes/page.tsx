@@ -22,12 +22,29 @@ interface Commande {
   }[]
 }
 
+interface SousLotForm {
+  quantite: string
+  datePeremption: string
+}
+
 interface LigneReception {
   ligneId: string
   nom: string
   quantiteCommandee: number
-  quantiteRecue: string
-  datePeremption: string
+  sousLots: SousLotForm[]
+}
+
+// Seuil de peremption proche a la reception : reprend exactement le seuil
+// deja utilise ailleurs dans l'app (/stock lotsCritiques, alertes cron) —
+// 90 jours — pour rester coherent plutot que d'inventer un autre chiffre.
+const SEUIL_PEREMPTION_PROCHE_JOURS = 90
+
+function estPeremptionProche(dateStr: string): boolean {
+  if (!dateStr) return false
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return false
+  const diffJours = (d.getTime() - Date.now()) / (24 * 60 * 60 * 1000)
+  return diffJours >= 0 && diffJours <= SEUIL_PEREMPTION_PROCHE_JOURS
 }
 
 // Suggestion de date de livraison prevue a la creation : +7 jours,
@@ -102,7 +119,14 @@ export default function CommandesPage() {
     Promise.all([
       fetch('/api/commandes').then((r)     => r.json()),
       fetch('/api/fournisseurs').then((r)  => r.json()),
-      fetch('/api/medicaments?limite=200').then((r) => r.json()),
+      // Bug corrige 19/07/2026 : le parametre etait "limite" (jamais lu par
+      // l'API qui attend "limit"), donc retombait sur la valeur par defaut
+      // de 20 medicaments — la plupart des suggestions issues du catalogue
+      // complet ne matchaient alors aucune option du menu deroulant.
+      // 2000 couvre un catalogue de pharmacie realiste ; la recherche
+      // autocompletee prevue en tache 3.4 remplacera ce chargement complet
+      // par une recherche serveur si le catalogue devient plus gros.
+      fetch('/api/medicaments?limit=2000').then((r) => r.json()),
     ]).then(([cmd, four, meds]) => {
       setCommandes(cmd.data || [])
       setFournisseurs(four.data || [])
@@ -220,11 +244,11 @@ export default function CommandesPage() {
         ligneId: l.id,
         nom: l.medicament?.nom || 'Médicament',
         quantiteCommandee: l.quantite,
-        // Pre-rempli avec la quantite commandee par confort, mais reste
-        // modifiable — rien n'est enregistre tant que l'admin ne confirme
-        // pas explicitement chaque ligne.
-        quantiteRecue: String(l.quantite),
-        datePeremption: '',
+        // Un seul sous-lot pre-rempli avec la quantite commandee par
+        // confort — modifiable, et l'admin peut en ajouter d'autres si le
+        // fournisseur a livre le meme medicament avec plusieurs dates de
+        // peremption differentes dans la meme reception.
+        sousLots: [{ quantite: String(l.quantite), datePeremption: '' }],
       }))
     )
   }
@@ -236,18 +260,63 @@ export default function CommandesPage() {
     setErreurReception(null)
   }
 
+  const ajouterSousLot = (ligneIndex: number) => {
+    setLignesReception((prev) =>
+      prev.map((l, i) =>
+        i === ligneIndex
+          ? { ...l, sousLots: [...l.sousLots, { quantite: '', datePeremption: '' }] }
+          : l
+      )
+    )
+  }
+
+  const supprimerSousLot = (ligneIndex: number, sousLotIndex: number) => {
+    setLignesReception((prev) =>
+      prev.map((l, i) =>
+        i === ligneIndex
+          ? { ...l, sousLots: l.sousLots.filter((_, si) => si !== sousLotIndex) }
+          : l
+      )
+    )
+  }
+
+  const modifierSousLot = (
+    ligneIndex: number,
+    sousLotIndex: number,
+    champ: 'quantite' | 'datePeremption',
+    valeur: string
+  ) => {
+    setLignesReception((prev) =>
+      prev.map((l, i) =>
+        i === ligneIndex
+          ? {
+              ...l,
+              sousLots: l.sousLots.map((sl, si) =>
+                si === sousLotIndex ? { ...sl, [champ]: valeur } : sl
+              ),
+            }
+          : l
+      )
+    )
+  }
+
+  const totalRecuLigne = (l: LigneReception) =>
+    l.sousLots.reduce((s, sl) => s + (parseInt(sl.quantite) || 0), 0)
+
   const confirmerReception = async () => {
     if (!commandeAReceptionner) return
     setErreurReception(null)
 
     for (const l of lignesReception) {
-      if (l.quantiteRecue === '' || parseInt(l.quantiteRecue) < 0) {
-        setErreurReception(`Quantité reçue manquante ou invalide pour ${l.nom}`)
-        return
-      }
-      if (parseInt(l.quantiteRecue) > 0 && !l.datePeremption) {
-        setErreurReception(`Date de péremption manquante pour ${l.nom}`)
-        return
+      for (const sl of l.sousLots) {
+        if (sl.quantite === '' || parseInt(sl.quantite) < 0) {
+          setErreurReception(`Quantité manquante ou invalide pour ${l.nom}`)
+          return
+        }
+        if (parseInt(sl.quantite) > 0 && !sl.datePeremption) {
+          setErreurReception(`Date de péremption manquante pour ${l.nom}`)
+          return
+        }
       }
     }
 
@@ -259,8 +328,10 @@ export default function CommandesPage() {
         statut: 'RECUE',
         lignes: lignesReception.map((l) => ({
           ligneId: l.ligneId,
-          quantiteRecue: parseInt(l.quantiteRecue),
-          datePeremption: l.datePeremption,
+          sousLots: l.sousLots.map((sl) => ({
+            quantite: parseInt(sl.quantite) || 0,
+            datePeremption: sl.datePeremption,
+          })),
         })),
       }),
     })
@@ -639,49 +710,70 @@ export default function CommandesPage() {
             Si un article n'a pas été livré du tout, laissez la quantité à 0.
           </p>
 
-          {lignesReception.map((l, index) => (
-            <div key={l.ligneId} className="border border-gray-200 rounded-lg p-3">
-              <p className="text-sm font-medium text-gray-800 mb-2">
-                {l.nom} <span className="text-gray-400 font-normal">(commandé : {l.quantiteCommandee})</span>
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Quantité reçue</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={l.quantiteRecue}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setLignesReception((prev) =>
-                        prev.map((p, i) => i === index ? { ...p, quantiteRecue: val } : p)
-                      )
-                    }}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Date de péremption</label>
-                  <input
-                    type="date"
-                    value={l.datePeremption}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setLignesReception((prev) =>
-                        prev.map((p, i) => i === index ? { ...p, datePeremption: val } : p)
-                      )
-                    }}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                </div>
-              </div>
-              {parseInt(l.quantiteRecue || '0') < l.quantiteCommandee && (
-                <p className="text-xs text-orange-500 mt-1">
-                  ⚠ Écart : {l.quantiteCommandee - (parseInt(l.quantiteRecue) || 0)} unité(s) manquante(s)
+          {lignesReception.map((l, index) => {
+            const total = totalRecuLigne(l)
+            return (
+              <div key={l.ligneId} className="border border-gray-200 rounded-lg p-3">
+                <p className="text-sm font-medium text-gray-800 mb-2">
+                  {l.nom} <span className="text-gray-400 font-normal">(commandé : {l.quantiteCommandee})</span>
                 </p>
-              )}
-            </div>
-          ))}
+
+                <div className="space-y-2">
+                  {l.sousLots.map((sl, sousIndex) => (
+                    <div key={sousIndex} className="flex gap-3 items-start">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">
+                          {sousIndex === 0 ? 'Quantité reçue' : `Quantité (lot ${sousIndex + 1})`}
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={sl.quantite}
+                          onChange={(e) => modifierSousLot(index, sousIndex, 'quantite', e.target.value)}
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">Date de péremption</label>
+                        <input
+                          type="date"
+                          value={sl.datePeremption}
+                          onChange={(e) => modifierSousLot(index, sousIndex, 'datePeremption', e.target.value)}
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        />
+                        {estPeremptionProche(sl.datePeremption) && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            ⚠ Péremption dans moins de 3 mois
+                          </p>
+                        )}
+                      </div>
+                      {l.sousLots.length > 1 && (
+                        <button
+                          onClick={() => supprimerSousLot(index, sousIndex)}
+                          className="text-red-400 hover:text-red-600 text-sm mt-5"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => ajouterSousLot(index)}
+                  className="mt-2 text-xs text-green-600 hover:text-green-800 font-medium"
+                >
+                  + Ajouter un lot avec une autre date de péremption
+                </button>
+
+                {total < l.quantiteCommandee && (
+                  <p className="text-xs text-orange-500 mt-1">
+                    ⚠ Écart : {l.quantiteCommandee - total} unité(s) manquante(s)
+                  </p>
+                )}
+              </div>
+            )
+          })}
 
           {erreurReception && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">

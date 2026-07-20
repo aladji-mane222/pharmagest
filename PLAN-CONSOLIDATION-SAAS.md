@@ -665,3 +665,11 @@ Constat actuel : `/caisse` affiche un historique des 5 dernières sessions de ca
 - Réutilise `formaterDuree` et la logique de dépassement déjà écrites dans `caisse/page.tsx` (Phase 2) plutôt que de les dupliquer — à extraire dans un utilitaire partagé si cette page est construite
 
 À rattacher à la Phase 3 (Commandes & Stock) ou à la Phase 5 (Cohérence & guidage), selon ce qui est priorisé au moment de s'y attaquer — pas urgent, mais à ne pas perdre de vue.
+
+# Tâche à part — Détail et modification d'une commande fournisseur (constat du 19/07/2026, test réel Nabé)
+`/fournisseurs/commandes` n'affiche qu'une ligne de tableau par commande (fournisseur, nombre d'articles, montant, statut) — aucune page ou modale de détail n'existe pour voir les lignes d'une commande (médicaments, quantités, prix unitaires) une fois créée, ni pour la modifier avant envoi. Une commande en BROUILLON avec une erreur de saisie (mauvaise quantité, mauvais médicament) ne peut aujourd'hui être ni consultée en détail, ni corrigée — seulement annulée et recréée entièrement.
+
+À construire (priorité à discuter — pas bloquant pour la Phase 3 en cours, mais gênant à l'usage réel) :
+- Vue détail (page ou modale) listant les lignes d'une commande avec médicament/quantité/prix/sous-total
+- Modification autorisée uniquement en statut BROUILLON (une fois ENVOYEE, la modifier changerait ce que le fournisseur a déjà reçu comme demande — cohérent avec le principe déjà appliqué ailleurs : pas de modification a posteriori d'un document transactionnel)
+- Une fois RECUE, la vue détail doit aussi afficher les sous-lots réellement reçus (quantité + date de péremption par sous-lot, cf. tâche 3.2) pour que la commande garde une trace complète de ce qui s'est passé, pas seulement de ce qui a été demandé
