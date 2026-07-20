@@ -1,9 +1,17 @@
+
 'use client'
 
 import { ReactNode, useEffect } from 'react'
 import Button from './Button'
 
 type ModalVariant = 'default' | 'danger'
+type ModalSize = 'md' | 'lg' | 'xl'
+
+const TAILLES: Record<ModalSize, string> = {
+  md: 'max-w-md',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+}
 
 interface ModalProps {
   open: boolean
@@ -19,6 +27,10 @@ interface ModalProps {
   cancelLabel?: string
   variant?: ModalVariant
   loading?: boolean
+  /** Largeur de la modale — 'md' (défaut) pour une confirmation simple,
+   *  'lg'/'xl' pour un formulaire avec plusieurs champs par ligne (ex:
+   *  réception de commande avec plusieurs lignes/sous-lots). */
+  size?: ModalSize
 }
 
 /**
@@ -49,6 +61,7 @@ export default function Modal({
   cancelLabel = 'Annuler',
   variant = 'default',
   loading = false,
+  size = 'md',
 }: ModalProps) {
   // Fermeture avec la touche Échap
   useEffect(() => {
@@ -75,8 +88,8 @@ export default function Modal({
         onClick={() => !loading && onClose()}
       />
 
-      <div className="relative bg-white rounded-card shadow-lg w-full max-w-md p-6">
-        <div className="flex items-start gap-3 mb-2">
+      <div className={`relative bg-white rounded-card shadow-lg w-full ${TAILLES[size]} max-h-[90vh] flex flex-col`}>
+        <div className="flex items-start gap-3 p-6 pb-2 shrink-0">
           {variant === 'danger' && (
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger-bg text-danger text-lg">
               !
@@ -92,10 +105,12 @@ export default function Modal({
           </div>
         </div>
 
-        {children && <div className="mt-4">{children}</div>}
+        {children && (
+          <div className="px-6 mt-2 pb-4 overflow-y-auto flex-1 min-h-0">{children}</div>
+        )}
 
         {onConfirm && (
-          <div className="mt-6 flex justify-end gap-3">
+          <div className="flex justify-end gap-3 p-6 pt-4 shrink-0 border-t border-gray-100">
             <Button variant="secondary" onClick={onClose} disabled={loading}>
               {cancelLabel}
             </Button>
