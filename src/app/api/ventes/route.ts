@@ -330,7 +330,7 @@ export async function POST(request: Request) {
 
   await createAuditLog({
     action:   'VENTE_EFFECTUEE',
-    details:  { venteId: vente.id, montantTotal, statut },
+    details:  { numeroFacture: vente.numeroFacture, montantTotal, statut },
     userId,
     pharmacieId,
   })
