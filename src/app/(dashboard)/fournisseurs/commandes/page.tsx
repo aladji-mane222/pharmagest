@@ -25,6 +25,7 @@ interface Commande {
 interface SousLotForm {
   quantite: string
   datePeremption: string
+  numeroLot: string
 }
 
 interface LigneReception {
@@ -248,7 +249,7 @@ export default function CommandesPage() {
         // confort — modifiable, et l'admin peut en ajouter d'autres si le
         // fournisseur a livre le meme medicament avec plusieurs dates de
         // peremption differentes dans la meme reception.
-        sousLots: [{ quantite: String(l.quantite), datePeremption: '' }],
+        sousLots: [{ quantite: String(l.quantite), datePeremption: '', numeroLot: '' }],
       }))
     )
   }
@@ -264,7 +265,7 @@ export default function CommandesPage() {
     setLignesReception((prev) =>
       prev.map((l, i) =>
         i === ligneIndex
-          ? { ...l, sousLots: [...l.sousLots, { quantite: '', datePeremption: '' }] }
+          ? { ...l, sousLots: [...l.sousLots, { quantite: '', datePeremption: '', numeroLot: '' }] }
           : l
       )
     )
@@ -283,7 +284,7 @@ export default function CommandesPage() {
   const modifierSousLot = (
     ligneIndex: number,
     sousLotIndex: number,
-    champ: 'quantite' | 'datePeremption',
+    champ: 'quantite' | 'datePeremption' | 'numeroLot',
     valeur: string
   ) => {
     setLignesReception((prev) =>
@@ -331,6 +332,7 @@ export default function CommandesPage() {
           sousLots: l.sousLots.map((sl) => ({
             quantite: parseInt(sl.quantite) || 0,
             datePeremption: sl.datePeremption,
+            numeroLot: sl.numeroLot.trim() || null,
           })),
         })),
       }),
@@ -747,6 +749,16 @@ export default function CommandesPage() {
                           </p>
                         )}
                       </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">N° de lot (optionnel)</label>
+                        <input
+                          type="text"
+                          value={sl.numeroLot}
+                          onChange={(e) => modifierSousLot(index, sousIndex, 'numeroLot', e.target.value)}
+                          placeholder="Ex: LOT-2026-04"
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        />
+                      </div>
                       {l.sousLots.length > 1 && (
                         <button
                           onClick={() => supprimerSousLot(index, sousIndex)}
@@ -769,6 +781,11 @@ export default function CommandesPage() {
                 {total < l.quantiteCommandee && (
                   <p className="text-xs text-orange-500 mt-1">
                     ⚠ Écart : {l.quantiteCommandee - total} unité(s) manquante(s)
+                  </p>
+                )}
+                {total > l.quantiteCommandee && (
+                  <p className="text-xs text-blue-500 mt-1">
+                    ⚠ Écart : {total - l.quantiteCommandee} unité(s) reçue(s) en plus de la commande
                   </p>
                 )}
               </div>
