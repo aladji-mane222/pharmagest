@@ -1,4 +1,3 @@
-
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -181,11 +180,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   })
 
   await createAuditLog({
-    action: 'COMMANDE_STATUT_CHANGE',
+    // Deux evenements reels et distincts caches derriere un seul libelle
+    // generique ("Statut de commande modifie") — corrige suite a un test
+    // reel ou une commande annulee etait introuvable dans le journal
+    // d'audit, faute d'action dediee.
+    action: statut === 'ANNULEE' ? 'COMMANDE_ANNULEE' : 'COMMANDE_ENVOYEE',
     details: {
       numeroCommande: commande.numeroCommande,
       fournisseurNom: commande.fournisseur.nom,
-      statut,
+      montantTotal: commande.montantTotal,
     },
     userId,
     pharmacieId,

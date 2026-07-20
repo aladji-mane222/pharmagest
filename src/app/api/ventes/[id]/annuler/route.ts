@@ -67,7 +67,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
   await createAuditLog({
     action: 'VENTE_ANNULEE',
     details: {
-      venteId: params.id,
+      numeroFacture: vente.numeroFacture,
+      clientNom: vente.client?.nom,
       lignes: vente.lignes.length,
       montantTotal: vente.montantTotal,
       ...(motif && { motif }),
