@@ -28,6 +28,10 @@ export default function VentesPage() {
   const { showToast } = useToast()
   const [medicaments, setMedicaments] = useState<Medicament[]>([])
   const [search, setSearch] = useState('')
+  // Equivalents generiques via DCI (Phase 3.4ter), affiches quand on
+  // clique sur un medicament en rupture au lieu de ne rien faire
+  const [ruptureSelectionnee, setRuptureSelectionnee] = useState<Medicament | null>(null)
+  const [equivalentsRupture,  setEquivalentsRupture]  = useState<{ id: string; nom: string; stockTotal: number; prixVente: number; unite: string }[]>([])
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [panier, setPanier] = useState<LignePanier[]>([])
   const [paiements, setPaiements] = useState<{ id: string; modePaiement: string; montant: string }[]>([
@@ -131,20 +135,16 @@ export default function VentesPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  // Ajout direct au panier si un seul medicament correspond exactement au nom
-  // tape (insensible a la casse) OU au code-barres scanne — evite un clic
-  // supplementaire quand le caissier a tape le nom complet ou scanne un
-  // produit (Phase 3.4bis). Se declenche uniquement quand la liste de
+  // Ajout direct au panier des qu'un seul medicament correspond a la
+  // recherche — plus besoin de taper le nom en entier ni de cliquer
+  // manuellement. Le seuil de 2 caracteres avant declenchement de la
+  // recherche (juste au-dessus) evite deja une selection prematuree sur
+  // une simple lettre. Se declenche uniquement quand la liste de
   // resultats change (nouvelle recherche), jamais en boucle : les cas de
   // sortie anticipee dans ajouterAuPanier (stock 0, quantite deja au max) ne
   // modifient ni search ni medicaments, donc l'effet ne se redeclenche pas.
   useEffect(() => {
-    if (medicaments.length !== 1) return
-    const m = medicaments[0]
-    const saisie = search.trim().toLowerCase()
-    const matchNom = m.nom.toLowerCase() === saisie
-    const matchCodeBarre = !!m.codeBarre && m.codeBarre.toLowerCase() === saisie
-    if (matchNom || matchCodeBarre) ajouterAuPanier(m)
+    if (medicaments.length === 1) surClicResultat(medicaments[0])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medicaments])
 
@@ -175,6 +175,21 @@ export default function VentesPage() {
     setSearch('')
     setMedicaments([])
     searchInputRef.current?.focus()
+  }
+
+  // Clic sur un resultat de recherche : ajoute au panier si du stock est
+  // disponible, sinon propose les equivalents generiques (meme DCI) au
+  // lieu de ne rien faire (Phase 3.4ter).
+  const surClicResultat = async (med: Medicament) => {
+    if (med.stockTotal > 0) {
+      ajouterAuPanier(med)
+      return
+    }
+    setRuptureSelectionnee(med)
+    setEquivalentsRupture([])
+    const res = await fetch(`/api/medicaments/${med.id}/equivalents`)
+    const json = await res.json()
+    setEquivalentsRupture(json.data?.equivalents || [])
   }
 
   const modifierQuantite = (medicamentId: string, quantite: number) => {
@@ -489,9 +504,8 @@ export default function VentesPage() {
                 {medicaments.map((med) => (
                   <button
                     key={med.id}
-                    onClick={() => ajouterAuPanier(med)}
-                    disabled={med.stockTotal === 0}
-                    className="w-full text-left px-4 py-3 hover:bg-app-bg border-b border-gray-100 last:border-0 flex justify-between items-center disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={() => surClicResultat(med)}
+                    className="w-full text-left px-4 py-3 hover:bg-app-bg border-b border-gray-100 last:border-0 flex justify-between items-center"
                   >
                     <span className="font-medium text-navy">{med.nom}</span>
                     <div className="flex items-center gap-3">
@@ -502,6 +516,38 @@ export default function VentesPage() {
                     </div>
                   </button>
                 ))}
+              </div>
+            )}
+            {ruptureSelectionnee && (
+              <div className="absolute top-full left-0 right-0 bg-blue-50 border border-blue-200 rounded-card shadow-md z-10 mt-1 p-4">
+                <div className="flex justify-between items-start mb-2">
+                  <p className="text-sm font-medium text-blue-800">
+                    {ruptureSelectionnee.nom} — en rupture
+                  </p>
+                  <button onClick={() => setRuptureSelectionnee(null)} className="text-blue-400 hover:text-blue-600 text-sm">✕</button>
+                </div>
+                {equivalentsRupture.length > 0 ? (
+                  <>
+                    <p className="text-xs text-blue-600 mb-2">Équivalent(s) disponible(s) (même DCI) :</p>
+                    <div className="space-y-1">
+                      {equivalentsRupture.map((eq) => (
+                        <button
+                          key={eq.id}
+                          onClick={() => {
+                            ajouterAuPanier({ id: eq.id, nom: eq.nom, codeBarre: null, prixVente: eq.prixVente, stockTotal: eq.stockTotal, unite: eq.unite })
+                            setRuptureSelectionnee(null)
+                          }}
+                          className="w-full text-left px-3 py-2 bg-white rounded-lg text-sm hover:bg-blue-100 flex justify-between"
+                        >
+                          <span>{eq.nom}</span>
+                          <span className="text-gray-400">Stock {eq.stockTotal}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-blue-500">Aucun équivalent connu (DCI non renseigné ou aucune alternative en stock).</p>
+                )}
               </div>
             )}
           </div>
