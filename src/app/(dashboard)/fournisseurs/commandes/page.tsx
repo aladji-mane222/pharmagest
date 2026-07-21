@@ -1,9 +1,12 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { formatMontant, formatDateTime, formatDate } from '@/lib/utils'
 import { exporterExcel, exporterCSV } from '@/lib/export'
+import { pdf } from '@react-pdf/renderer'
+import CommandesPDF from '@/components/fournisseurs/CommandesPDF'
 import Modal from '@/components/ui/Modal'
 import { TOLERANCE_RETARD_JOURS } from '@/lib/livraison'
 
@@ -103,8 +106,14 @@ interface LigneForm {
   prixUnitaire: string
 }
 
-export default function CommandesPage() {
+function CommandesPageInner() {
+  const searchParams = useSearchParams()
+  const filtreFournisseurId = searchParams.get('fournisseurId') || ''
+  const commandeCibleId     = searchParams.get('commandeId') || ''
+  const commandeCibleRef    = useRef<HTMLTableRowElement>(null)
+
   const [commandes,     setCommandes]     = useState<Commande[]>([])
+  const [filtreFournisseurNom, setFiltreFournisseurNom] = useState('')
   const [fournisseurs,  setFournisseurs]  = useState<Fournisseur[]>([])
   const [medicaments,   setMedicaments]   = useState<Medicament[]>([])
   const [loading,       setLoading]       = useState(true)
@@ -130,14 +139,31 @@ export default function CommandesPage() {
   const [exportDateDebut,   setExportDateDebut]   = useState('')
   const [exportDateFin,     setExportDateFin]     = useState('')
   const [exportEnCours,     setExportEnCours]     = useState(false)
+  const [nomPharmacie,      setNomPharmacie]      = useState('Ma Pharmacie')
 
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestions,     setSuggestions]     = useState<Suggestion[]>([])
   const [loadingSugg,     setLoadingSugg]     = useState(false)
 
   useEffect(() => {
+    fetch('/api/parametres')
+      .then((r) => r.json())
+      .then((json) => {
+        const nom = json.data?.nom ?? json.data?.pharmacie?.nom
+        if (nom) setNomPharmacie(nom)
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const urlCommandes = filtreFournisseurId
+      ? `/api/commandes?fournisseurId=${filtreFournisseurId}`
+      : commandeCibleId
+        ? '/api/commandes?tous=1'
+        : '/api/commandes'
+
     Promise.all([
-      fetch('/api/commandes').then((r)     => r.json()),
+      fetch(urlCommandes).then((r)         => r.json()),
       fetch('/api/fournisseurs').then((r)  => r.json()),
       // Bug corrige 19/07/2026 : le parametre etait "limite" (jamais lu par
       // l'API qui attend "limit"), donc retombait sur la valeur par defaut
@@ -151,9 +177,25 @@ export default function CommandesPage() {
       setCommandes(cmd.data || [])
       setFournisseurs(four.data || [])
       setMedicaments(meds.data?.medicaments || [])
+      if (filtreFournisseurId) {
+        const f = (four.data || []).find((x: Fournisseur) => x.id === filtreFournisseurId)
+        setFiltreFournisseurNom(f?.nom || '')
+      }
       setLoading(false)
     })
-  }, [])
+  }, [filtreFournisseurId])
+
+  // Si on arrive depuis un lien "Origine" d'un mouvement de stock lie a
+  // une commande precise, on n'a pas de fiche dediee (voir tache a part
+  // dans PLAN-CONSOLIDATION-SAAS.md) — a defaut, on scrolle jusqu'a la
+  // ligne concernee et on la met en evidence quelques secondes.
+  useEffect(() => {
+    if (!commandeCibleId || commandes.length === 0) return
+    const t = setTimeout(() => {
+      commandeCibleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 100)
+    return () => clearTimeout(t)
+  }, [commandeCibleId, commandes])
 
   // Quand on sélectionne un médicament sur une ligne, pré-remplir le prix d'achat
   const onMedicamentChange = (index: number, medicamentId: string) => {
@@ -378,7 +420,7 @@ export default function CommandesPage() {
   // Export historique commandes (Phase 3.3) : appel dedie avec filtres,
   // separe de la liste "commandes" utilisee pour la creation/reception
   // afin de ne jamais plafonner cette derniere a des fins d'export.
-  const lancerExport = async (format: 'excel' | 'csv') => {
+  const lancerExport = async (format: 'excel' | 'csv' | 'pdf') => {
     setExportEnCours(true)
     const params = new URLSearchParams()
     if (exportFournisseur) params.set('fournisseurId', exportFournisseur)
@@ -389,6 +431,46 @@ export default function CommandesPage() {
     const res  = await fetch(`/api/commandes?${params.toString()}`)
     const json = await res.json()
     const liste: Commande[] = json.data || []
+
+    if (liste.length === 0) {
+      setExportEnCours(false)
+      return
+    }
+
+    if (format === 'pdf') {
+      const nomFournisseurFiltre = exportFournisseur
+        ? fournisseurs.find((f) => f.id === exportFournisseur)?.nom
+        : null
+      const filtreLabel = [
+        nomFournisseurFiltre ? `Fournisseur : ${nomFournisseurFiltre}` : null,
+        exportStatut ? `Statut : ${LABELS_STATUT[exportStatut] ?? exportStatut}` : null,
+        (exportDateDebut || exportDateFin) ? `Période : ${exportDateDebut || '...'} au ${exportDateFin || '...'}` : null,
+      ].filter(Boolean).join(' — ') || null
+
+      const lignesPdf = liste.map((c) => ({
+        fournisseur:         c.fournisseur.nom,
+        dateCommande:        formatDate(c.createdAt),
+        dateLivraisonPrevue: c.dateLivraisonPrevue ? formatDate(c.dateLivraisonPrevue) : '',
+        dateReceptionReelle: c.dateReception ? formatDate(c.dateReception) : '',
+        statut:              LABELS_STATUT[c.statut] ?? c.statut,
+        montantTotal:        c.montantTotal,
+        ecart: c.lignes.some(
+          (l) => l.quantiteRecue !== null && l.quantiteRecue !== undefined && l.quantiteRecue !== l.quantite
+        ),
+      }))
+
+      const blob = await pdf(
+        <CommandesPDF lignes={lignesPdf} nomPharmacie={nomPharmacie} filtreLabel={filtreLabel} />
+      ).toBlob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'commandes-fournisseurs.pdf'
+      a.click()
+      URL.revokeObjectURL(url)
+      setExportEnCours(false)
+      return
+    }
 
     const lignesExport = liste.map((c) => {
       const ecart = c.lignes.some(
@@ -405,10 +487,6 @@ export default function CommandesPage() {
       }
     })
 
-    if (lignesExport.length === 0) {
-      setExportEnCours(false)
-      return
-    }
     if (format === 'excel') await exporterExcel(lignesExport, 'commandes-fournisseurs')
     else                    exporterCSV(lignesExport, 'commandes-fournisseurs')
     setExportEnCours(false)
@@ -501,6 +579,17 @@ export default function CommandesPage() {
         </div>
       </div>
 
+      {filtreFournisseurId && (
+        <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 mb-6 text-sm">
+          <span className="text-gray-600">
+            Commandes de <span className="font-medium text-gray-800">{filtreFournisseurNom || '...'}</span> uniquement
+          </span>
+          <a href="/fournisseurs/commandes" className="text-green-600 hover:underline">
+            Voir toutes les commandes ×
+          </a>
+        </div>
+      )}
+
       {/* Panneau export */}
       {exportOuvert && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-6">
@@ -568,6 +657,13 @@ export default function CommandesPage() {
               className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50 disabled:opacity-50"
             >
               {exportEnCours ? 'Export en cours...' : '📄 Exporter en CSV'}
+            </button>
+            <button
+              onClick={() => lancerExport('pdf')}
+              disabled={exportEnCours}
+              className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50 disabled:opacity-50"
+            >
+              {exportEnCours ? 'Export en cours...' : '🧾 Exporter en PDF'}
             </button>
           </div>
         </div>
@@ -796,7 +892,13 @@ export default function CommandesPage() {
             </thead>
             <tbody>
               {commandes.map((cmd) => (
-                <tr key={cmd.id} className="border-b last:border-0 hover:bg-gray-50">
+                <tr
+                  key={cmd.id}
+                  ref={cmd.id === commandeCibleId ? commandeCibleRef : undefined}
+                  className={`border-b last:border-0 hover:bg-gray-50 ${
+                    cmd.id === commandeCibleId ? 'bg-amber-50 ring-2 ring-inset ring-amber-300' : ''
+                  }`}
+                >
                   <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{formatDateTime(cmd.createdAt)}</td>
                   <td className="px-6 py-4 font-medium">{cmd.fournisseur.nom}</td>
                   <td className="px-6 py-4 text-gray-500 text-xs">{cmd.lignes.length} ligne{cmd.lignes.length > 1 ? 's' : ''}</td>
@@ -941,5 +1043,13 @@ export default function CommandesPage() {
         </div>
       </Modal>
     </div>
+  )
+}
+
+export default function CommandesPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-gray-400">Chargement...</div>}>
+      <CommandesPageInner />
+    </Suspense>
   )
 }

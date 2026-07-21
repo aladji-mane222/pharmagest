@@ -1,3 +1,5 @@
+// CIBLE: src/components/rapports/RapportPDF.tsx
+
 import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
 
 // ── Types internes (miroir de rapports/page.tsx) ─────────────────────────────
@@ -27,8 +29,17 @@ export interface RapportPDFProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Intl.NumberFormat('fr-FR') utilise un espace insecable fin (U+202F) comme
+// separateur de milliers — glyphe absent de la police Helvetica de base
+// utilisee par react-pdf, ce qui produit un rendu casse ("2/000" au lieu
+// de "2 000", ou l'espace disparait carrement selon les cas). Meme bug
+// deja identifie et corrige dans RecuPDF.tsx (Phase 2) mais jamais
+// reporte ici — corrige au meme endroit avec la meme methode (espace
+// ASCII normal, formatage manuel).
 function fmt(n: number): string {
-  return new Intl.NumberFormat('fr-FR').format(Math.round(n)) + ' GNF'
+  const entier = Math.round(n)
+  const avecEspaces = entier.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  return `${avecEspaces} GNF`
 }
 
 function fmtDate(iso: string): string {

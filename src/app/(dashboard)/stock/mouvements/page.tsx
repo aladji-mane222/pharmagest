@@ -45,7 +45,7 @@ function Origine({ m }: { m: Mouvement }) {
   }
   if (m.commande) {
     return (
-      <Link href="/fournisseurs/commandes" className="text-green-600 hover:underline">
+      <Link href={`/fournisseurs/commandes?commandeId=${m.commande.id}`} className="text-green-600 hover:underline">
         Commande {m.commande.numeroCommande || ''}
       </Link>
     )

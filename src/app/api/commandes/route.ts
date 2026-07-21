@@ -1,4 +1,3 @@
-// CIBLE: src/app/api/commandes/route.ts
 
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -16,10 +15,15 @@ export async function GET(request: Request) {
   const statut         = searchParams.get('statut') || ''
   const dateDebut       = searchParams.get('dateDebut') || ''
   const dateFin         = searchParams.get('dateFin') || ''
+  // Flag dedie (sans autre filtre) pour le cas ou une commande precise
+  // ciblee par un lien externe (ex: origine d'un mouvement de stock)
+  // pourrait etre plus ancienne que les 20 commandes recentes affichees
+  // par defaut — sinon elle ne serait jamais chargee pour etre localisee.
+  const tous             = searchParams.get('tous') === '1'
   // Un filtre applique = usage "historique/export" -> pas de plafond a 20.
   // Vue par defaut (page commandes, aucun filtre) = les 20 plus recentes,
   // comportement inchange pour ne pas ralentir l'ecran de travail courant.
-  const filtreActif = !!(fournisseurId || statut || dateDebut || dateFin)
+  const filtreActif = !!(fournisseurId || statut || dateDebut || dateFin || tous)
 
   const where: Record<string, unknown> = { pharmacieId: session.user.pharmacieId }
   if (fournisseurId) where.fournisseurId = fournisseurId
