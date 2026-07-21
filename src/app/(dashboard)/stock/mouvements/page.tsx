@@ -1,7 +1,9 @@
+
 'use client'
 
 import { useEffect, useState } from 'react'
-import { formatDateTime } from '@/lib/utils'
+import Link from 'next/link'
+import { formatDateTime, formatDate } from '@/lib/utils'
 
 interface Mouvement {
   id: string
@@ -10,6 +12,9 @@ interface Mouvement {
   createdAt: string
   medicament: { nom: string; unite: string }
   user: { nom: string } | null
+  vente: { id: string; numeroFacture: string | null } | null
+  commande: { id: string; numeroCommande: string | null } | null
+  inventaire: { id: string; createdAt: string } | null
 }
 
 const BADGE: Record<string, { bg: string; label: string }> = {
@@ -23,6 +28,36 @@ function afficherQuantite(type: string, quantite: number) {
   if (type === 'ENTREE' || type === 'RETOUR') return { signe: `+${quantite}`, couleur: 'text-green-600' }
   if (type === 'SORTIE')                       return { signe: `-${quantite}`, couleur: 'text-red-600' }
   return                                               { signe: `${quantite}`,  couleur: 'text-blue-600' }
+}
+
+// Origine du mouvement (Phase 3.8) : un seul des trois champs relation
+// est rempli selon le type. Pas de detail de commande/inventaire
+// existant pour l'instant (voir tache a part "Detail et modification
+// d'une commande" dans PLAN-CONSOLIDATION-SAAS.md) — on renvoie donc
+// vers la liste plutot que vers une fiche individuelle pour ces deux cas.
+function Origine({ m }: { m: Mouvement }) {
+  if (m.vente) {
+    return (
+      <Link href={`/ventes/${m.vente.id}`} className="text-green-600 hover:underline">
+        Vente {m.vente.numeroFacture || ''}
+      </Link>
+    )
+  }
+  if (m.commande) {
+    return (
+      <Link href="/fournisseurs/commandes" className="text-green-600 hover:underline">
+        Commande {m.commande.numeroCommande || ''}
+      </Link>
+    )
+  }
+  if (m.inventaire) {
+    return (
+      <Link href="/inventaire" className="text-green-600 hover:underline">
+        Inventaire du {formatDate(m.inventaire.createdAt)}
+      </Link>
+    )
+  }
+  return <span className="text-gray-400">—</span>
 }
 
 export default function MouvementsStockPage() {
@@ -141,6 +176,7 @@ export default function MouvementsStockPage() {
                 <th className="text-center px-6 py-3 text-gray-600">Type</th>
                 <th className="text-right px-6 py-3 text-gray-600">Quantité</th>
                 <th className="text-left px-6 py-3 text-gray-600">Effectué par</th>
+                <th className="text-left px-6 py-3 text-gray-600">Origine</th>
               </tr>
             </thead>
             <tbody>
@@ -166,6 +202,9 @@ export default function MouvementsStockPage() {
                     </td>
                     <td className="px-6 py-4 text-gray-600">
                       {m.user?.nom || '—'}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <Origine m={m} />
                     </td>
                   </tr>
                 )

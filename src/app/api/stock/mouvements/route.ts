@@ -38,6 +38,9 @@ export async function GET(request: Request) {
       include: {
         medicament: { select: { nom: true, unite: true } },
         user:       { select: { nom: true } },
+        vente:      { select: { id: true, numeroFacture: true } },
+        commande:   { select: { id: true, numeroCommande: true } },
+        inventaire: { select: { id: true, createdAt: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limite,
