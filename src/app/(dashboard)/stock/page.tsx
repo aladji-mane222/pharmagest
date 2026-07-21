@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -23,6 +24,7 @@ interface MedicamentStock {
   stockMinimum: number
   stockTotal: number
   stockBas: boolean
+  rupture: boolean
   lotsCritiques: number
   produitDormant: boolean
   lots: Lot[]
@@ -43,7 +45,7 @@ export default function StockPage() {
   const [stock, setStock] = useState<MedicamentStock[]>([])
   const [valeurTotale, setValeurTotale] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [filtre, setFiltre] = useState<'tous' | 'bas' | 'critiques' | 'dormants'>('tous')
+  const [filtre, setFiltre] = useState<'tous' | 'ruptures' | 'bas' | 'critiques' | 'dormants'>('tous')
   const [selected, setSelected] = useState<MedicamentStock | null>(null)
   const [importOuvert, setImportOuvert] = useState(false)
 
@@ -62,11 +64,16 @@ export default function StockPage() {
   }, [])
 
   const stockFiltre = stock.filter((med) => {
-    if (filtre === 'bas') return med.stockBas
+    if (filtre === 'ruptures')  return med.rupture
+    if (filtre === 'bas')       return med.stockBas && !med.rupture
     if (filtre === 'critiques') return med.lotsCritiques > 0
-    if (filtre === 'dormants') return med.produitDormant
+    if (filtre === 'dormants')  return med.produitDormant
     return true
   })
+
+  const ruptures        = stock.filter((m) => m.rupture)
+  const stockBasNonNul   = stock.filter((m) => m.stockBas && !m.rupture)
+  const peremptionProche = stock.filter((m) => m.lotsCritiques > 0)
 
   if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
 
@@ -95,7 +102,7 @@ export default function StockPage() {
             🔄 Mouvements
           </Link>
           <div className="flex gap-2">
-            {(['tous', 'bas', 'critiques', 'dormants'] as const).map((f) => (
+            {(['tous', 'ruptures', 'bas', 'critiques', 'dormants'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFiltre(f)}
@@ -103,7 +110,7 @@ export default function StockPage() {
                   filtre === f ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                {f === 'tous' ? 'Tous' : f === 'bas' ? 'Stock bas' : f === 'critiques' ? 'Péremptions' : 'Dormants'}
+                {f === 'tous' ? 'Tous' : f === 'ruptures' ? 'Ruptures' : f === 'bas' ? 'Stock bas' : f === 'critiques' ? 'Péremptions' : 'Dormants'}
               </button>
             ))}
           </div>
@@ -120,18 +127,32 @@ export default function StockPage() {
         onImported={() => chargerStock()}
       />
 
-      <div className="grid grid-cols-4 gap-6 mb-6">
+      {(ruptures.length > 0 || stockBasNonNul.length > 0 || peremptionProche.length > 0) && (
+        <p className="text-sm text-gray-600 mb-4">
+          ⚠️ {[
+            ruptures.length > 0 ? `${ruptures.length} rupture${ruptures.length > 1 ? 's' : ''}` : null,
+            stockBasNonNul.length > 0 ? `${stockBasNonNul.length} stock${stockBasNonNul.length > 1 ? 's' : ''} bas` : null,
+            peremptionProche.length > 0 ? `${peremptionProche.length} péremption${peremptionProche.length > 1 ? 's' : ''} proche${peremptionProche.length > 1 ? 's' : ''}` : null,
+          ].filter(Boolean).join(', ')}
+        </p>
+      )}
+
+      <div className="grid grid-cols-5 gap-6 mb-6">
         <div className="bg-white rounded-xl shadow p-4">
           <p className="text-sm text-gray-500">Total médicaments</p>
           <p className="text-2xl font-bold text-gray-800">{stock.length}</p>
         </div>
         <div className="bg-white rounded-xl shadow p-4">
-          <p className="text-sm text-gray-500">Stock bas</p>
-          <p className="text-2xl font-bold text-orange-500">{stock.filter((m) => m.stockBas).length}</p>
+          <p className="text-sm text-gray-500">Ruptures</p>
+          <p className="text-2xl font-bold text-red-600">{ruptures.length}</p>
         </div>
         <div className="bg-white rounded-xl shadow p-4">
-          <p className="text-sm text-gray-500">Lots critiques</p>
-          <p className="text-2xl font-bold text-red-500">{stock.filter((m) => m.lotsCritiques > 0).length}</p>
+          <p className="text-sm text-gray-500">Stock bas</p>
+          <p className="text-2xl font-bold text-orange-500">{stockBasNonNul.length}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow p-4">
+          <p className="text-sm text-gray-500">Péremptions proches</p>
+          <p className="text-2xl font-bold text-yellow-500">{peremptionProche.length}</p>
         </div>
         <div className="bg-white rounded-xl shadow p-4">
           <p className="text-sm text-gray-500">Produits dormants</p>
@@ -139,6 +160,56 @@ export default function StockPage() {
           <p className="text-xs text-gray-400 mt-0.5">Aucune vente depuis 90 jours</p>
         </div>
       </div>
+
+      {/* ── Sections d'alertes distinctes (Phase 3.7) — plutot qu'une
+          liste unique a filtrer mentalement, chaque categorie a son
+          propre encart, visible seulement si elle contient des elements */}
+      {(ruptures.length > 0 || stockBasNonNul.length > 0 || peremptionProche.length > 0) && (
+        <div className="grid grid-cols-3 gap-6 mb-6">
+          {ruptures.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-red-700 mb-2">🔴 Ruptures ({ruptures.length})</h3>
+              <ul className="space-y-1 max-h-40 overflow-y-auto">
+                {ruptures.map((m) => (
+                  <li key={m.id}>
+                    <button onClick={() => setSelected(m)} className="text-sm text-red-800 hover:underline text-left">
+                      {m.nom}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {stockBasNonNul.length > 0 && (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-orange-700 mb-2">🟠 Stock bas ({stockBasNonNul.length})</h3>
+              <ul className="space-y-1 max-h-40 overflow-y-auto">
+                {stockBasNonNul.map((m) => (
+                  <li key={m.id}>
+                    <button onClick={() => setSelected(m)} className="text-sm text-orange-800 hover:underline text-left">
+                      {m.nom} <span className="text-orange-500">({m.stockTotal}/{m.stockMinimum})</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {peremptionProche.length > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-yellow-700 mb-2">🟡 Péremptions proches ({peremptionProche.length})</h3>
+              <ul className="space-y-1 max-h-40 overflow-y-auto">
+                {peremptionProche.map((m) => (
+                  <li key={m.id}>
+                    <button onClick={() => setSelected(m)} className="text-sm text-yellow-800 hover:underline text-left">
+                      {m.nom} <span className="text-yellow-600">({m.lotsCritiques} lot{m.lotsCritiques > 1 ? 's' : ''})</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-6">
 
@@ -166,7 +237,7 @@ export default function StockPage() {
                   }`}
                 >
                   <td className="px-4 py-3 font-medium text-gray-800">{med.nom}</td>
-                  <td className={`px-4 py-3 text-right font-medium ${med.stockBas ? 'text-red-500' : 'text-green-600'}`}>
+                  <td className={`px-4 py-3 text-right font-medium ${med.rupture ? 'text-red-600' : med.stockBas ? 'text-orange-500' : 'text-green-600'}`}>
                     {med.stockTotal} {med.unite}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-500">{med.stockMinimum}</td>
@@ -174,8 +245,11 @@ export default function StockPage() {
                     {med.prixAchat ? formatMontant(med.stockTotal * med.prixAchat) : '-'}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    {med.stockBas && (
-                      <span className="px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs">Bas</span>
+                    {med.rupture && (
+                      <span className="px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs">Rupture</span>
+                    )}
+                    {med.stockBas && !med.rupture && (
+                      <span className="px-2 py-1 bg-orange-100 text-orange-600 rounded-full text-xs">Bas</span>
                     )}
                     {med.lotsCritiques > 0 && (
                       <span className="px-2 py-1 bg-yellow-100 text-yellow-600 rounded-full text-xs ml-1">Péremption</span>

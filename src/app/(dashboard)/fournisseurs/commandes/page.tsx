@@ -90,6 +90,7 @@ interface Medicament {
   id: string
   nom: string
   prixAchat: number | null
+  stockTotal: number
 }
 
 interface Suggestion {
@@ -104,6 +105,91 @@ interface LigneForm {
   medicamentId: string
   quantite: string
   prixUnitaire: string
+}
+
+// Recherche autocompletee de medicament (Phase 3.4) — remplace le <select>
+// brut qui obligeait a faire defiler tout le catalogue. Filtrage cote
+// client puisque la liste complete est deja chargee en memoire (voir le
+// fetch limit=2000 plus haut) ; affiche stock actuel + prix d'achat
+// habituel pendant la frappe, comme prevu au plan.
+function AutocompleteMedicament({
+  medicaments,
+  valeur,
+  onChoisir,
+}: {
+  medicaments: Medicament[]
+  valeur: string
+  onChoisir: (medicamentId: string) => void
+}) {
+  const medicamentSelectionne = medicaments.find((m) => m.id === valeur)
+  const [texte, setTexte]     = useState(medicamentSelectionne?.nom || '')
+  const [ouvert, setOuvert]   = useState(false)
+  const conteneurRef = useRef<HTMLDivElement>(null)
+
+  // Si la selection change depuis l'exterieur (ex: "Utiliser les
+  // suggestions"), on resynchronise le texte affiche
+  useEffect(() => {
+    setTexte(medicamentSelectionne?.nom || '')
+  }, [valeur]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const surClicExterieur = (e: MouseEvent) => {
+      if (conteneurRef.current && !conteneurRef.current.contains(e.target as Node)) {
+        setOuvert(false)
+        // Si le texte tape ne correspond plus a la selection valide, on
+        // revient a l'affichage du dernier choix connu plutot que de
+        // laisser un texte libre non selectionne
+        setTexte(medicamentSelectionne?.nom || '')
+      }
+    }
+    document.addEventListener('mousedown', surClicExterieur)
+    return () => document.removeEventListener('mousedown', surClicExterieur)
+  }, [medicamentSelectionne])
+
+  const resultats = texte.trim().length === 0
+    ? []
+    : medicaments
+        .filter((m) => m.nom.toLowerCase().includes(texte.trim().toLowerCase()))
+        .slice(0, 20)
+
+  return (
+    <div className="relative" ref={conteneurRef}>
+      <input
+        type="text"
+        value={texte}
+        placeholder="Rechercher..."
+        onChange={(e) => { setTexte(e.target.value); setOuvert(true) }}
+        onFocus={() => setOuvert(true)}
+        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+      />
+      {ouvert && resultats.length > 0 && (
+        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+          {resultats.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => {
+                onChoisir(m.id)
+                setTexte(m.nom)
+                setOuvert(false)
+              }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex justify-between items-center gap-2"
+            >
+              <span className="truncate">{m.nom}</span>
+              <span className="text-xs text-gray-400 shrink-0">
+                Stock {m.stockTotal}{m.prixAchat ? ` · ${formatMontant(m.prixAchat)}` : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {ouvert && texte.trim().length > 0 && resultats.length === 0 && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-sm text-gray-400">
+          Aucun médicament trouvé
+        </div>
+      )}
+    </div>
+  )
 }
 
 function CommandesPageInner() {
@@ -798,16 +884,11 @@ function CommandesPageInner() {
                 return (
                   <div key={index} className="grid grid-cols-12 gap-2 px-4 py-3 border-b last:border-0 items-center">
                     <div className="col-span-5">
-                      <select
-                        value={ligne.medicamentId}
-                        onChange={(e) => onMedicamentChange(index, e.target.value)}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                      >
-                        <option value="">Choisir un médicament</option>
-                        {medicaments.map((m) => (
-                          <option key={m.id} value={m.id}>{m.nom}</option>
-                        ))}
-                      </select>
+                      <AutocompleteMedicament
+                        medicaments={medicaments}
+                        valeur={ligne.medicamentId}
+                        onChoisir={(id) => onMedicamentChange(index, id)}
+                      />
                     </div>
                     <div className="col-span-2">
                       <input
