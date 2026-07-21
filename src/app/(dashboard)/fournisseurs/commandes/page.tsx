@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
 import Modal from '@/components/ui/Modal'
+import { TOLERANCE_RETARD_JOURS } from '@/lib/livraison'
 
 interface Commande {
   id: string
@@ -66,7 +67,8 @@ function joursDeRetard(dateLivraisonPrevue: string | null, dateReference: Date):
 }
 
 // Tolerance de 2 jours avant de considerer une livraison en retard
-const TOLERANCE_RETARD_JOURS = 2
+// -> importee de src/lib/livraison.ts, partagee avec le calcul de
+// fiabilite fournisseur pour ne jamais diverger.
 
 interface Fournisseur {
   id: string
