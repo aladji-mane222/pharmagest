@@ -1,5 +1,3 @@
-// CIBLE: src/lib/export.ts
-
 // 'xlsx' n'est plus importée statiquement : elle est chargée dynamiquement
 // dans exporterExcel() uniquement, pour ne pas gonfler le JS des pages qui
 // n'utilisent que exporterCSV (qui n'en a jamais eu besoin) — corrigé le
@@ -43,13 +41,27 @@ export async function exporterExcel(donnees: Record<string, unknown>[], nomFichi
   XLSX.writeFile(workbook, `${nomFichier}.xlsx`)
 }
 
+// Echappement CSV standard (RFC 4180) : une valeur contenant une virgule,
+// un guillemet ou un retour a la ligne doit etre entouree de guillemets,
+// avec les guillemets internes doubles. Sans ça, une simple virgule dans
+// une donnee (ex: nom de fournisseur "Pharma, Plus & Cie") decale toutes
+// les colonnes suivantes. Bug preexistant trouve en audit complet du
+// 21/07/2026 — jamais declenche jusqu'ici par manque de donnee avec
+// virgule dans les exports testes, mais latent pour tout champ futur.
+function echapperCSV(valeur: string): string {
+  if (/[",\n]/.test(valeur)) {
+    return `"${valeur.replace(/"/g, '""')}"`
+  }
+  return valeur
+}
+
 export function exporterCSV(donneesBrutes: Record<string, unknown>[], nomFichier: string) {
   if (donneesBrutes.length === 0) return
   const donnees = aplatirDonnees(donneesBrutes)
 
   const entetes = Object.keys(donnees[0])
-  const lignes = donnees.map((d) => entetes.map((e) => d[e]).join(','))
-  const contenu = [entetes.join(','), ...lignes].join('\n')
+  const lignes = donnees.map((d) => entetes.map((e) => echapperCSV(String(d[e] ?? ''))).join(','))
+  const contenu = [entetes.map(echapperCSV).join(','), ...lignes].join('\n')
 
   // BOM UTF-8 (\uFEFF) en tete de fichier : sans lui, Excel sur Windows
   // suppose un encodage local (souvent Windows-1252) et affiche les
