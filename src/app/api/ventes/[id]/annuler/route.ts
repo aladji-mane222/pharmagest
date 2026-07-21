@@ -36,7 +36,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       data: { statut: 'ANNULEE', motifAnnulation: motif || null },
     })
 
-    // c. Remise en stock pour chaque ligne — un SEUL lot credite, jamais
+    // b. Remise en stock pour chaque ligne — un SEUL lot credite, jamais
     // tous les lots actifs du medicament.
     //
     // BUG CORRIGE le 21/07/2026 : l'ancien code faisait
@@ -49,13 +49,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
     // reellement une annulation avec plusieurs lots.
     //
     // Le lot cible est, dans l'ordre de preference :
-    // 1. Le lot exact d'ou la vente avait ete decrementee (LigneVente.lotId,
-    // rempli par decrementerLotFifo au moment de la vente)
-    // 2. A defaut (lotId absent, ventes anciennes), le lot FIFO actif le
-    // plus pertinent (meme regle que getLotFifo utilise a la vente)
-    // 3. A defaut absolu (aucun lot actif restant), le lot le plus recent
-    // du medicament, reactive au passage — pour ne jamais perdre le
-    // stock rendu meme dans ce cas limite
+    //  1. Le lot exact d'ou la vente avait ete decrementee (LigneVente.lotId,
+    //     rempli par decrementerLotFifo au moment de la vente)
+    //  2. A defaut (lotId absent, ventes anciennes), le lot FIFO actif le
+    //     plus pertinent (meme regle que getLotFifo utilise a la vente)
+    //  3. A defaut absolu (aucun lot actif restant), le lot le plus recent
+    //     du medicament, reactive au passage — pour ne jamais perdre le
+    //     stock rendu meme dans ce cas limite
     //
     // Limite connue et acceptee : si la vente d'origine avait ete
     // decrementee sur PLUSIEURS lots a la fois (decrementerLotFifo peut

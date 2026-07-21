@@ -151,16 +151,24 @@ export default function VentesPage() {
   // Recherche immediate par code-barres exact sur Entree, sans attendre le
   // debounce de 300ms — une douchette USB tape le code puis envoie Entree
   // quasi instantanement, donc on ne veut pas de delai perceptible ici.
-  // Si rien ne correspond exactement, on laisse la recherche generale
-  // (search, deja lancee en parallele) faire son travail normalement.
+  //
+  // La recherche generale (search, debounce 300ms) est deja lancee en
+  // parallele des la frappe. Pour eviter que les deux se chevauchent (et
+  // ajoutent le medicament deux fois si le debounce se termine pendant
+  // l'attente de ce fetch), on vide `search` tout de suite : ca annule le
+  // timer du debounce en attente (cleanup du useEffect ci-dessus) avant
+  // meme que la requete code-barres ne reponde.
   const surEntreeRecherche = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return
     const valeur = search.trim()
     if (!valeur) return
+    setSearch('')
+    setMedicaments([])
     const res = await fetch(`/api/medicaments?codeBarre=${encodeURIComponent(valeur)}`)
     const json = await res.json()
     const trouve = json.data?.medicaments?.[0]
     if (trouve) ajouterAuPanier(trouve)
+    else showToast('Aucun médicament ne correspond à ce code-barres', 'error')
   }
 
   const ajouterAuPanier = (med: Medicament) => {
