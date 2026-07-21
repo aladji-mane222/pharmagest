@@ -1,3 +1,4 @@
+
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -57,7 +58,13 @@ export async function GET() {
     const stockTotal = m.lots.reduce((sum, l) => sum + l.quantite, 0)
     const lotsCritiques = m.lots.filter(l => l.datePeremption <= dans90Jours).length
     const produitDormant = stockTotal > 0 && !medicamentsVendusRecemment.has(m.id)
-    return { ...m, stockTotal, lotsCritiques, stockBas: stockTotal < m.stockMinimum, produitDormant }
+    // "rupture" distingue le stock a 0 du simple "stock bas" (sous le
+    // seuil mais pas nul) — ajoute pour la Phase 3.7 (sections separees
+    // sur /stock), sans toucher a la definition de stockBas ci-dessous,
+    // deja utilisee ailleurs (dashboard, alertes cron, /medicaments) et
+    // volontairement laissee inchangee pour ne rien casser.
+    const rupture = stockTotal === 0
+    return { ...m, stockTotal, lotsCritiques, stockBas: stockTotal < m.stockMinimum, produitDormant, rupture }
   })
 
   const valeurTotale = stock.reduce((sum, m) => sum + (m.stockTotal * (m.prixAchat || 0)), 0)
