@@ -1,3 +1,5 @@
+// CIBLE: src/lib/export.ts
+
 // 'xlsx' n'est plus importée statiquement : elle est chargée dynamiquement
 // dans exporterExcel() uniquement, pour ne pas gonfler le JS des pages qui
 // n'utilisent que exporterCSV (qui n'en a jamais eu besoin) — corrigé le
@@ -49,7 +51,13 @@ export function exporterCSV(donneesBrutes: Record<string, unknown>[], nomFichier
   const lignes = donnees.map((d) => entetes.map((e) => d[e]).join(','))
   const contenu = [entetes.join(','), ...lignes].join('\n')
 
-  const blob = new Blob([contenu], { type: 'text/csv;charset=utf-8;' })
+  // BOM UTF-8 (\uFEFF) en tete de fichier : sans lui, Excel sur Windows
+  // suppose un encodage local (souvent Windows-1252) et affiche les
+  // caracteres accentues corrompus ("RÃ©ception" au lieu de "Réception")
+  // — constate le 20/07/2026 sur l'export commandes, mais touchait en
+  // realite tous les exports CSV de l'app puisque le bug etait ici,
+  // dans la fonction partagee.
+  const blob = new Blob(['\uFEFF' + contenu], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const lien = document.createElement('a')
   lien.href = url
