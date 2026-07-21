@@ -152,6 +152,21 @@ function AutocompleteMedicament({
         .filter((m) => m.nom.toLowerCase().includes(texte.trim().toLowerCase()))
         .slice(0, 20)
 
+  // Selection automatique si un seul medicament correspond — evite de
+  // devoir cliquer ou taper le nom en entier quand la saisie suffit deja
+  // a lever toute ambiguite. Seuil de 2 caracteres pour ne pas
+  // selectionner trop tot sur une simple lettre qui matcherait par
+  // hasard un seul medicament dans un petit catalogue de test.
+  useEffect(() => {
+    if (texte.trim().length < 2) return
+    if (resultats.length === 1 && resultats[0].id !== valeur) {
+      onChoisir(resultats[0].id)
+      setTexte(resultats[0].nom)
+      setOuvert(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [texte])
+
   return (
     <div className="relative" ref={conteneurRef}>
       <input
@@ -194,12 +209,11 @@ function AutocompleteMedicament({
 
 function CommandesPageInner() {
   const searchParams = useSearchParams()
-  const filtreFournisseurId = searchParams.get('fournisseurId') || ''
-  const commandeCibleId     = searchParams.get('commandeId') || ''
-  const commandeCibleRef    = useRef<HTMLTableRowElement>(null)
+  const filtreFournisseurIdInitial = searchParams.get('fournisseurId') || ''
+  const commandeCibleId            = searchParams.get('commandeId') || ''
+  const commandeCibleRef           = useRef<HTMLTableRowElement>(null)
 
   const [commandes,     setCommandes]     = useState<Commande[]>([])
-  const [filtreFournisseurNom, setFiltreFournisseurNom] = useState('')
   const [fournisseurs,  setFournisseurs]  = useState<Fournisseur[]>([])
   const [medicaments,   setMedicaments]   = useState<Medicament[]>([])
   const [loading,       setLoading]       = useState(true)
@@ -218,14 +232,21 @@ function CommandesPageInner() {
   const [erreurReception,       setErreurReception]       = useState<string | null>(null)
   const [savingReception,       setSavingReception]       = useState(false)
 
-  // ── Export historique (Phase 3.3) ──
-  const [exportOuvert,      setExportOuvert]      = useState(false)
-  const [exportFournisseur, setExportFournisseur] = useState('')
-  const [exportStatut,      setExportStatut]      = useState('')
-  const [exportDateDebut,   setExportDateDebut]   = useState('')
-  const [exportDateFin,     setExportDateFin]     = useState('')
-  const [exportEnCours,     setExportEnCours]     = useState(false)
-  const [nomPharmacie,      setNomPharmacie]      = useState('Ma Pharmacie')
+  // ── Filtre + export unifies (Phase 3.3 + 3.7 suite) ──
+  // Un seul jeu d'etats pilote a la fois CE QUI EST AFFICHE a l'ecran et
+  // ce qui part dans un export — demande explicite de Nabe le 21/07 : il
+  // n'existait avant qu'un filtre "pour l'export" sans effet sur la liste
+  // visible, ce qui n'etait pas un vrai systeme de filtre pour l'usage
+  // quotidien.
+  const [filtreOuvert,     setFiltreOuvert]     = useState(!!filtreFournisseurIdInitial)
+  const [filtreFournisseur,setFiltreFournisseur]= useState(filtreFournisseurIdInitial)
+  const [filtreStatut,     setFiltreStatut]     = useState('')
+  const [filtreDateDebut,  setFiltreDateDebut]  = useState('')
+  const [filtreDateFin,    setFiltreDateFin]    = useState('')
+  const [exportEnCours,    setExportEnCours]    = useState(false)
+  const [nomPharmacie,     setNomPharmacie]     = useState('Ma Pharmacie')
+
+  const filtreActif = !!(filtreFournisseur || filtreStatut || filtreDateDebut || filtreDateFin)
 
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestions,     setSuggestions]     = useState<Suggestion[]>([])
@@ -241,35 +262,44 @@ function CommandesPageInner() {
       .catch(() => {})
   }, [])
 
+  // Fournisseurs + catalogue medicaments : independants des filtres,
+  // charges une seule fois
   useEffect(() => {
-    const urlCommandes = filtreFournisseurId
-      ? `/api/commandes?fournisseurId=${filtreFournisseurId}`
-      : commandeCibleId
-        ? '/api/commandes?tous=1'
-        : '/api/commandes'
-
     Promise.all([
-      fetch(urlCommandes).then((r)         => r.json()),
-      fetch('/api/fournisseurs').then((r)  => r.json()),
+      fetch('/api/fournisseurs').then((r) => r.json()),
       // Bug corrige 19/07/2026 : le parametre etait "limite" (jamais lu par
       // l'API qui attend "limit"), donc retombait sur la valeur par defaut
       // de 20 medicaments — la plupart des suggestions issues du catalogue
       // complet ne matchaient alors aucune option du menu deroulant.
-      // 2000 couvre un catalogue de pharmacie realiste ; la recherche
-      // autocompletee prevue en tache 3.4 remplacera ce chargement complet
-      // par une recherche serveur si le catalogue devient plus gros.
+      // 2000 couvre un catalogue de pharmacie realiste.
       fetch('/api/medicaments?limit=2000').then((r) => r.json()),
-    ]).then(([cmd, four, meds]) => {
-      setCommandes(cmd.data || [])
+    ]).then(([four, meds]) => {
       setFournisseurs(four.data || [])
       setMedicaments(meds.data?.medicaments || [])
-      if (filtreFournisseurId) {
-        const f = (four.data || []).find((x: Fournisseur) => x.id === filtreFournisseurId)
-        setFiltreFournisseurNom(f?.nom || '')
-      }
-      setLoading(false)
     })
-  }, [filtreFournisseurId])
+  }, [])
+
+  // Liste des commandes affichees : reagit a chaque changement de filtre.
+  // Un filtre actif retire le plafond de 20 (voir filtreActif cote API) —
+  // "tous=1" couvre le cas particulier d'un lien vers une commande precise
+  // (origine d'un mouvement de stock) qui pourrait etre plus ancienne que
+  // les 20 dernieres, sans filtre explicite par ailleurs.
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (filtreFournisseur) params.set('fournisseurId', filtreFournisseur)
+    if (filtreStatut)      params.set('statut',        filtreStatut)
+    if (filtreDateDebut)   params.set('dateDebut',     filtreDateDebut)
+    if (filtreDateFin)     params.set('dateFin',       filtreDateFin)
+    if (!filtreActif && commandeCibleId) params.set('tous', '1')
+
+    setLoading(true)
+    fetch(`/api/commandes?${params.toString()}`)
+      .then((r) => r.json())
+      .then((json) => {
+        setCommandes(json.data || [])
+        setLoading(false)
+      })
+  }, [filtreFournisseur, filtreStatut, filtreDateDebut, filtreDateFin, filtreActif, commandeCibleId])
 
   // Si on arrive depuis un lien "Origine" d'un mouvement de stock lie a
   // une commande precise, on n'a pas de fiche dediee (voir tache a part
@@ -504,33 +534,22 @@ function CommandesPageInner() {
   }
 
   // Export historique commandes (Phase 3.3) : appel dedie avec filtres,
-  // separe de la liste "commandes" utilisee pour la creation/reception
-  // afin de ne jamais plafonner cette derniere a des fins d'export.
+  // La liste "commandes" est deja filtree en temps reel (voir le
+  // useEffect au-dessus) — l'export reutilise directement cet etat au
+  // lieu de refaire un appel reseau separe avec les memes filtres.
   const lancerExport = async (format: 'excel' | 'csv' | 'pdf') => {
+    if (commandes.length === 0) return
     setExportEnCours(true)
-    const params = new URLSearchParams()
-    if (exportFournisseur) params.set('fournisseurId', exportFournisseur)
-    if (exportStatut)      params.set('statut',        exportStatut)
-    if (exportDateDebut)   params.set('dateDebut',     exportDateDebut)
-    if (exportDateFin)     params.set('dateFin',       exportDateFin)
-
-    const res  = await fetch(`/api/commandes?${params.toString()}`)
-    const json = await res.json()
-    const liste: Commande[] = json.data || []
-
-    if (liste.length === 0) {
-      setExportEnCours(false)
-      return
-    }
+    const liste = commandes
 
     if (format === 'pdf') {
-      const nomFournisseurFiltre = exportFournisseur
-        ? fournisseurs.find((f) => f.id === exportFournisseur)?.nom
+      const nomFournisseurFiltre = filtreFournisseur
+        ? fournisseurs.find((f) => f.id === filtreFournisseur)?.nom
         : null
       const filtreLabel = [
         nomFournisseurFiltre ? `Fournisseur : ${nomFournisseurFiltre}` : null,
-        exportStatut ? `Statut : ${LABELS_STATUT[exportStatut] ?? exportStatut}` : null,
-        (exportDateDebut || exportDateFin) ? `Période : ${exportDateDebut || '...'} au ${exportDateFin || '...'}` : null,
+        filtreStatut ? `Statut : ${LABELS_STATUT[filtreStatut] ?? filtreStatut}` : null,
+        (filtreDateDebut || filtreDateFin) ? `Période : ${filtreDateDebut || '...'} au ${filtreDateFin || '...'}` : null,
       ].filter(Boolean).join(' — ') || null
 
       const lignesPdf = liste.map((c) => ({
@@ -647,14 +666,14 @@ function CommandesPageInner() {
             📋 Commandes suggérées
           </button>
           <button
-            onClick={() => setExportOuvert(!exportOuvert)}
+            onClick={() => setFiltreOuvert(!filtreOuvert)}
             className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
-              exportOuvert
+              filtreOuvert || filtreActif
                 ? 'bg-blue-50 border-blue-300 text-blue-700'
                 : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
             }`}
           >
-            ⬇️ Exporter
+            🔍 Filtrer{filtreActif ? ' (actif)' : ''}
           </button>
           <button
             onClick={() => { setShowForm(!showForm); setErreur(null) }}
@@ -665,30 +684,43 @@ function CommandesPageInner() {
         </div>
       </div>
 
-      {filtreFournisseurId && (
+      {filtreActif && (
         <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 mb-6 text-sm">
           <span className="text-gray-600">
-            Commandes de <span className="font-medium text-gray-800">{filtreFournisseurNom || '...'}</span> uniquement
+            Filtré : {[
+              filtreFournisseur ? fournisseurs.find((f) => f.id === filtreFournisseur)?.nom : null,
+              filtreStatut ? LABELS_STATUT[filtreStatut] : null,
+              (filtreDateDebut || filtreDateFin) ? `du ${filtreDateDebut || '...'} au ${filtreDateFin || '...'}` : null,
+            ].filter(Boolean).join(' — ')}
+            {' '}({commandes.length} commande{commandes.length > 1 ? 's' : ''})
           </span>
-          <a href="/fournisseurs/commandes" className="text-green-600 hover:underline">
-            Voir toutes les commandes ×
-          </a>
+          <button
+            onClick={() => {
+              setFiltreFournisseur('')
+              setFiltreStatut('')
+              setFiltreDateDebut('')
+              setFiltreDateFin('')
+            }}
+            className="text-green-600 hover:underline"
+          >
+            Réinitialiser ×
+          </button>
         </div>
       )}
 
-      {/* Panneau export */}
-      {exportOuvert && (
+      {/* Panneau filtre + export */}
+      {filtreOuvert && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-6">
-          <h2 className="text-base font-semibold text-blue-800 mb-1">Exporter l'historique des commandes</h2>
+          <h2 className="text-base font-semibold text-blue-800 mb-1">Filtrer les commandes</h2>
           <p className="text-sm text-blue-700 mb-4">
-            Aucun filtre ne sélectionne tout l'historique (pas seulement les 20 commandes les plus récentes affichées ci-dessous).
+            S'applique à la liste ci-dessous ET aux exports. Sans filtre, seules les 20 commandes les plus récentes sont affichées.
           </p>
           <div className="flex flex-wrap items-end gap-4 mb-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Fournisseur</label>
               <select
-                value={exportFournisseur}
-                onChange={(e) => setExportFournisseur(e.target.value)}
+                value={filtreFournisseur}
+                onChange={(e) => setFiltreFournisseur(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-48"
               >
                 <option value="">Tous les fournisseurs</option>
@@ -700,8 +732,8 @@ function CommandesPageInner() {
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Statut</label>
               <select
-                value={exportStatut}
-                onChange={(e) => setExportStatut(e.target.value)}
+                value={filtreStatut}
+                onChange={(e) => setFiltreStatut(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-40"
               >
                 <option value="">Tous les statuts</option>
@@ -714,8 +746,8 @@ function CommandesPageInner() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Du</label>
               <input
                 type="date"
-                value={exportDateDebut}
-                onChange={(e) => setExportDateDebut(e.target.value)}
+                value={filtreDateDebut}
+                onChange={(e) => setFiltreDateDebut(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
               />
             </div>
@@ -723,8 +755,8 @@ function CommandesPageInner() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Au</label>
               <input
                 type="date"
-                value={exportDateFin}
-                onChange={(e) => setExportDateFin(e.target.value)}
+                value={filtreDateFin}
+                onChange={(e) => setFiltreDateFin(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
               />
             </div>
@@ -868,9 +900,9 @@ function CommandesPageInner() {
               )}
             </div>
 
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="border border-gray-200 rounded-lg overflow-visible">
               {/* En-têtes */}
-              <div className="grid grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-medium text-gray-500 border-b">
+              <div className="grid grid-cols-12 gap-2 bg-gray-50 px-4 py-2 text-xs font-medium text-gray-500 border-b rounded-t-lg">
                 <div className="col-span-5">Médicament</div>
                 <div className="col-span-2 text-center">Quantité</div>
                 <div className="col-span-3">Prix unitaire (GNF)</div>

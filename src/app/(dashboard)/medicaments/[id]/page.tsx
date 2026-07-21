@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -56,6 +57,11 @@ export default function FicheMedicamentPage() {
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [archiving, setArchiving] = useState(false)
 
+  // Equivalents generiques via DCI (Phase 3.4ter) — charges seulement en
+  // cas de rupture (stockTotal === 0) sur un medicament dont le DCI est
+  // renseigne, sinon inutile de faire l'appel.
+  const [equivalents, setEquivalents] = useState<{ id: string; nom: string; stockTotal: number }[]>([])
+
   const charger = () => {
     setLoading(true)
     fetch(`/api/medicaments/${id}`)
@@ -83,6 +89,16 @@ export default function FicheMedicamentPage() {
     if (id) charger()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  useEffect(() => {
+    if (!med || med.stockTotal > 0 || !med.dci) {
+      setEquivalents([])
+      return
+    }
+    fetch(`/api/medicaments/${med.id}/equivalents`)
+      .then((r) => r.json())
+      .then((json) => setEquivalents(json.data?.equivalents || []))
+  }, [med])
 
   const enregistrer = async () => {
     if (!form.nom.trim() || !form.prixVente) {
@@ -327,6 +343,23 @@ export default function FicheMedicamentPage() {
                 <dd className="font-medium">{med.ordonnanceObligatoire ? 'Obligatoire' : 'Libre'}</dd>
               </div>
             </dl>
+          )}
+
+          {med.stockTotal === 0 && equivalents.length > 0 && (
+            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm font-medium text-blue-800 mb-2">
+                💊 Rupture — équivalent{equivalents.length > 1 ? 's' : ''} disponible{equivalents.length > 1 ? 's' : ''} (même DCI)
+              </p>
+              <ul className="space-y-1">
+                {equivalents.map((eq) => (
+                  <li key={eq.id}>
+                    <a href={`/medicaments/${eq.id}`} className="text-sm text-blue-700 hover:underline">
+                      {eq.nom} <span className="text-blue-400">(stock : {eq.stockTotal})</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
 
