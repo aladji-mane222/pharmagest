@@ -1,3 +1,4 @@
+// CIBLE: src/app/api/commandes/route.ts
 
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -6,12 +7,34 @@ import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
 import { genererNumeroCommande } from '@/lib/numerotation'
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
 
+  const { searchParams } = new URL(request.url)
+  const fournisseurId = searchParams.get('fournisseurId') || ''
+  const statut         = searchParams.get('statut') || ''
+  const dateDebut       = searchParams.get('dateDebut') || ''
+  const dateFin         = searchParams.get('dateFin') || ''
+  // Un filtre applique = usage "historique/export" -> pas de plafond a 20.
+  // Vue par defaut (page commandes, aucun filtre) = les 20 plus recentes,
+  // comportement inchange pour ne pas ralentir l'ecran de travail courant.
+  const filtreActif = !!(fournisseurId || statut || dateDebut || dateFin)
+
+  const where: Record<string, unknown> = { pharmacieId: session.user.pharmacieId }
+  if (fournisseurId) where.fournisseurId = fournisseurId
+  if (statut)         where.statut       = statut
+  if (dateDebut || dateFin) {
+    const fin = dateFin ? new Date(dateFin) : undefined
+    if (fin) fin.setUTCHours(23, 59, 59, 999)
+    where.createdAt = {
+      ...(dateDebut && { gte: new Date(dateDebut) }),
+      ...(fin       && { lte: fin }),
+    }
+  }
+
   const commandes = await prisma.commandeFournisseur.findMany({
-    where: { pharmacieId: session.user.pharmacieId },
+    where,
     include: {
       fournisseur: { select: { nom: true } },
       lignes: {
@@ -19,7 +42,7 @@ export async function GET() {
       },
     },
     orderBy: { createdAt: 'desc' },
-    take: 20,
+    ...(filtreActif ? {} : { take: 20 }),
   })
 
   return apiSuccess(commandes)

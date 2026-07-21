@@ -2,7 +2,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { formatMontant, formatDateTime } from '@/lib/utils'
+import { formatMontant, formatDateTime, formatDate } from '@/lib/utils'
+import { exporterExcel, exporterCSV } from '@/lib/export'
 import Modal from '@/components/ui/Modal'
 import { TOLERANCE_RETARD_JOURS } from '@/lib/livraison'
 
@@ -70,6 +71,13 @@ function joursDeRetard(dateLivraisonPrevue: string | null, dateReference: Date):
 // -> importee de src/lib/livraison.ts, partagee avec le calcul de
 // fiabilite fournisseur pour ne jamais diverger.
 
+const LABELS_STATUT: Record<string, string> = {
+  BROUILLON: 'Brouillon',
+  ENVOYEE:   'Envoyée',
+  RECUE:     'Reçue',
+  ANNULEE:   'Annulée',
+}
+
 interface Fournisseur {
   id: string
   nom: string
@@ -114,6 +122,14 @@ export default function CommandesPage() {
   const [lignesReception,       setLignesReception]       = useState<LigneReception[]>([])
   const [erreurReception,       setErreurReception]       = useState<string | null>(null)
   const [savingReception,       setSavingReception]       = useState(false)
+
+  // ── Export historique (Phase 3.3) ──
+  const [exportOuvert,      setExportOuvert]      = useState(false)
+  const [exportFournisseur, setExportFournisseur] = useState('')
+  const [exportStatut,      setExportStatut]      = useState('')
+  const [exportDateDebut,   setExportDateDebut]   = useState('')
+  const [exportDateFin,     setExportDateFin]     = useState('')
+  const [exportEnCours,     setExportEnCours]     = useState(false)
 
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestions,     setSuggestions]     = useState<Suggestion[]>([])
@@ -359,6 +375,45 @@ export default function CommandesPage() {
     setSavingReception(false)
   }
 
+  // Export historique commandes (Phase 3.3) : appel dedie avec filtres,
+  // separe de la liste "commandes" utilisee pour la creation/reception
+  // afin de ne jamais plafonner cette derniere a des fins d'export.
+  const lancerExport = async (format: 'excel' | 'csv') => {
+    setExportEnCours(true)
+    const params = new URLSearchParams()
+    if (exportFournisseur) params.set('fournisseurId', exportFournisseur)
+    if (exportStatut)      params.set('statut',        exportStatut)
+    if (exportDateDebut)   params.set('dateDebut',     exportDateDebut)
+    if (exportDateFin)     params.set('dateFin',       exportDateFin)
+
+    const res  = await fetch(`/api/commandes?${params.toString()}`)
+    const json = await res.json()
+    const liste: Commande[] = json.data || []
+
+    const lignesExport = liste.map((c) => {
+      const ecart = c.lignes.some(
+        (l) => l.quantiteRecue !== null && l.quantiteRecue !== undefined && l.quantiteRecue !== l.quantite
+      )
+      return {
+        Fournisseur:              c.fournisseur.nom,
+        'Date commande':          formatDate(c.createdAt),
+        'Date livraison prévue':  c.dateLivraisonPrevue ? formatDate(c.dateLivraisonPrevue) : '',
+        'Date réception réelle':  c.dateReception ? formatDate(c.dateReception) : '',
+        Statut:                   LABELS_STATUT[c.statut] ?? c.statut,
+        'Montant total (GNF)':    c.montantTotal,
+        'Écart de livraison':     ecart ? 'Oui' : 'Non',
+      }
+    })
+
+    if (lignesExport.length === 0) {
+      setExportEnCours(false)
+      return
+    }
+    if (format === 'excel') await exporterExcel(lignesExport, 'commandes-fournisseurs')
+    else                    exporterCSV(lignesExport, 'commandes-fournisseurs')
+    setExportEnCours(false)
+  }
+
   const statutCouleur = (statut: string) => {
     switch (statut) {
       case 'BROUILLON': return 'bg-gray-100 text-gray-700'
@@ -428,6 +483,16 @@ export default function CommandesPage() {
             📋 Commandes suggérées
           </button>
           <button
+            onClick={() => setExportOuvert(!exportOuvert)}
+            className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+              exportOuvert
+                ? 'bg-blue-50 border-blue-300 text-blue-700'
+                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            ⬇️ Exporter
+          </button>
+          <button
             onClick={() => { setShowForm(!showForm); setErreur(null) }}
             className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
           >
@@ -435,6 +500,78 @@ export default function CommandesPage() {
           </button>
         </div>
       </div>
+
+      {/* Panneau export */}
+      {exportOuvert && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-6">
+          <h2 className="text-base font-semibold text-blue-800 mb-1">Exporter l'historique des commandes</h2>
+          <p className="text-sm text-blue-700 mb-4">
+            Aucun filtre ne sélectionne tout l'historique (pas seulement les 20 commandes les plus récentes affichées ci-dessous).
+          </p>
+          <div className="flex flex-wrap items-end gap-4 mb-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Fournisseur</label>
+              <select
+                value={exportFournisseur}
+                onChange={(e) => setExportFournisseur(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-48"
+              >
+                <option value="">Tous les fournisseurs</option>
+                {fournisseurs.map((f) => (
+                  <option key={f.id} value={f.id}>{f.nom}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Statut</label>
+              <select
+                value={exportStatut}
+                onChange={(e) => setExportStatut(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-40"
+              >
+                <option value="">Tous les statuts</option>
+                {Object.entries(LABELS_STATUT).map(([code, label]) => (
+                  <option key={code} value={code}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Du</label>
+              <input
+                type="date"
+                value={exportDateDebut}
+                onChange={(e) => setExportDateDebut(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Au</label>
+              <input
+                type="date"
+                value={exportDateFin}
+                onChange={(e) => setExportDateFin(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => lancerExport('excel')}
+              disabled={exportEnCours}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+            >
+              {exportEnCours ? 'Export en cours...' : '📊 Exporter en Excel'}
+            </button>
+            <button
+              onClick={() => lancerExport('csv')}
+              disabled={exportEnCours}
+              className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50 disabled:opacity-50"
+            >
+              {exportEnCours ? 'Export en cours...' : '📄 Exporter en CSV'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Panneau suggestions */}
       {showSuggestions && (
@@ -667,7 +804,7 @@ export default function CommandesPage() {
                   <td className="px-6 py-4 text-center">{badgeLivraison(cmd)}</td>
                   <td className="px-6 py-4 text-center">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${statutCouleur(cmd.statut)}`}>
-                      {cmd.statut}
+                      {LABELS_STATUT[cmd.statut] ?? cmd.statut}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">

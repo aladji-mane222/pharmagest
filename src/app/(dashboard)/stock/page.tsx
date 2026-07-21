@@ -24,6 +24,7 @@ interface MedicamentStock {
   stockTotal: number
   stockBas: boolean
   lotsCritiques: number
+  produitDormant: boolean
   lots: Lot[]
 }
 
@@ -42,7 +43,7 @@ export default function StockPage() {
   const [stock, setStock] = useState<MedicamentStock[]>([])
   const [valeurTotale, setValeurTotale] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [filtre, setFiltre] = useState<'tous' | 'bas' | 'critiques'>('tous')
+  const [filtre, setFiltre] = useState<'tous' | 'bas' | 'critiques' | 'dormants'>('tous')
   const [selected, setSelected] = useState<MedicamentStock | null>(null)
   const [importOuvert, setImportOuvert] = useState(false)
 
@@ -63,6 +64,7 @@ export default function StockPage() {
   const stockFiltre = stock.filter((med) => {
     if (filtre === 'bas') return med.stockBas
     if (filtre === 'critiques') return med.lotsCritiques > 0
+    if (filtre === 'dormants') return med.produitDormant
     return true
   })
 
@@ -93,7 +95,7 @@ export default function StockPage() {
             🔄 Mouvements
           </Link>
           <div className="flex gap-2">
-            {(['tous', 'bas', 'critiques'] as const).map((f) => (
+            {(['tous', 'bas', 'critiques', 'dormants'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFiltre(f)}
@@ -101,7 +103,7 @@ export default function StockPage() {
                   filtre === f ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                {f === 'tous' ? 'Tous' : f === 'bas' ? 'Stock bas' : 'Péremptions'}
+                {f === 'tous' ? 'Tous' : f === 'bas' ? 'Stock bas' : f === 'critiques' ? 'Péremptions' : 'Dormants'}
               </button>
             ))}
           </div>
@@ -118,7 +120,7 @@ export default function StockPage() {
         onImported={() => chargerStock()}
       />
 
-      <div className="grid grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-4 gap-6 mb-6">
         <div className="bg-white rounded-xl shadow p-4">
           <p className="text-sm text-gray-500">Total médicaments</p>
           <p className="text-2xl font-bold text-gray-800">{stock.length}</p>
@@ -130,6 +132,11 @@ export default function StockPage() {
         <div className="bg-white rounded-xl shadow p-4">
           <p className="text-sm text-gray-500">Lots critiques</p>
           <p className="text-2xl font-bold text-red-500">{stock.filter((m) => m.lotsCritiques > 0).length}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow p-4">
+          <p className="text-sm text-gray-500">Produits dormants</p>
+          <p className="text-2xl font-bold text-blue-400">{stock.filter((m) => m.produitDormant).length}</p>
+          <p className="text-xs text-gray-400 mt-0.5">Aucune vente depuis 90 jours</p>
         </div>
       </div>
 
@@ -173,7 +180,10 @@ export default function StockPage() {
                     {med.lotsCritiques > 0 && (
                       <span className="px-2 py-1 bg-yellow-100 text-yellow-600 rounded-full text-xs ml-1">Péremption</span>
                     )}
-                    {!med.stockBas && med.lotsCritiques === 0 && (
+                    {med.produitDormant && (
+                      <span className="px-2 py-1 bg-blue-50 text-blue-500 rounded-full text-xs ml-1">Dormant</span>
+                    )}
+                    {!med.stockBas && med.lotsCritiques === 0 && !med.produitDormant && (
                       <span className="px-2 py-1 bg-green-100 text-green-600 rounded-full text-xs">OK</span>
                     )}
                   </td>

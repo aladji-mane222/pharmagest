@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -9,6 +10,7 @@ import { ouvrirRecuPDF, telechargerRecuPDF, construireMessageWhatsApp, DonneesRe
 interface Medicament {
   id: string
   nom: string
+  codeBarre: string | null
   prixVente: number
   stockTotal: number
   unite: string
@@ -130,17 +132,36 @@ export default function VentesPage() {
   }, [search])
 
   // Ajout direct au panier si un seul medicament correspond exactement au nom
-  // tape (insensible a la casse) — evite un clic supplementaire quand le
-  // caissier a tape le nom complet. Se declenche uniquement quand la liste
-  // de resultats change (nouvelle recherche), jamais en boucle : les cas de
+  // tape (insensible a la casse) OU au code-barres scanne — evite un clic
+  // supplementaire quand le caissier a tape le nom complet ou scanne un
+  // produit (Phase 3.4bis). Se declenche uniquement quand la liste de
+  // resultats change (nouvelle recherche), jamais en boucle : les cas de
   // sortie anticipee dans ajouterAuPanier (stock 0, quantite deja au max) ne
   // modifient ni search ni medicaments, donc l'effet ne se redeclenche pas.
   useEffect(() => {
-    if (medicaments.length === 1 && medicaments[0].nom.toLowerCase() === search.trim().toLowerCase()) {
-      ajouterAuPanier(medicaments[0])
-    }
+    if (medicaments.length !== 1) return
+    const m = medicaments[0]
+    const saisie = search.trim().toLowerCase()
+    const matchNom = m.nom.toLowerCase() === saisie
+    const matchCodeBarre = !!m.codeBarre && m.codeBarre.toLowerCase() === saisie
+    if (matchNom || matchCodeBarre) ajouterAuPanier(m)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medicaments])
+
+  // Recherche immediate par code-barres exact sur Entree, sans attendre le
+  // debounce de 300ms — une douchette USB tape le code puis envoie Entree
+  // quasi instantanement, donc on ne veut pas de delai perceptible ici.
+  // Si rien ne correspond exactement, on laisse la recherche generale
+  // (search, deja lancee en parallele) faire son travail normalement.
+  const surEntreeRecherche = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return
+    const valeur = search.trim()
+    if (!valeur) return
+    const res = await fetch(`/api/medicaments?codeBarre=${encodeURIComponent(valeur)}`)
+    const json = await res.json()
+    const trouve = json.data?.medicaments?.[0]
+    if (trouve) ajouterAuPanier(trouve)
+  }
 
   const ajouterAuPanier = (med: Medicament) => {
     if (med.stockTotal === 0) return
@@ -458,9 +479,10 @@ export default function VentesPage() {
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2 space-y-4">
           <div className="relative">
-            <input type="text" placeholder="Rechercher un medicament (min 2 lettres)..."
+            <input type="text" placeholder="Rechercher un medicament ou scanner un code-barres..."
               ref={searchInputRef}
               value={search} onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={surEntreeRecherche}
               className="w-full px-4 py-3 border border-gray-200 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint text-lg" />
             {medicaments.length > 0 && (
               <div className="absolute top-full left-0 right-0 bg-white border border-gray-100 rounded-card shadow-md z-10 mt-1 overflow-hidden">
