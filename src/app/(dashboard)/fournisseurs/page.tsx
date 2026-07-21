@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -16,6 +17,19 @@ interface Fournisseur {
   telephone: string | null
   email: string | null
   delaiLivraison: number | null
+  fiabilite?: {
+    totalCommandesRecues: number
+    commandesATemps: number
+    pourcentageATemps: number | null
+    niveau: 'fiable' | 'generalement_fiable' | 'souvent_en_retard' | 'insuffisant'
+  }
+}
+
+const STYLES_FIABILITE: Record<string, { classe: string; label: string }> = {
+  fiable:               { classe: 'bg-green-100 text-green-700',  label: 'Fiable' },
+  generalement_fiable:  { classe: 'bg-orange-100 text-orange-700', label: 'Généralement fiable' },
+  souvent_en_retard:    { classe: 'bg-red-100 text-red-700',       label: 'Souvent en retard' },
+  insuffisant:          { classe: 'bg-gray-100 text-gray-500',     label: 'Historique insuffisant' },
 }
 
 const CHAMPS_IMPORT_FOURNISSEURS: ImportField[] = [
@@ -204,6 +218,7 @@ export default function FournisseursPage() {
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Contact</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Téléphone</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Délai</th>
+                <th className="text-left px-6 py-3 text-gray-600 font-medium">Fiabilité</th>
                 <th className="text-right px-6 py-3 text-gray-600 font-medium">Actions</th>
               </tr>
             </thead>
@@ -222,6 +237,27 @@ export default function FournisseursPage() {
                   <td className="px-6 py-4 text-gray-600">{f.telephone || '-'}</td>
                   <td className="px-6 py-4 text-gray-600">
                     {f.delaiLivraison ? `${f.delaiLivraison} jours` : '-'}
+                  </td>
+                  <td className="px-6 py-4">
+                    {(() => {
+                      const fiab = f.fiabilite
+                      const style = STYLES_FIABILITE[fiab?.niveau || 'insuffisant']
+                      const titre =
+                        fiab && fiab.niveau !== 'insuffisant'
+                          ? `${fiab.commandesATemps} livraison(s) à temps sur ${fiab.totalCommandesRecues} reçue(s) (90 derniers jours)`
+                          : `Moins de 3 commandes reçues avec date prévue sur les 90 derniers jours`
+                      return (
+                        <span
+                          title={titre}
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${style.classe}`}
+                        >
+                          {style.label}
+                          {fiab?.pourcentageATemps !== null && fiab?.pourcentageATemps !== undefined && (
+                            <> ({fiab.pourcentageATemps}%)</>
+                          )}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">

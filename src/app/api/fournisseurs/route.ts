@@ -4,17 +4,58 @@ import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
 import { genererNumeroFournisseur } from '@/lib/numerotation'
+import { Prisma } from '@prisma/client'
+import {
+  TOLERANCE_RETARD_JOURS,
+  FENETRE_FIABILITE_JOURS,
+  calculerNiveauFiabilite,
+} from '@/lib/livraison'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
 
+  const pharmacieId = session.user.pharmacieId
+
   const fournisseurs = await prisma.fournisseur.findMany({
-    where: { pharmacieId: session.user.pharmacieId, actif: true },
+    where: { pharmacieId, actif: true },
     orderBy: { nom: 'asc' },
   })
 
-  return new Response(JSON.stringify({ success: true, data: fournisseurs }), {
+  // Fiabilite : une seule requete agregee (groupee par fournisseur) sur
+  // les commandes recues avec date de livraison prevue renseignee, sur
+  // la fenetre glissante — plutot qu'une requete par fournisseur (N+1,
+  // couteux vu la latence Guinee-Europe deja documentee dans le projet).
+  const stats = await prisma.$queryRaw<{ fournisseurId: string; total: bigint; aTemps: bigint }[]>(
+    Prisma.sql`
+      SELECT "fournisseurId",
+             COUNT(*) AS total,
+             COUNT(*) FILTER (
+               WHERE "dateReception" <= "dateLivraisonPrevue" + (${TOLERANCE_RETARD_JOURS}::int * INTERVAL '1 day')
+             ) AS "aTemps"
+      FROM "CommandeFournisseur"
+      WHERE "pharmacieId" = ${pharmacieId}
+        AND statut = 'RECUE'
+        AND "dateLivraisonPrevue" IS NOT NULL
+        AND "dateReception" IS NOT NULL
+        AND "dateReception" >= NOW() - (${FENETRE_FIABILITE_JOURS}::int * INTERVAL '1 day')
+      GROUP BY "fournisseurId"
+    `
+  )
+  const statsParFournisseur = new Map(stats.map((s) => [s.fournisseurId, s]))
+
+  const fournisseursAvecFiabilite = fournisseurs.map((f) => {
+    const s = statsParFournisseur.get(f.id)
+    const total = s ? Number(s.total) : 0
+    const aTemps = s ? Number(s.aTemps) : 0
+    const { pourcentageATemps, niveau } = calculerNiveauFiabilite(total, aTemps)
+    return {
+      ...f,
+      fiabilite: { totalCommandesRecues: total, commandesATemps: aTemps, pourcentageATemps, niveau },
+    }
+  })
+
+  return new Response(JSON.stringify({ success: true, data: fournisseursAvecFiabilite }), {
     headers: {
       'Content-Type': 'application/json',
       'Cache-Control': 's-maxage=120, stale-while-revalidate=60',
