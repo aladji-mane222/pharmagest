@@ -1,14 +1,8 @@
-
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
-import { Prisma } from '@prisma/client'
-
-// 90 jours : meme convention que le seuil de peremption proche et la
-// fenetre de fiabilite fournisseur deja utilises ailleurs dans l'app —
-// pour ne pas ajouter un nouveau chiffre "magique" de plus.
-const FENETRE_DORMANT_JOURS = 90
+import { getMedicamentsVendusRecemment } from '@/lib/stock'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -17,7 +11,7 @@ export async function GET() {
   const pharmacieId = session.user.pharmacieId
   const dans90Jours = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
 
-  const [medicamentsRaw, ventesRecentes] = await Promise.all([
+  const [medicamentsRaw, medicamentsVendusRecemment] = await Promise.all([
     prisma.medicament.findMany({
       where: { pharmacieId, actif: true },
       include: {
@@ -28,21 +22,10 @@ export async function GET() {
       },
       orderBy: { nom: 'asc' },
     }),
-    // Un seul aller-retour pour recuperer tous les medicaments vendus
-    // recemment, plutot qu'une requete "derniere vente" par medicament
-    // (latence Guinee-Europe deja documentee dans le projet)
-    prisma.$queryRaw<{ medicamentId: string }[]>(
-      Prisma.sql`
-        SELECT DISTINCT lv."medicamentId"
-        FROM "LigneVente" lv
-        JOIN "Vente" v ON v.id = lv."venteId"
-        WHERE v."pharmacieId" = ${pharmacieId}
-          AND v.statut != 'ANNULEE'
-          AND v."createdAt" >= NOW() - (${FENETRE_DORMANT_JOURS}::int * INTERVAL '1 day')
-      `
-    ),
+    // Extrait dans src/lib/stock.ts (Phase 4) pour etre reutilise tel
+    // quel par /api/rapports sans dupliquer/risquer de diverger.
+    getMedicamentsVendusRecemment(pharmacieId),
   ])
-  const medicamentsVendusRecemment = new Set(ventesRecentes.map((v) => v.medicamentId))
 
   // BUG CRITIQUE corrigé le 04/07/2026 : l'ancien code faisait
   // `medicamentsRaw.map(({ lots, ...m }) => ...)`, ce qui retirait "lots"
