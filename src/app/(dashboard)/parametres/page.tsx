@@ -43,13 +43,13 @@ export default function ParametresPage() {
       })
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, champs: Record<string, unknown>) => {
     e.preventDefault()
     setSaving(true)
     const res = await fetch('/api/parametres', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify(champs),
     })
     if (res.ok) {
       setSuccess(true)
@@ -75,7 +75,7 @@ export default function ParametresPage() {
           </div>
         )}
         <fieldset disabled={!estAdmin} className="contents">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={(e) => handleSubmit(e, { nom: form.nom, adresse: form.adresse, telephone: form.telephone, email: form.email })} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nom de la pharmacie</label>
             <input value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })}
@@ -96,6 +96,23 @@ export default function ParametresPage() {
             <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
           </div>
+          {success && <p className="text-green-600 text-sm">Parametres sauvegardes !</p>}
+          <button type="submit" disabled={saving}
+            className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
+            {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+          </button>
+        </form>
+        </fieldset>
+      </div>
+
+      {/* Format de recu — separe du bloc admin ci-dessus : modifiable par
+          TOUS les roles (besoin operationnel du quotidien), contrairement
+          aux infos administratives de la pharmacie. Decision confirmee
+          par Nabe le 23/07/2026. Envoi cible : seul formatRecu part dans
+          le PATCH, jamais les champs admin-only. */}
+      <div className="bg-white rounded-xl shadow p-6 mb-6">
+        <h2 className="font-semibold text-gray-700 mb-4">Format de reçu</h2>
+        <form onSubmit={(e) => handleSubmit(e, { formatRecu: form.formatRecu })} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Format d&apos;impression du recu</label>
             <select
@@ -117,7 +134,6 @@ export default function ParametresPage() {
             {saving ? 'Sauvegarde...' : 'Sauvegarder'}
           </button>
         </form>
-        </fieldset>
       </div>
 
       <div className="bg-white rounded-xl shadow p-6 mb-6">
@@ -128,7 +144,7 @@ export default function ParametresPage() {
           </div>
         )}
         <fieldset disabled={!estAdmin} className="contents">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={(e) => handleSubmit(e, { dureeMaxSessionCaisseH: form.dureeMaxSessionCaisseH })} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Duree max d&apos;une session caisse (heures)

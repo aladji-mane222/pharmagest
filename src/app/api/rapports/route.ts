@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     ? new Date(searchParams.get('debut')!)
     : new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   const fin = searchParams.get('fin') ? new Date(searchParams.get('fin')!) : new Date()
+  const fournisseurIdFiltre = searchParams.get('fournisseurId') || null
   fin.setHours(23, 59, 59, 999)
   const pharmacieId = session.user.pharmacieId
 
@@ -151,6 +152,15 @@ export async function GET(request: Request) {
       // pas un vrai taux de rotation comptable.
       const rotation = stockTotal > 0 ? Math.round((quantiteVendue / stockTotal) * 100) / 100 : null
       const produitDormant = stockTotal > 0 && !medicamentsVendusRecemment.has(m.id)
+      // Statut unifie affiche/exporte partout (ecran, Excel, CSV, PDF) —
+      // avant chacun bricolait sa propre representation (booleen brut en
+      // export, badge seul a l'ecran), incoherent d'un format a l'autre.
+      // Ordre de priorite : rupture > stock bas > dormant > normal.
+      const statut =
+        stockTotal === 0            ? 'Rupture' :
+        stockTotal <= m.stockMinimum ? 'Stock bas' :
+        produitDormant               ? 'Dormant' :
+                                        'Normal'
       return {
         ...m,
         stockTotal,
@@ -158,6 +168,7 @@ export async function GET(request: Request) {
         quantiteVendue,
         rotation,
         produitDormant,
+        statut,
       }
     })
     const valeurTotale = stock.reduce((s, m) => s + m.valeur, 0)
@@ -214,18 +225,22 @@ export async function GET(request: Request) {
   }
 
   if (type === 'graphique-benefice') {
-    // Evolution du benefice net jour par jour sur les 30 derniers jours,
-    // fixe (pas lie a la periode selectionnee dans le filtre — c'est une
-    // tendance de fond affichee en contexte du rapport Benefice).
-    // 3 requetes agregees groupees par jour plutot qu'une boucle de 30
+    // Evolution du benefice net jour par jour, fenetre configurable
+    // (15/30/90j — demande le 23/07/2026, avant fixe a 30j), pas liee a
+    // la periode selectionnee dans le filtre — c'est une tendance de
+    // fond affichee en contexte du rapport Benefice.
+    // 3 requetes agregees groupees par jour plutot qu'une boucle de N
     // requetes (latence Guinee-Europe deja documentee dans le projet).
+    const nbJoursParam = parseInt(searchParams.get('jours') || '30', 10)
+    const nbJours = [15, 30, 90].includes(nbJoursParam) ? nbJoursParam : 30
+
     const [caParJour, cmvParJour, depensesParJour] = await Promise.all([
       prisma.$queryRaw<{ jour: Date; ca: number }[]>(
         Prisma.sql`
           SELECT DATE("createdAt") as jour, COALESCE(SUM("montantTotal"), 0)::float as ca
           FROM "Vente"
           WHERE "pharmacieId" = ${pharmacieId} AND statut = 'COMPLETE'
-            AND "createdAt" >= NOW() - INTERVAL '30 days'
+            AND "createdAt" >= NOW() - (${nbJours}::int * INTERVAL '1 day')
           GROUP BY DATE("createdAt")
         `
       ),
@@ -236,7 +251,7 @@ export async function GET(request: Request) {
           JOIN "Vente" v ON v.id = lv."venteId"
           JOIN "Medicament" m ON m.id = lv."medicamentId"
           WHERE v."pharmacieId" = ${pharmacieId} AND v.statut = 'COMPLETE'
-            AND v."createdAt" >= NOW() - INTERVAL '30 days'
+            AND v."createdAt" >= NOW() - (${nbJours}::int * INTERVAL '1 day')
           GROUP BY DATE(v."createdAt")
         `
       ),
@@ -245,7 +260,7 @@ export async function GET(request: Request) {
           SELECT DATE("createdAt") as jour, COALESCE(SUM(montant), 0)::float as depenses
           FROM "Depense"
           WHERE "pharmacieId" = ${pharmacieId} AND archivee = false
-            AND "createdAt" >= NOW() - INTERVAL '30 days'
+            AND "createdAt" >= NOW() - (${nbJours}::int * INTERVAL '1 day')
           GROUP BY DATE("createdAt")
         `
       ),
@@ -256,7 +271,7 @@ export async function GET(request: Request) {
     const depensesMap = new Map(depensesParJour.map((r) => [r.jour.toISOString().slice(0, 10), r.depenses]))
 
     const jours: { date: string; beneficeNet: number }[] = []
-    for (let i = 29; i >= 0; i--) {
+    for (let i = nbJours - 1; i >= 0; i--) {
       const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
       const cle = d.toISOString().slice(0, 10)
       const ca = caMap.get(cle) ?? 0
@@ -319,6 +334,31 @@ export async function GET(request: Request) {
     return apiSuccess({ clients: clientsAvecAnciennete, totalDu, parTranche, type })
   }
 
+  if (type === 'depenses') {
+    const depenses = await prisma.depense.findMany({
+      where: { pharmacieId, createdAt: { gte: debut, lte: fin }, archivee: false },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        libelle: true,
+        montant: true,
+        categorie: true,
+        createdAt: true,
+        user: { select: { nom: true } },
+      },
+    })
+    const total = depenses.reduce((s, d) => s + d.montant, 0)
+
+    const categorieMap = new Map<string, { categorie: string; nb: number; montant: number }>()
+    for (const d of depenses) {
+      const cur = categorieMap.get(d.categorie) ?? { categorie: d.categorie, nb: 0, montant: 0 }
+      categorieMap.set(d.categorie, { ...cur, nb: cur.nb + 1, montant: cur.montant + d.montant })
+    }
+    const parCategorie = Array.from(categorieMap.values()).sort((a, b) => b.montant - a.montant)
+
+    return apiSuccess({ type, depenses, total, parCategorie })
+  }
+
   if (type === 'commandes') {
     // BROUILLON exclue (jamais envoyee, pas une activite reelle) et ANNULEE
     // exclue des montants (meme principe que les ventes ANNULEE deja
@@ -328,6 +368,7 @@ export async function GET(request: Request) {
         pharmacieId,
         createdAt: { gte: debut, lte: fin },
         statut: { in: ['ENVOYEE', 'RECUE'] },
+        ...(fournisseurIdFiltre ? { fournisseurId: fournisseurIdFiltre } : {}),
       },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -395,7 +436,11 @@ export async function GET(request: Request) {
     // lignes des commandes de la periode
     const lignesAvecReception = await prisma.ligneCommande.findMany({
       where: {
-        commande: { pharmacieId, createdAt: { gte: debut, lte: fin } },
+        commande: {
+          pharmacieId,
+          createdAt: { gte: debut, lte: fin },
+          ...(fournisseurIdFiltre ? { fournisseurId: fournisseurIdFiltre } : {}),
+        },
         quantiteRecue: { not: null },
       },
       select: { quantite: true, quantiteRecue: true, prixUnitaire: true },
@@ -407,12 +452,22 @@ export async function GET(request: Request) {
       0
     )
 
+    // Liste stable (independante de la periode/filtre) pour peupler le
+    // menu deroulant du filtre fournisseur cote UI
+    const fournisseursDisponibles = await prisma.fournisseur.findMany({
+      where: { pharmacieId, actif: true },
+      select: { id: true, nom: true },
+      orderBy: { nom: 'asc' },
+    })
+
     return apiSuccess({
       type,
       commandes: commandesEnrichies,
       montantTotalCommande,
       montantTotalRecu,
       parFournisseur,
+      fournisseursDisponibles,
+      fournisseurIdFiltre,
       fiabilite: {
         totalCommandesRecues: recuesAvecDates.length,
         commandesATemps,

@@ -4,6 +4,15 @@ import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
 
+function normaliserNom(nom: string): string {
+  return nom
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
@@ -97,6 +106,19 @@ export async function POST(request: Request) {
     if (conflit) {
       return apiError(`Ce code-barres est deja utilise par "${conflit.nom}"`, 409)
     }
+  }
+
+  // Doublon par nom — absent jusqu'ici (seul le code-barres etait
+  // verifie, optionnel). Trouve en testant reellement le 23/07/2026.
+  // Meme normalisation (accents/casse/espaces) que fournisseurs/clients.
+  const nomNorm = normaliserNom(nom)
+  const medicamentsExistants = await prisma.medicament.findMany({
+    where: { pharmacieId, actif: true },
+    select: { nom: true },
+  })
+  const doublonNom = medicamentsExistants.find((m) => normaliserNom(m.nom) === nomNorm)
+  if (doublonNom) {
+    return apiError(`Un medicament avec ce nom existe deja (${doublonNom.nom})`, 409)
   }
 
   const medicament = await prisma.medicament.create({
