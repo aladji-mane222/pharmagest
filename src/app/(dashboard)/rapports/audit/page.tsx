@@ -265,7 +265,7 @@ export default function AuditPage() {
   }
   const prefixesTries = [
     ...ORDRE_PREFIXES.filter((p) => groupesParPrefixe.has(p)),
-    ...[...groupesParPrefixe.keys()].filter((p) => !ORDRE_PREFIXES.includes(p)).sort(),
+    ...Array.from(groupesParPrefixe.keys()).filter((p) => !ORDRE_PREFIXES.includes(p)).sort(),
   ]
   const groupesSelect = prefixesTries.map((prefixe) => ({
     label: LABELS_PREFIXES[prefixe] ?? prefixe,
