@@ -21,10 +21,22 @@ export async function GET() {
 export async function PATCH(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
-  if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
 
   const body = await request.json()
   const { nom, adresse, telephone, email, formatRecu, dureeMaxSessionCaisseH } = body
+
+  // Un CAISSIER peut changer le format de recu (besoin operationnel du
+  // quotidien) mais pas les infos administratives de la pharmacie ni la
+  // duree max de session caisse — decision confirmee par Nabe le
+  // 23/07/2026. On rejette explicitement plutot que d'ignorer
+  // silencieusement, pour que l'appelant sache que ce n'est pas passe.
+  if (session.user.role === 'CAISSIER') {
+    const champsInterdits = { nom, adresse, telephone, email, dureeMaxSessionCaisseH }
+    const tentativeChampInterdit = Object.entries(champsInterdits).some(([, v]) => v !== undefined)
+    if (tentativeChampInterdit) {
+      return apiError('Seul le format de recu peut etre modifie par un caissier', 403)
+    }
+  }
 
   const formatsValides = ['A4', 'THERMIQUE_58', 'THERMIQUE_80']
   if (formatRecu !== undefined && !formatsValides.includes(formatRecu)) {

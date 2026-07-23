@@ -16,8 +16,18 @@ export default withAuth(
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
-    // Tableau de bord crédits — Admin uniquement
-    if (pathname.startsWith('/credits') && token?.role === 'CAISSIER') {
+    // Rapports (dont /rapports/audit) — Admin uniquement. Les API
+    // correspondantes bloquaient deja CAISSIER (403), mais la PAGE
+    // elle-meme restait accessible en tapant l'URL directement, avec un
+    // flash de la sidebar avant que les appels API echouent — trouve en
+    // testant reellement le 23/07/2026. Corrige ici, au meme niveau que
+    // /admin et /credits.
+    if (pathname.startsWith('/rapports') && token?.role === 'CAISSIER') {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+
+    // Personnel — Admin uniquement, meme constat que /rapports
+    if (pathname.startsWith('/personnel') && token?.role === 'CAISSIER') {
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 

@@ -60,8 +60,16 @@ const menuGroups: MenuGroup[] = [
     caissierHidden: true,
     items: [
       { href: '/personnel',  label: 'Personnel',  icon: '👤' },
-      { href: '/parametres', label: 'Paramètres', icon: '⚙️' },
       { href: '/rapports',   label: 'Rapports',   icon: '📈' },
+    ],
+  },
+  {
+    // Parametres reste visible pour un CAISSIER (Phase 4, 23/07/2026) —
+    // il peut changer le format de recu, l'API bloque tout le reste en
+    // lecture seule pour lui (voir /api/parametres PATCH)
+    label: 'GESTION',
+    items: [
+      { href: '/parametres', label: 'Paramètres', icon: '⚙️' },
     ],
   },
 ]
