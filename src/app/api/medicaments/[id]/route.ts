@@ -51,6 +51,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     codeBarre,
     dci,
     ordonnanceObligatoire,
+    forcerCreation,
   } = body
 
   // Le code-barres est unique par pharmacie (@@unique([pharmacieId, codeBarre])
@@ -83,6 +84,19 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const doublonNom = medicamentsExistants.find((m) => normaliserNom(m.nom) === nomNorm)
     if (doublonNom) {
       return apiError(`Un medicament avec ce nom existe deja (${doublonNom.nom})`, 409)
+    }
+    if (!forcerCreation) {
+      const proche = medicamentsExistants.find((m) => {
+        const mNorm = normaliserNom(m.nom)
+        return mNorm !== nomNorm && (mNorm.includes(nomNorm) || nomNorm.includes(mNorm))
+      })
+      if (proche) {
+        return apiError(
+          `Un medicament au nom proche existe deja : "${proche.nom}"`,
+          409,
+          { avertissement: true, nomSimilaire: proche.nom }
+        )
+      }
     }
   }
 

@@ -1,3 +1,4 @@
+
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
   if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
 
   const body = await request.json()
-  const { nom, contact, telephone, email, delaiLivraison } = body
+  const { nom, contact, telephone, email, delaiLivraison, forcerCreation } = body
 
   if (!nom) return apiError('Nom du fournisseur requis', 400)
   if (email && email.trim() && !EMAIL_REGEX.test(email.trim())) {
@@ -127,6 +128,26 @@ export async function POST(request: Request) {
   const doublonNom = fournisseursExistants.find((f) => normaliserNom(f.nom) === nomNorm)
   if (doublonNom) {
     return apiError(`Un fournisseur avec ce nom existe deja (${doublonNom.nom})`, 409)
+  }
+
+  // Avertissement NON-BLOQUANT (pas un doublon exact) : un nom contient
+  // l'autre apres normalisation — typiquement un suffixe legal en plus
+  // ("Fournisseur Fiable" vs "Fournisseur Fiable SARL"), trouve en
+  // testant reellement le 23/07/2026. On ne bloque pas — meme principe
+  // que l'avertissement nom-seul deja utilise pour les clients — on
+  // laisse passer si le formulaire renvoie forcerCreation: true.
+  if (!forcerCreation) {
+    const proche = fournisseursExistants.find((f) => {
+      const fNorm = normaliserNom(f.nom)
+      return fNorm !== nomNorm && (fNorm.includes(nomNorm) || nomNorm.includes(fNorm))
+    })
+    if (proche) {
+      return apiError(
+        `Un fournisseur au nom proche existe deja : "${proche.nom}"`,
+        409,
+        { avertissement: true, nomSimilaire: proche.nom }
+      )
+    }
   }
 
   const fournisseur = await prisma.$transaction(async (tx) => {

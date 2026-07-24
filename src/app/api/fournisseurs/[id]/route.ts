@@ -1,3 +1,4 @@
+
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -45,7 +46,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   if (!fournisseur) return apiError('Fournisseur non trouve', 404)
 
   const body = await request.json()
-  const { nom, contact, telephone, email, delaiLivraison } = body
+  const { nom, contact, telephone, email, delaiLivraison, forcerCreation } = body
 
   if (email !== undefined && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return apiError('Email invalide', 400)
@@ -85,6 +86,19 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       const existant = autresFournisseurs.find((f) => normaliserNom(f.nom) === nomNorm)
       if (existant) {
         return apiError(`Un autre fournisseur avec ce nom existe deja (${existant.nom})`, 409)
+      }
+      if (!forcerCreation) {
+        const proche = autresFournisseurs.find((f) => {
+          const fNorm = normaliserNom(f.nom)
+          return fNorm !== nomNorm && (fNorm.includes(nomNorm) || nomNorm.includes(fNorm))
+        })
+        if (proche) {
+          return apiError(
+            `Un fournisseur au nom proche existe deja : "${proche.nom}"`,
+            409,
+            { avertissement: true, nomSimilaire: proche.nom }
+          )
+        }
       }
     }
   }

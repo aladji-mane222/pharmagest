@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -52,6 +51,7 @@ export default function FournisseursPage() {
   const [archivingId, setArchivingId] = useState<string | null>(null)
   const [confirmArchiverId, setConfirmArchiverId] = useState<string | null>(null)
   const [importOuvert, setImportOuvert] = useState(false)
+  const [avertissementNom, setAvertissementNom] = useState<string | null>(null)
   const { showToast } = useToast()
 
   const chargerFournisseurs = () => {
@@ -67,23 +67,34 @@ export default function FournisseursPage() {
     chargerFournisseurs()
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const soumettreFournisseur = async (forcerCreation: boolean) => {
     setSaving(true)
     const res = await fetch('/api/fournisseurs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, forcerCreation }),
     })
     const json = await res.json()
     if (res.ok) {
       setFournisseurs([...fournisseurs, json.data])
       setForm({ nom: '', contact: '', telephone: '', email: '', delaiLivraison: '' })
       setShowForm(false)
+      setAvertissementNom(null)
+    } else if (json.details?.avertissement) {
+      // Pas un vrai blocage — juste un nom proche d'un fournisseur
+      // existant (ex: avec/sans "SARL"). On demande confirmation plutot
+      // que de bloquer, meme principe que l'avertissement nom-seul deja
+      // utilise pour les clients.
+      setAvertissementNom(json.details.nomSimilaire)
     } else {
       showToast(json.error || 'Erreur lors de la creation du fournisseur', 'error')
     }
     setSaving(false)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    soumettreFournisseur(false)
   }
 
   const archiver = (id: string) => {
@@ -294,6 +305,17 @@ export default function FournisseursPage() {
         variant="danger"
         confirmLabel="Archiver"
         loading={!!archivingId}
+      />
+
+      <Modal
+        open={!!avertissementNom}
+        onClose={() => setAvertissementNom(null)}
+        onConfirm={() => soumettreFournisseur(true)}
+        title="Nom de fournisseur proche d'un existant"
+        description={`Un fournisseur au nom proche existe déjà : "${avertissementNom}". Vérifie que ce n'est pas le même avant de continuer.`}
+        variant="default"
+        confirmLabel="Créer quand même"
+        loading={saving}
       />
     </div>
   )
