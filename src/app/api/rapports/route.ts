@@ -351,8 +351,9 @@ export async function GET(request: Request) {
 
     const categorieMap = new Map<string, { categorie: string; nb: number; montant: number }>()
     for (const d of depenses) {
-      const cur = categorieMap.get(d.categorie) ?? { categorie: d.categorie, nb: 0, montant: 0 }
-      categorieMap.set(d.categorie, { ...cur, nb: cur.nb + 1, montant: cur.montant + d.montant })
+      const categorie = d.categorie ?? 'Sans catégorie'
+      const cur = categorieMap.get(categorie) ?? { categorie, nb: 0, montant: 0 }
+      categorieMap.set(categorie, { ...cur, nb: cur.nb + 1, montant: cur.montant + d.montant })
     }
     const parCategorie = Array.from(categorieMap.values()).sort((a, b) => b.montant - a.montant)
 
