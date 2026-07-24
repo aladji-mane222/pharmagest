@@ -1,3 +1,4 @@
+
 import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
 
 // ── Types internes (miroir de rapports/page.tsx) ─────────────────────────────
@@ -20,6 +21,10 @@ interface BeneficeData {
   ca: number
   totalDepenses: number
   beneficeNet: number
+  // Injectes cote page.tsx au moment de l'export (pas dans le rapport de
+  // base) — Phase 4, 24/07/2026
+  evolution?: { date: string; beneficeNet: number }[]
+  repartitionDepenses?: { categorie: string; montant: number }[]
 }
 interface VentesData    { type: 'ventes';    ventes: VenteRow[]; total: number; ticketMoyen: number; topMedicaments: TopMedicament[] }
 interface StockData     { type: 'stock';     stock: StockRow[]; valeurTotale: number; nbProduitsDormants: number }
@@ -80,6 +85,30 @@ interface Colonne { label: string; flex: number; align: 'left' | 'right' }
 interface SectionPDF { key: string; titre: string; colonnes: Colonne[]; lignes: string[][]; sommaire?: string }
 
 function construireSections(data: RapportData): SectionPDF[] {
+  if (data.type === 'benefice') {
+    const sections: SectionPDF[] = []
+    if (data.evolution) {
+      sections.push({
+        key: 'evolution', titre: 'Évolution du bénéfice net',
+        colonnes: [
+          { label: 'Date',         flex: 3, align: 'left'  },
+          { label: 'Bénéfice net', flex: 3, align: 'right' },
+        ],
+        lignes: data.evolution.map((j) => [j.date, fmt(j.beneficeNet)]),
+      })
+    }
+    if (data.repartitionDepenses) {
+      sections.push({
+        key: 'repartitionDepenses', titre: 'Répartition des dépenses',
+        colonnes: [
+          { label: 'Catégorie', flex: 4, align: 'left'  },
+          { label: 'Montant',   flex: 3, align: 'right' },
+        ],
+        lignes: data.repartitionDepenses.map((c) => [c.categorie, fmt(c.montant)]),
+      })
+    }
+    return sections
+  }
   if (data.type === 'ventes') {
     return [
       {
@@ -238,8 +267,8 @@ const s = StyleSheet.create({
     borderBottomWidth: 0.5, borderBottomColor: '#F3F4F6',
   },
   tableRowAlt: { backgroundColor: '#F9FAFB' },
-  headCell: { fontFamily: 'Helvetica-Bold', fontSize: 9, color: '#374151' },
-  cell:     { fontSize: 9, color: '#374151' },
+  headCell: { fontFamily: 'Helvetica-Bold', fontSize: 9, color: '#374151', paddingRight: 8 },
+  cell:     { fontSize: 9, color: '#374151', paddingRight: 8 },
   cellRight: { textAlign: 'right' },
 
   // Résumé sous le tableau

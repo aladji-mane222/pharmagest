@@ -1,3 +1,4 @@
+
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -226,21 +227,19 @@ export async function GET(request: Request) {
 
   if (type === 'graphique-benefice') {
     // Evolution du benefice net jour par jour, fenetre configurable
-    // (15/30/90j — demande le 23/07/2026, avant fixe a 30j), pas liee a
-    // la periode selectionnee dans le filtre — c'est une tendance de
-    // fond affichee en contexte du rapport Benefice.
+    // Evolution du benefice net jour par jour SUR LA PERIODE CHOISIE dans
+    // le filtre (debut/fin) — avant, fenetre fixe 15/30/90j deconnectee
+    // du filtre ; change le 24/07/2026 a la demande de Nabe ("je dois
+    // pouvoir choisir, pas seulement ces boutons").
     // 3 requetes agregees groupees par jour plutot qu'une boucle de N
     // requetes (latence Guinee-Europe deja documentee dans le projet).
-    const nbJoursParam = parseInt(searchParams.get('jours') || '30', 10)
-    const nbJours = [15, 30, 90].includes(nbJoursParam) ? nbJoursParam : 30
-
     const [caParJour, cmvParJour, depensesParJour] = await Promise.all([
       prisma.$queryRaw<{ jour: Date; ca: number }[]>(
         Prisma.sql`
           SELECT DATE("createdAt") as jour, COALESCE(SUM("montantTotal"), 0)::float as ca
           FROM "Vente"
           WHERE "pharmacieId" = ${pharmacieId} AND statut = 'COMPLETE'
-            AND "createdAt" >= NOW() - (${nbJours}::int * INTERVAL '1 day')
+            AND "createdAt" >= ${debut} AND "createdAt" <= ${fin}
           GROUP BY DATE("createdAt")
         `
       ),
@@ -251,7 +250,7 @@ export async function GET(request: Request) {
           JOIN "Vente" v ON v.id = lv."venteId"
           JOIN "Medicament" m ON m.id = lv."medicamentId"
           WHERE v."pharmacieId" = ${pharmacieId} AND v.statut = 'COMPLETE'
-            AND v."createdAt" >= NOW() - (${nbJours}::int * INTERVAL '1 day')
+            AND v."createdAt" >= ${debut} AND v."createdAt" <= ${fin}
           GROUP BY DATE(v."createdAt")
         `
       ),
@@ -260,7 +259,7 @@ export async function GET(request: Request) {
           SELECT DATE("createdAt") as jour, COALESCE(SUM(montant), 0)::float as depenses
           FROM "Depense"
           WHERE "pharmacieId" = ${pharmacieId} AND archivee = false
-            AND "createdAt" >= NOW() - (${nbJours}::int * INTERVAL '1 day')
+            AND "createdAt" >= ${debut} AND "createdAt" <= ${fin}
           GROUP BY DATE("createdAt")
         `
       ),
@@ -270,9 +269,10 @@ export async function GET(request: Request) {
     const cmvMap       = new Map(cmvParJour.map((r) => [r.jour.toISOString().slice(0, 10), r.cmv]))
     const depensesMap = new Map(depensesParJour.map((r) => [r.jour.toISOString().slice(0, 10), r.depenses]))
 
+    const nbJours = Math.max(1, Math.round((fin.getTime() - debut.getTime()) / (24 * 60 * 60 * 1000)) + 1)
     const jours: { date: string; beneficeNet: number }[] = []
-    for (let i = nbJours - 1; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
+    for (let i = 0; i < nbJours; i++) {
+      const d = new Date(debut.getTime() + i * 24 * 60 * 60 * 1000)
       const cle = d.toISOString().slice(0, 10)
       const ca = caMap.get(cle) ?? 0
       const cmv = cmvMap.get(cle) ?? 0
@@ -351,7 +351,7 @@ export async function GET(request: Request) {
 
     const categorieMap = new Map<string, { categorie: string; nb: number; montant: number }>()
     for (const d of depenses) {
-      const categorie = d.categorie ?? 'Sans catégorie'
+      const categorie = d.categorie ?? 'inconnue'
       const cur = categorieMap.get(categorie) ?? { categorie, nb: 0, montant: 0 }
       categorieMap.set(categorie, { ...cur, nb: cur.nb + 1, montant: cur.montant + d.montant })
     }

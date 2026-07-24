@@ -89,8 +89,13 @@ function isItemActive(itemHref: string, pathname: string): boolean {
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { data: session } = useSession()
-  const isCaissier = session?.user?.role === 'CAISSIER'
+  const { data: session, status } = useSession()
+  // Tant que la session charge, on ne SAIT PAS encore si c'est un
+  // CAISSIER — traiter ce cas comme "restreint par defaut" plutot que
+  // "autorise par defaut" evite le flash des liens Personnel/Rapports
+  // avant hydratation, trouve en testant reellement le 24/07/2026.
+  const sessionChargee = status !== 'loading'
+  const isCaissier = !sessionChargee || session?.user?.role === 'CAISSIER'
 
   const rolLabel =
     session?.user?.role === 'SUPER_ADMIN' ? 'Super Admin'

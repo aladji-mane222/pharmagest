@@ -1,8 +1,18 @@
+
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+
+function normaliserNom(nom: string): string {
+  return nom
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+}
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -58,6 +68,21 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     })
     if (conflit) {
       return apiError(`Ce code-barres est deja utilise par "${conflit.nom}"`, 409)
+    }
+  }
+
+  // Doublon par nom — meme oubli que sur la creation, corrige en meme
+  // temps (trouve en testant reellement le 24/07/2026 : la creation
+  // bloquait deja mais pas l'edition).
+  if (nom !== undefined && normaliserNom(nom) !== normaliserNom(medicament.nom)) {
+    const medicamentsExistants = await prisma.medicament.findMany({
+      where: { pharmacieId: session.user.pharmacieId, actif: true, id: { not: params.id } },
+      select: { nom: true },
+    })
+    const nomNorm = normaliserNom(nom)
+    const doublonNom = medicamentsExistants.find((m) => normaliserNom(m.nom) === nomNorm)
+    if (doublonNom) {
+      return apiError(`Un medicament avec ce nom existe deja (${doublonNom.nom})`, 409)
     }
   }
 
