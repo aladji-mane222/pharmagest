@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
@@ -27,28 +28,41 @@ const LABELS_FIABILITE: Record<string, string> = {
   insuffisant:          'Historique insuffisant',
 }
 
-// Sections disponibles a l'export par type de rapport (Phase 4, 23/07/2026)
-// — utilise a la fois par le panneau de cases a cocher et par la
-// construction des donnees exportees plus bas.
+// Sections disponibles par type de rapport (Phase 4, 23-24/07/2026) —
+// utilisees a la fois pour : (1) les onglets d'affichage a l'ecran, pour
+// eviter la "page interminable" avec tous les tableaux empiles (constat
+// de Nabe du 24/07), et (2) le panneau de cases a cocher a l'export.
+// Un seul tableau -> pas d'onglets necessaires, affiche directement.
 const SECTIONS_PAR_TYPE: Record<string, SectionExportOption[]> = {
   ventes: [
-    { key: 'detail', label: 'Tableau détail des ventes' },
     { key: 'topMedicaments', label: 'Top médicaments vendus' },
+    { key: 'detail', label: 'Détail des ventes' },
+    { key: 'parCaissier', label: 'Par caissier' },
+    { key: 'parMode', label: 'Par mode de paiement' },
   ],
   stock: [
-    { key: 'detail', label: 'Tableau détail du stock' },
+    { key: 'detail', label: 'Détail du stock' },
   ],
   credits: [
-    { key: 'detail', label: 'Tableau détail des créances' },
-    { key: 'parTranche', label: 'Répartition par ancienneté' },
+    { key: 'detail', label: 'Détail des créances' },
   ],
   commandes: [
-    { key: 'detail', label: 'Tableau détail des commandes' },
+    { key: 'detail', label: 'Détail des commandes' },
     { key: 'parFournisseur', label: 'Répartition par fournisseur' },
   ],
   depenses: [
-    { key: 'detail', label: 'Tableau détail des dépenses' },
+    { key: 'detail', label: 'Détail des dépenses' },
     { key: 'parCategorie', label: 'Répartition par catégorie' },
+  ],
+}
+
+// Sections exportables specifiquement (benefice n'a pas d'onglets a
+// l'ecran — ce sont des graphiques compacts cote a cote, pas des
+// tableaux qui s'empilent — mais peut quand meme s'exporter)
+const SECTIONS_EXPORT_SUPPLEMENTAIRES: Record<string, SectionExportOption[]> = {
+  benefice: [
+    { key: 'evolution', label: 'Évolution du bénéfice net' },
+    { key: 'repartitionDepenses', label: 'Répartition des dépenses' },
   ],
 }
 
@@ -65,6 +79,8 @@ export default function RapportsPage() {
   const [fin, setFin] = useState(() => new Date().toISOString().slice(0, 10))
   const [fournisseurFiltre, setFournisseurFiltre] = useState('')
   const [triTop, setTriTop] = useState<'ca' | 'quantite'>('ca')
+  const [triTopDir, setTriTopDir] = useState<'asc' | 'desc'>('desc')
+  const [onglet, setOnglet] = useState<string>('')
   const [data, setData] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(false)
   const [generatingPDF, setGeneratingPDF] = useState(false)
@@ -75,8 +91,6 @@ export default function RapportsPage() {
     evolution: { ca: number | null; beneficeNet: number | null; totalDepenses: number | null; panierMoyen: number | null }
   } | null>(null)
 
-  // Résumé KPI en tête de page (Phase 4.5) — indépendant du filtre de
-  // rapport détaillé, toujours "ce mois-ci vs mois précédent"
   useEffect(() => {
     fetch('/api/rapports?type=kpi')
       .then((r) => r.json())
@@ -84,7 +98,6 @@ export default function RapportsPage() {
       .catch(() => {})
   }, [])
 
-  // Récupère le nom de la pharmacie depuis les paramètres (une seule fois)
   useEffect(() => {
     fetch('/api/parametres')
       .then((r) => r.json())
@@ -94,6 +107,16 @@ export default function RapportsPage() {
       })
       .catch(() => {})
   }, [])
+
+  // A chaque nouveau rapport genere : revenir sur le premier onglet
+  // disponible pour ce type (evite de rester coince sur un onglet qui
+  // n'existe pas pour le nouveau type choisi)
+  useEffect(() => {
+    if (data?.type) {
+      const sections = SECTIONS_PAR_TYPE[data.type as string] ?? []
+      setOnglet(sections[0]?.key ?? '')
+    }
+  }, [data])
 
   const genererRapport = async () => {
     setLoading(true)
@@ -105,17 +128,22 @@ export default function RapportsPage() {
     setLoading(false)
   }
 
-  // Top medicaments tries cote client (Phase 4, demande du 23/07/2026 —
-  // pouvoir trier par quantite ou par CA au clic sur l'en-tete)
+  const basculerTri = (colonne: 'ca' | 'quantite') => {
+    if (triTop === colonne) {
+      setTriTopDir((d) => (d === 'desc' ? 'asc' : 'desc'))
+    } else {
+      setTriTop(colonne)
+      setTriTopDir('desc')
+    }
+  }
+
   const topMedicamentsTries = useMemo(() => {
     if (!data || data.type !== 'ventes') return []
     const liste = (data.topMedicaments as { nom: string; quantite: number; ca: number }[]) ?? []
-    return [...liste].sort((a, b) => b[triTop] - a[triTop])
-  }, [data, triTop])
+    const triees = [...liste].sort((a, b) => a[triTop] - b[triTop])
+    return triTopDir === 'desc' ? triees.reverse() : triees
+  }, [data, triTop, triTopDir])
 
-  // ── Construction des donnees exportees (Excel/CSV), colonnes propres et
-  // lisibles — harmonise avec le PDF, plus de dump brut d'objets/booleens
-  // techniques (Phase 4, 23/07/2026)
   const construireSectionsExport = (clesChoisies: string[]): SectionExport[] => {
     if (!data) return []
     const sections: SectionExport[] = []
@@ -126,12 +154,7 @@ export default function RapportsPage() {
         sections.push({
           nom: 'Ventes',
           donnees: (data.ventes as { numeroFacture: string | null; createdAt: string; montantTotal: number; user: { nom: string } }[])
-            .map((v) => ({
-              'N° facture': v.numeroFacture ?? '—',
-              Date: formatDateTime(v.createdAt),
-              Caissier: v.user.nom,
-              Montant: v.montantTotal,
-            })),
+            .map((v) => ({ 'N° facture': v.numeroFacture ?? '—', Date: formatDateTime(v.createdAt), Caissier: v.user.nom, Montant: v.montantTotal })),
         })
       }
       if (inclure('topMedicaments')) {
@@ -139,6 +162,20 @@ export default function RapportsPage() {
           nom: 'Top medicaments',
           donnees: (data.topMedicaments as { nom: string; quantite: number; ca: number }[])
             .map((m) => ({ Médicament: m.nom, Quantité: m.quantite, 'CA généré': m.ca })),
+        })
+      }
+      if (inclure('parCaissier')) {
+        sections.push({
+          nom: 'Par caissier',
+          donnees: (data.parCaissier as { nom: string; nbVentes: number; total: number }[])
+            .map((c) => ({ Caissier: c.nom, 'Nb ventes': c.nbVentes, Total: c.total })),
+        })
+      }
+      if (inclure('parMode')) {
+        sections.push({
+          nom: 'Par mode',
+          donnees: (data.parMode as { mode: string; nbVentes: number; total: number }[])
+            .map((m) => ({ Mode: m.mode.replace('_', ' '), 'Nb ventes': m.nbVentes, Total: m.total })),
         })
       }
     }
@@ -151,24 +188,12 @@ export default function RapportsPage() {
       })
     }
 
-    if (data.type === 'credits') {
-      if (inclure('detail')) {
-        sections.push({
-          nom: 'Credits',
-          donnees: (data.clients as { nom: string; telephone: string | null; soldeCredit: number; ancienneteJours: number | null }[])
-            .map((c) => ({
-              Client: c.nom, Téléphone: c.telephone ?? '—', 'Solde dû': c.soldeCredit,
-              'Ancienneté (j)': c.ancienneteJours ?? '—',
-            })),
-        })
-      }
-      if (inclure('parTranche')) {
-        sections.push({
-          nom: 'Par tranche',
-          donnees: (data.parTranche as { tranche: string; nbClients: number; montant: number }[])
-            .map((t) => ({ Tranche: t.tranche, 'Nb clients': t.nbClients, Montant: t.montant })),
-        })
-      }
+    if (data.type === 'credits' && inclure('detail')) {
+      sections.push({
+        nom: 'Credits',
+        donnees: (data.clients as { nom: string; telephone: string | null; soldeCredit: number; ancienneteJours: number | null }[])
+          .map((c) => ({ Client: c.nom, Téléphone: c.telephone ?? '—', 'Solde dû': c.soldeCredit, 'Ancienneté (j)': c.ancienneteJours ?? '—' })),
+      })
     }
 
     if (data.type === 'commandes') {
@@ -179,13 +204,9 @@ export default function RapportsPage() {
             numeroCommande: string | null; statut: string; createdAt: string
             fournisseur: { nom: string }; montantCommande: number; montantRecu: number; enRetard: boolean | null
           }[]).map((c) => ({
-            'N° commande': c.numeroCommande ?? '—',
-            Fournisseur: c.fournisseur.nom,
-            Date: formatDateTime(c.createdAt),
-            'Statut commande': c.statut,
-            Livraison: c.enRetard === true ? 'En retard' : c.enRetard === false ? 'À temps' : '—',
-            Commandé: c.montantCommande,
-            Reçu: c.montantRecu,
+            'N° commande': c.numeroCommande ?? '—', Fournisseur: c.fournisseur.nom, Date: formatDateTime(c.createdAt),
+            'Statut commande': c.statut, Livraison: c.enRetard === true ? 'En retard' : c.enRetard === false ? 'À temps' : '—',
+            Commandé: c.montantCommande, Reçu: c.montantRecu,
           })),
         })
       }
@@ -203,10 +224,7 @@ export default function RapportsPage() {
         sections.push({
           nom: 'Depenses',
           donnees: (data.depenses as { libelle: string; montant: number; categorie: string; createdAt: string; user: { nom: string } }[])
-            .map((d) => ({
-              Date: formatDateTime(d.createdAt), Libellé: d.libelle, Catégorie: d.categorie,
-              Montant: d.montant, Utilisateur: d.user.nom,
-            })),
+            .map((d) => ({ Date: formatDateTime(d.createdAt), Libellé: d.libelle, Catégorie: d.categorie, Montant: d.montant, Utilisateur: d.user.nom })),
         })
       }
       if (inclure('parCategorie')) {
@@ -218,6 +236,39 @@ export default function RapportsPage() {
       }
     }
 
+    if (data.type === 'benefice') {
+      if (inclure('evolution')) {
+        // Necessite un fetch a part : les points quotidiens ne sont pas
+        // dans `data` du rapport principal (ils viennent du composant
+        // graphique). On les recupere ici au moment de l'export.
+        // Gere plus bas via une fonction async dediee.
+      }
+      if (inclure('repartitionDepenses')) {
+        sections.push({
+          nom: 'Repartition depenses',
+          donnees: (data.repartitionDepenses as { categorie: string; montant: number }[])
+            .map((c) => ({ Catégorie: c.categorie, Montant: c.montant })),
+        })
+      }
+    }
+
+    return sections
+  }
+
+  // Le bénéfice a besoin d'un fetch dédié pour la section "évolution"
+  // (les points quotidiens n'existent que dans le composant graphique,
+  // pas dans `data` du rapport) — géré à part des autres exports.
+  const construireSectionsExportAsync = async (clesChoisies: string[]): Promise<SectionExport[]> => {
+    const sections = construireSectionsExport(clesChoisies)
+    if (data?.type === 'benefice' && clesChoisies.includes('evolution')) {
+      const res = await fetch(`/api/rapports?type=graphique-benefice&debut=${debut}&fin=${fin}`)
+      const json = await res.json()
+      const jours = (json.data?.jours ?? []) as { date: string; beneficeNet: number }[]
+      sections.unshift({
+        nom: 'Evolution benefice',
+        donnees: jours.map((j) => ({ Date: j.date, 'Bénéfice net': j.beneficeNet })),
+      })
+    }
     return sections
   }
 
@@ -225,10 +276,18 @@ export default function RapportsPage() {
     if (!data) return
     setGeneratingPDF(true)
     try {
+      let dataPourPDF = data
+      // Pour le benefice, injecter les points d'evolution dans l'objet
+      // envoye au PDF (RapportPDF ne les a pas nativement)
+      if (data.type === 'benefice' && clesChoisies?.includes('evolution')) {
+        const res = await fetch(`/api/rapports?type=graphique-benefice&debut=${debut}&fin=${fin}`)
+        const json = await res.json()
+        dataPourPDF = { ...data, evolution: json.data?.jours ?? [] }
+      }
       const blob = await pdf(
         <RapportPDF
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          data={data as any}
+          data={dataPourPDF as any}
           titre={TITRES[type]}
           periode={{ debut, fin }}
           nomPharmacie={nomPharmacie}
@@ -246,7 +305,33 @@ export default function RapportsPage() {
     }
   }
 
-  const sectionsDisponibles = data ? (SECTIONS_PAR_TYPE[type] ?? []) : []
+  const sectionsEcran = data ? (SECTIONS_PAR_TYPE[data.type as string] ?? []) : []
+  const sectionsExportDisponibles = data
+    ? [...(SECTIONS_PAR_TYPE[data.type as string] ?? []), ...(SECTIONS_EXPORT_SUPPLEMENTAIRES[data.type as string] ?? [])]
+    : []
+
+  // Barre d'onglets reutilisable — seulement si plus d'une section
+  // (sinon, rien a choisir, le tableau unique s'affiche direct)
+  const BarreOnglets = () => {
+    if (sectionsEcran.length <= 1) return null
+    return (
+      <div className="flex gap-1 mb-6 border-b border-gray-200">
+        {sectionsEcran.map((s) => (
+          <button
+            key={s.key}
+            onClick={() => setOnglet(s.key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              onglet === s.key
+                ? 'border-green-600 text-green-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div className="p-8">
@@ -266,8 +351,6 @@ export default function RapportsPage() {
               { label: 'Panier moyen',        cle: 'panierMoyen' as const, couleur: 'text-gray-700' },
             ]).map(({ label, cle, couleur }) => {
               const evo = kpi.evolution[cle]
-              // pour les depenses, une baisse (evolution negative) est une
-              // bonne nouvelle — inverser le sens des couleurs vert/rouge
               const positifEstBon = cle !== 'totalDepenses'
               const estPositif = evo !== null && evo >= 0
               const estBonneNouvelle = evo !== null && (positifEstBon ? estPositif : !estPositif)
@@ -313,13 +396,13 @@ export default function RapportsPage() {
             <input type="date" value={fin} onChange={(e) => setFin(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
           </div>
-          {type === 'commandes' && data?.fournisseursDisponibles ? (
+          {type === 'commandes' && Boolean(data?.fournisseursDisponibles) ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Fournisseur</label>
               <select value={fournisseurFiltre} onChange={(e) => setFournisseurFiltre(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
                 <option value="">Tous les fournisseurs</option>
-                {(data.fournisseursDisponibles as { id: string; nom: string }[]).map((f) => (
+                {(data?.fournisseursDisponibles as { id: string; nom: string }[]).map((f) => (
                   <option key={f.id} value={f.id}>{f.nom}</option>
                 ))}
               </select>
@@ -343,18 +426,12 @@ export default function RapportsPage() {
 
       {data && (
         <div className="bg-white rounded-xl shadow p-6">
-          {/* Export : action secondaire (Phase 4.8) — plus discret que le
-              bouton "Generer", puisque generer le rapport est l'action
-              principale et exporter n'arrive qu'apres, sur demande.
-              Panneau a cases a cocher (Phase 4, 23/07/2026) pour les
-              rapports a plusieurs sections ; simple lien pour "benefice"
-              qui n'a pas de tableau a selectionner. */}
           <div className="flex justify-end mb-4">
-            {sectionsDisponibles.length > 0 ? (
+            {sectionsExportDisponibles.length > 0 ? (
               <ExportPanel
-                sections={sectionsDisponibles}
-                onExporterExcel={(cles) => exporterExcelMultiSections(construireSectionsExport(cles), `rapport-${type}`)}
-                onExporterCSV={(cles) => exporterCSVMultiSections(construireSectionsExport(cles), `rapport-${type}`)}
+                sections={sectionsExportDisponibles}
+                onExporterExcel={async (cles) => exporterExcelMultiSections(await construireSectionsExportAsync(cles), `rapport-${type}`)}
+                onExporterCSV={async (cles) => exporterCSVMultiSections(await construireSectionsExportAsync(cles), `rapport-${type}`)}
                 onExporterPDF={(cles) => handleExportPDF(cles)}
                 generatingPDF={generatingPDF}
               />
@@ -397,7 +474,7 @@ export default function RapportsPage() {
               </p>
 
               <div className="grid grid-cols-2 gap-8 mb-2">
-                <BeneficeEvolutionChart />
+                <BeneficeEvolutionChart debut={debut} fin={fin} />
                 <DepensesCategorieChart donnees={(data.repartitionDepenses as { categorie: string; montant: number }[]) ?? []} />
               </div>
             </div>
@@ -405,7 +482,7 @@ export default function RapportsPage() {
 
           {data.type === 'ventes' && (
             <div>
-              <div className="flex justify-between items-start mb-6">
+              <div className="flex justify-between items-start mb-4">
                 <h2 className="font-semibold text-gray-700 text-lg">Rapport Ventes</h2>
                 <div className="text-right">
                   <p className="text-green-600 font-bold text-lg">Total : {formatMontant(data.total as number)}</p>
@@ -428,108 +505,106 @@ export default function RapportsPage() {
                 </div>
               </div>
 
-              {/* Top medicaments vendus — colonnes triables (Phase 4, 23/07/2026) */}
-              <div className="mb-8">
-                <h3 className="font-semibold text-gray-600 mb-3 text-sm">Top médicaments vendus</h3>
+              <BarreOnglets />
+
+              {onglet === 'topMedicaments' && (
+                <div>
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b">
+                      <tr>
+                        <th className="text-left px-4 py-2 text-gray-600">Médicament</th>
+                        <th
+                          onClick={() => basculerTri('quantite')}
+                          className={`text-right px-4 py-2 cursor-pointer select-none hover:text-blue-600 ${triTop === 'quantite' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}
+                        >
+                          Quantité vendue {triTop === 'quantite' && (triTopDir === 'desc' ? '▼' : '▲')}
+                        </th>
+                        <th
+                          onClick={() => basculerTri('ca')}
+                          className={`text-right px-4 py-2 cursor-pointer select-none hover:text-blue-600 ${triTop === 'ca' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}
+                        >
+                          CA généré {triTop === 'ca' && (triTopDir === 'desc' ? '▼' : '▲')}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topMedicamentsTries.map((m) => (
+                        <tr key={m.nom} className="border-b last:border-0">
+                          <td className="px-4 py-2 font-medium">{m.nom}</td>
+                          <td className="px-4 py-2 text-right text-gray-600">{m.quantite}</td>
+                          <td className="px-4 py-2 text-right font-medium text-green-600">{formatMontant(m.ca)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-xs text-gray-400 mt-2">Clique sur une colonne pour trier (re-clique pour inverser l'ordre).</p>
+                </div>
+              )}
+
+              {onglet === 'detail' && (
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b">
                     <tr>
-                      <th className="text-left px-4 py-2 text-gray-600">Médicament</th>
-                      <th
-                        onClick={() => setTriTop('quantite')}
-                        className={`text-right px-4 py-2 cursor-pointer select-none hover:text-blue-600 ${triTop === 'quantite' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}
-                      >
-                        Quantité vendue {triTop === 'quantite' && '▼'}
-                      </th>
-                      <th
-                        onClick={() => setTriTop('ca')}
-                        className={`text-right px-4 py-2 cursor-pointer select-none hover:text-blue-600 ${triTop === 'ca' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}
-                      >
-                        CA généré {triTop === 'ca' && '▼'}
-                      </th>
+                      <th className="text-left px-4 py-3 text-gray-600">N° facture</th>
+                      <th className="text-left px-4 py-3 text-gray-600">Date</th>
+                      <th className="text-left px-4 py-3 text-gray-600">Caissier</th>
+                      <th className="text-right px-4 py-3 text-gray-600">Montant</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {topMedicamentsTries.map((m) => (
-                      <tr key={m.nom} className="border-b last:border-0">
-                        <td className="px-4 py-2 font-medium">{m.nom}</td>
-                        <td className="px-4 py-2 text-right text-gray-600">{m.quantite}</td>
-                        <td className="px-4 py-2 text-right font-medium text-green-600">{formatMontant(m.ca)}</td>
+                    {(data.ventes as { id: string; numeroFacture: string | null; createdAt: string; montantTotal: number; user: { nom: string } }[]).map((v) => (
+                      <tr key={v.id} className="border-b last:border-0">
+                        <td className="px-4 py-3 font-medium">{v.numeroFacture ?? '—'}</td>
+                        <td className="px-4 py-3 text-gray-600">{formatDateTime(v.createdAt)}</td>
+                        <td className="px-4 py-3">{v.user.nom}</td>
+                        <td className="px-4 py-3 text-right font-medium text-green-600">{formatMontant(v.montantTotal)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <p className="text-xs text-gray-400 mt-2">Clique sur une colonne pour trier.</p>
-              </div>
+              )}
 
-              {/* Tableau détail */}
-              <table className="w-full text-sm mb-8">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="text-left px-4 py-3 text-gray-600">N° facture</th>
-                    <th className="text-left px-4 py-3 text-gray-600">Date</th>
-                    <th className="text-left px-4 py-3 text-gray-600">Caissier</th>
-                    <th className="text-right px-4 py-3 text-gray-600">Montant</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data.ventes as { id: string; numeroFacture: string | null; createdAt: string; montantTotal: number; user: { nom: string } }[]).map((v) => (
-                    <tr key={v.id} className="border-b last:border-0">
-                      <td className="px-4 py-3 font-medium">{v.numeroFacture ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-600">{formatDateTime(v.createdAt)}</td>
-                      <td className="px-4 py-3">{v.user.nom}</td>
-                      <td className="px-4 py-3 text-right font-medium text-green-600">{formatMontant(v.montantTotal)}</td>
+              {onglet === 'parCaissier' && (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="text-left px-4 py-2 text-gray-600">Caissier</th>
+                      <th className="text-right px-4 py-2 text-gray-600">Nb ventes</th>
+                      <th className="text-right px-4 py-2 text-gray-600">Total</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Agrégats par caissier et mode */}
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <h3 className="font-semibold text-gray-600 mb-3 text-sm">Par caissier</h3>
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b">
-                      <tr>
-                        <th className="text-left px-4 py-2 text-gray-600">Caissier</th>
-                        <th className="text-right px-4 py-2 text-gray-600">Nb ventes</th>
-                        <th className="text-right px-4 py-2 text-gray-600">Total</th>
+                  </thead>
+                  <tbody>
+                    {(data.parCaissier as { nom: string; nbVentes: number; total: number }[]).map((row) => (
+                      <tr key={row.nom} className="border-b last:border-0">
+                        <td className="px-4 py-2 font-medium">{row.nom}</td>
+                        <td className="px-4 py-2 text-right text-gray-600">{row.nbVentes}</td>
+                        <td className="px-4 py-2 text-right font-medium text-green-600">{formatMontant(row.total)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {(data.parCaissier as { nom: string; nbVentes: number; total: number }[]).map((row) => (
-                        <tr key={row.nom} className="border-b last:border-0">
-                          <td className="px-4 py-2 font-medium">{row.nom}</td>
-                          <td className="px-4 py-2 text-right text-gray-600">{row.nbVentes}</td>
-                          <td className="px-4 py-2 text-right font-medium text-green-600">{formatMontant(row.total)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
+              )}
 
-                <div>
-                  <h3 className="font-semibold text-gray-600 mb-3 text-sm">Par mode de paiement</h3>
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b">
-                      <tr>
-                        <th className="text-left px-4 py-2 text-gray-600">Mode</th>
-                        <th className="text-right px-4 py-2 text-gray-600">Nb ventes</th>
-                        <th className="text-right px-4 py-2 text-gray-600">Total</th>
+              {onglet === 'parMode' && (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="text-left px-4 py-2 text-gray-600">Mode</th>
+                      <th className="text-right px-4 py-2 text-gray-600">Nb ventes</th>
+                      <th className="text-right px-4 py-2 text-gray-600">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.parMode as { mode: string; nbVentes: number; total: number }[]).map((row) => (
+                      <tr key={row.mode} className="border-b last:border-0">
+                        <td className="px-4 py-2 font-medium">{row.mode.replace('_', ' ')}</td>
+                        <td className="px-4 py-2 text-right text-gray-600">{row.nbVentes}</td>
+                        <td className="px-4 py-2 text-right font-medium text-green-600">{formatMontant(row.total)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {(data.parMode as { mode: string; nbVentes: number; total: number }[]).map((row) => (
-                        <tr key={row.mode} className="border-b last:border-0">
-                          <td className="px-4 py-2 font-medium">{row.mode.replace('_', ' ')}</td>
-                          <td className="px-4 py-2 text-right text-gray-600">{row.nbVentes}</td>
-                          <td className="px-4 py-2 text-right font-medium text-green-600">{formatMontant(row.total)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
 
@@ -542,6 +617,9 @@ export default function RapportsPage() {
                   <p className="text-sm text-gray-500">{data.nbProduitsDormants as number} produit(s) dormant(s) (aucune vente depuis 90j)</p>
                 </div>
               </div>
+              <p className="text-xs text-gray-400 mb-3">
+                {(data.stock as unknown[]).length} médicament(s) actif(s) au total.
+              </p>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
@@ -578,13 +656,14 @@ export default function RapportsPage() {
 
           {data.type === 'depenses' && (
             <div>
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex justify-between items-center mb-4">
                 <h2 className="font-semibold text-gray-700 text-lg">Rapport des Dépenses</h2>
                 <p className="text-red-600 font-bold text-lg">Total : {formatMontant(data.total as number)}</p>
               </div>
 
-              <div className="mb-8">
-                <h3 className="font-semibold text-gray-600 mb-3 text-sm">Par catégorie</h3>
+              <BarreOnglets />
+
+              {onglet === 'parCategorie' && (
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b">
                     <tr>
@@ -603,30 +682,32 @@ export default function RapportsPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              )}
 
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="text-left px-4 py-3 text-gray-600">Date</th>
-                    <th className="text-left px-4 py-3 text-gray-600">Libellé</th>
-                    <th className="text-left px-4 py-3 text-gray-600">Catégorie</th>
-                    <th className="text-left px-4 py-3 text-gray-600">Ajouté par</th>
-                    <th className="text-right px-4 py-3 text-gray-600">Montant</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data.depenses as { id: string; libelle: string; montant: number; categorie: string; createdAt: string; user: { nom: string } }[]).map((d) => (
-                    <tr key={d.id} className="border-b last:border-0">
-                      <td className="px-4 py-3 text-gray-600">{formatDateTime(d.createdAt)}</td>
-                      <td className="px-4 py-3 font-medium">{d.libelle}</td>
-                      <td className="px-4 py-3">{d.categorie}</td>
-                      <td className="px-4 py-3 text-gray-600">{d.user.nom}</td>
-                      <td className="px-4 py-3 text-right font-medium text-red-600">{formatMontant(d.montant)}</td>
+              {onglet === 'detail' && (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="text-left px-4 py-3 text-gray-600">Date</th>
+                      <th className="text-left px-4 py-3 text-gray-600">Libellé</th>
+                      <th className="text-left px-4 py-3 text-gray-600">Catégorie</th>
+                      <th className="text-left px-4 py-3 text-gray-600">Ajouté par</th>
+                      <th className="text-right px-4 py-3 text-gray-600">Montant</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(data.depenses as { id: string; libelle: string; montant: number; categorie: string; createdAt: string; user: { nom: string } }[]).map((d) => (
+                      <tr key={d.id} className="border-b last:border-0">
+                        <td className="px-4 py-3 text-gray-600">{formatDateTime(d.createdAt)}</td>
+                        <td className="px-4 py-3 font-medium">{d.libelle}</td>
+                        <td className="px-4 py-3">{d.categorie}</td>
+                        <td className="px-4 py-3 text-gray-600">{d.user.nom}</td>
+                        <td className="px-4 py-3 text-right font-medium text-red-600">{formatMontant(d.montant)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
 
@@ -637,7 +718,6 @@ export default function RapportsPage() {
                 <p className="text-red-600 font-bold">Total du : {formatMontant(data.totalDu as number)}</p>
               </div>
 
-              {/* Repartition par tranche d'anciennete */}
               <div className="grid grid-cols-4 gap-4 mb-6">
                 {(['0-30', '31-60', '60+', 'inconnue'] as const).map((tr) => {
                   const row = (data.parTranche as { tranche: string; nbClients: number; montant: number }[])
@@ -687,7 +767,6 @@ export default function RapportsPage() {
             <div>
               <h2 className="font-semibold text-gray-700 mb-6 text-lg">Rapport des Commandes</h2>
 
-              {/* KPI */}
               <div className="grid grid-cols-4 gap-4 mb-6">
                 <div className="bg-blue-50 rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Total commandé</p>
@@ -719,49 +798,50 @@ export default function RapportsPage() {
                 </div>
               </div>
 
-              {/* Tableau détail */}
-              <table className="w-full text-sm mb-8">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="text-left px-4 py-3 text-gray-600">N° commande</th>
-                    <th className="text-left px-4 py-3 text-gray-600">Fournisseur</th>
-                    <th className="text-left px-4 py-3 text-gray-600">Date</th>
-                    <th className="text-left px-4 py-3 text-gray-600">Statut</th>
-                    <th className="text-right px-4 py-3 text-gray-600">Commandé</th>
-                    <th className="text-right px-4 py-3 text-gray-600">Reçu</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data.commandes as {
-                    id: string; numeroCommande: string | null; statut: string; createdAt: string
-                    fournisseur: { nom: string }; montantCommande: number; montantRecu: number
-                    enRetard: boolean | null
-                  }[]).map((c) => (
-                    <tr key={c.id} className="border-b last:border-0">
-                      <td className="px-4 py-3 font-medium">{c.numeroCommande ?? '—'}</td>
-                      <td className="px-4 py-3">{c.fournisseur.nom}</td>
-                      <td className="px-4 py-3 text-gray-600">{formatDateTime(c.createdAt)}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1">
-                          {c.statut}
-                          {c.enRetard === true && (
-                            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">En retard</span>
-                          )}
-                          {c.enRetard === false && (
-                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">À temps</span>
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">{formatMontant(c.montantCommande)}</td>
-                      <td className="px-4 py-3 text-right text-green-600 font-medium">{formatMontant(c.montantRecu)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <BarreOnglets />
 
-              {/* Repartition par fournisseur */}
-              <div>
-                <h3 className="font-semibold text-gray-600 mb-3 text-sm">Par fournisseur</h3>
+              {onglet === 'detail' && (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="text-left px-4 py-3 text-gray-600">N° commande</th>
+                      <th className="text-left px-4 py-3 text-gray-600">Fournisseur</th>
+                      <th className="text-left px-4 py-3 text-gray-600">Date</th>
+                      <th className="text-left px-4 py-3 text-gray-600">Statut</th>
+                      <th className="text-right px-4 py-3 text-gray-600">Commandé</th>
+                      <th className="text-right px-4 py-3 text-gray-600">Reçu</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.commandes as {
+                      id: string; numeroCommande: string | null; statut: string; createdAt: string
+                      fournisseur: { nom: string }; montantCommande: number; montantRecu: number
+                      enRetard: boolean | null
+                    }[]).map((c) => (
+                      <tr key={c.id} className="border-b last:border-0">
+                        <td className="px-4 py-3 font-medium">{c.numeroCommande ?? '—'}</td>
+                        <td className="px-4 py-3">{c.fournisseur.nom}</td>
+                        <td className="px-4 py-3 text-gray-600">{formatDateTime(c.createdAt)}</td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1">
+                            {c.statut}
+                            {c.enRetard === true && (
+                              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">En retard</span>
+                            )}
+                            {c.enRetard === false && (
+                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">À temps</span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">{formatMontant(c.montantCommande)}</td>
+                        <td className="px-4 py-3 text-right text-green-600 font-medium">{formatMontant(c.montantRecu)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {onglet === 'parFournisseur' && (
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b">
                     <tr>
@@ -780,7 +860,7 @@ export default function RapportsPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              )}
             </div>
           )}
         </div>
