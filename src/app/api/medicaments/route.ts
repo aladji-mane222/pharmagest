@@ -1,3 +1,4 @@
+
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -94,6 +95,7 @@ export async function POST(request: Request) {
     codeBarre,
     dci,
     ordonnanceObligatoire,
+    forcerCreation,
   } = body
 
   if (!nom || !prixVente) return apiError('Nom et prix de vente requis', 400)
@@ -119,6 +121,24 @@ export async function POST(request: Request) {
   const doublonNom = medicamentsExistants.find((m) => normaliserNom(m.nom) === nomNorm)
   if (doublonNom) {
     return apiError(`Un medicament avec ce nom existe deja (${doublonNom.nom})`, 409)
+  }
+
+  // Avertissement NON-BLOQUANT (nom proche, pas exact) — demande par
+  // Nabe le 24/07/2026, meme mecanisme que fournisseurs : un nom
+  // contient l'autre apres normalisation. On laisse passer si
+  // forcerCreation: true est renvoye par le formulaire.
+  if (!forcerCreation) {
+    const proche = medicamentsExistants.find((m) => {
+      const mNorm = normaliserNom(m.nom)
+      return mNorm !== nomNorm && (mNorm.includes(nomNorm) || nomNorm.includes(mNorm))
+    })
+    if (proche) {
+      return apiError(
+        `Un medicament au nom proche existe deja : "${proche.nom}"`,
+        409,
+        { avertissement: true, nomSimilaire: proche.nom }
+      )
+    }
   }
 
   const medicament = await prisma.medicament.create({

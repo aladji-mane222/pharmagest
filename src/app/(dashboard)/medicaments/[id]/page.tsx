@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -53,6 +52,7 @@ export default function FicheMedicamentPage() {
   })
   const [saving, setSaving] = useState(false)
   const [erreurEdition, setErreurEdition] = useState('')
+  const [avertissementNom, setAvertissementNom] = useState<string | null>(null)
 
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [archiving, setArchiving] = useState(false)
@@ -100,7 +100,7 @@ export default function FicheMedicamentPage() {
       .then((json) => setEquivalents(json.data?.equivalents || []))
   }, [med])
 
-  const enregistrer = async () => {
+  const enregistrer = async (forcerCreation = false) => {
     if (!form.nom.trim() || !form.prixVente) {
       setErreurEdition('Nom et prix de vente requis')
       return
@@ -111,10 +111,15 @@ export default function FicheMedicamentPage() {
       const res = await fetch(`/api/medicaments/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, forcerCreation }),
       })
       const json = await res.json()
       if (!res.ok) {
+        if (json.details?.avertissement) {
+          // Pas un vrai blocage — nom proche d'un medicament existant
+          setAvertissementNom(json.details.nomSimilaire)
+          return
+        }
         setErreurEdition(json.error || 'Erreur lors de la modification')
         return
       }
@@ -294,7 +299,7 @@ export default function FicheMedicamentPage() {
 
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={enregistrer}
+                  onClick={() => enregistrer()}
                   disabled={saving}
                   className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
                 >
@@ -444,6 +449,17 @@ export default function FicheMedicamentPage() {
         variant="danger"
         confirmLabel="Archiver"
         loading={archiving}
+      />
+
+      <Modal
+        open={!!avertissementNom}
+        onClose={() => setAvertissementNom(null)}
+        onConfirm={() => enregistrer(true)}
+        title="Nom de médicament proche d'un existant"
+        description={`Un médicament au nom proche existe déjà : "${avertissementNom}". Vérifie que ce n'est pas le même avant de continuer.`}
+        variant="default"
+        confirmLabel="Enregistrer quand même"
+        loading={saving}
       />
     </div>
   )

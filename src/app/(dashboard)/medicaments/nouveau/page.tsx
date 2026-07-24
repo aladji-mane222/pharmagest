@@ -1,12 +1,15 @@
+
 'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Modal from '@/components/ui/Modal'
 
 export default function NouveauMedicamentPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [avertissementNom, setAvertissementNom] = useState<string | null>(null)
   const [form, setForm] = useState({
     nom: '',
     description: '',
@@ -20,25 +23,37 @@ export default function NouveauMedicamentPage() {
     ordonnanceObligatoire: false,
   })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const soumettre = async (forcerCreation: boolean) => {
     setLoading(true)
     setError('')
 
     const res = await fetch('/api/medicaments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, forcerCreation }),
     })
 
     const json = await res.json()
 
     if (!res.ok) {
+      if (json.details?.avertissement) {
+        // Pas un vrai blocage — nom proche d'un medicament existant,
+        // on demande confirmation plutot que de bloquer (meme principe
+        // que fournisseurs, demande le 24/07/2026)
+        setAvertissementNom(json.details.nomSimilaire)
+        setLoading(false)
+        return
+      }
       setError(json.error || 'Erreur lors de la creation')
       setLoading(false)
     } else {
       router.push('/medicaments')
     }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    soumettre(false)
   }
 
   return (
@@ -185,6 +200,17 @@ export default function NouveauMedicamentPage() {
           </button>
         </div>
       </form>
+
+      <Modal
+        open={!!avertissementNom}
+        onClose={() => setAvertissementNom(null)}
+        onConfirm={() => soumettre(true)}
+        title="Nom de médicament proche d'un existant"
+        description={`Un médicament au nom proche existe déjà : "${avertissementNom}". Vérifie que ce n'est pas le même avant de continuer.`}
+        variant="default"
+        confirmLabel="Créer quand même"
+        loading={loading}
+      />
     </div>
   )
 }
