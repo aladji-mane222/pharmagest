@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { formatDateTime } from '@/lib/utils'
+import { Card, PageHeader, EmptyState, SkeletonTable } from '@/components/ui'
 
 interface AuditLog {
   id: string
@@ -314,19 +316,23 @@ export default function AuditPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Journal d&apos;activité</h1>
-        <p className="text-gray-500 text-sm">{total} action{total > 1 ? 's' : ''} enregistrée{total > 1 ? 's' : ''}</p>
-      </div>
+      <Link href="/rapports" className="text-sm text-gray-500 hover:text-mint-dark hover:underline mb-4 inline-block">
+        ← Retour aux rapports
+      </Link>
+
+      <PageHeader
+        title="Journal d'activité"
+        description={`${total} action${total > 1 ? 's' : ''} enregistrée${total > 1 ? 's' : ''}`}
+      />
 
       {/* Barre de filtres */}
-      <div className="bg-white rounded-xl shadow p-4 mb-6 flex flex-wrap items-end gap-4">
+      <div className="bg-white rounded-card shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap items-end gap-4">
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Action</label>
           <select
             value={action}
             onChange={(e) => setAction(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 w-64"
+            className="px-3 py-2 border border-gray-300 rounded-card text-sm focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint w-64"
           >
             <option value="">Toutes les actions</option>
             {groupesSelect.map((groupe) => (
@@ -344,7 +350,7 @@ export default function AuditPage() {
             type="date"
             value={dateDebut}
             onChange={(e) => setDateDebut(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="px-3 py-2 border border-gray-300 rounded-card text-sm focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint"
           />
         </div>
         <div>
@@ -353,13 +359,13 @@ export default function AuditPage() {
             type="date"
             value={dateFin}
             onChange={(e) => setDateFin(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="px-3 py-2 border border-gray-300 rounded-card text-sm focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint"
           />
         </div>
         {filtresActifs && (
           <button
             onClick={reinitialiser}
-            className="px-4 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
+            className="px-4 py-2 text-sm bg-gray-100 text-gray-600 rounded-card hover:bg-gray-200"
           >
             Réinitialiser
           </button>
@@ -401,7 +407,7 @@ export default function AuditPage() {
                       )}
                     </p>
                   )}
-                  <table className="w-full text-sm border border-gray-100 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm border border-gray-100 rounded-card overflow-hidden">
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="text-left px-3 py-2 text-gray-600">Médicament</th>
@@ -429,7 +435,7 @@ export default function AuditPage() {
                 </div>
               ) : (
                 selected.details && (
-                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg px-3">
+                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-card px-3">
                     <ChampsDetail objet={selected.details as Record<string, unknown>} />
                   </div>
                 )
@@ -444,7 +450,7 @@ export default function AuditPage() {
                     {voirJSON ? 'Masquer' : 'Afficher'} les données techniques
                   </button>
                   {voirJSON && (
-                    <pre className="mt-2 bg-gray-50 rounded-lg p-3 text-xs text-gray-600 overflow-auto max-h-40">
+                    <pre className="mt-2 bg-gray-50 rounded-card p-3 text-xs text-gray-600 overflow-auto max-h-40">
                       {JSON.stringify(selected.details, null, 2)}
                     </pre>
                   )}
@@ -456,14 +462,20 @@ export default function AuditPage() {
       )}
 
       {/* Tableau */}
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <Card padding="none" className="overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Chargement...</div>
+          <div className="p-6">
+            <SkeletonTable rows={8} cols={4} />
+          </div>
         ) : logs.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Aucune action trouvée</div>
+          <EmptyState
+            icon="📋"
+            title={filtresActifs ? 'Aucune action ne correspond' : 'Aucune action trouvée'}
+            description={filtresActifs ? 'Essayez un autre filtre.' : undefined}
+          />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-app-bg border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600">Date</th>
                 <th className="text-left px-6 py-3 text-gray-600">Action</th>
@@ -473,7 +485,7 @@ export default function AuditPage() {
             </thead>
             <tbody>
               {logs.map((log) => (
-                <tr key={log.id} className="border-b last:border-0 hover:bg-gray-50">
+                <tr key={log.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg">
                   <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{formatDateTime(log.createdAt)}</td>
                   <td className="px-6 py-4">
                     <span
@@ -497,7 +509,7 @@ export default function AuditPage() {
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 text-sm">
@@ -506,14 +518,14 @@ export default function AuditPage() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-3 py-1.5 border border-gray-300 rounded-card text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-app-bg"
             >
               ← Précédent
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+              className="px-3 py-1.5 border border-gray-300 rounded-card text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-app-bg"
             >
               Suivant →
             </button>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
-import { Modal, useToast } from '@/components/ui'
+import { Modal, useToast, Card, PageHeader, Button, Input, Select, EmptyState, SkeletonTable } from '@/components/ui'
 
 interface Depense {
   id: string
@@ -96,28 +96,28 @@ export default function DepensesPage() {
     setConfirmArchiver(null)
   }
 
+  const repartitionParCategorie = Object.entries(
+    depenses.reduce<Record<string, number>>((acc, d) => {
+      if (d.categorie) acc[d.categorie] = (acc[d.categorie] || 0) + d.montant
+      return acc
+    }, {})
+  ).sort((a, b) => b[1] - a[1])
+
   return (
     <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Depenses</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Total : <span className="font-semibold text-red-600">{formatMontant(totalMontant)}</span>
-          </p>
+          <PageHeader
+            title="Dépenses"
+            description={`Total : ${formatMontant(totalMontant)}`}
+          />
           {depenses.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
-              {Object.entries(
-                depenses.reduce<Record<string, number>>((acc, d) => {
-                  if (d.categorie) acc[d.categorie] = (acc[d.categorie] || 0) + d.montant
-                  return acc
-                }, {})
-              )
-                .sort((a, b) => b[1] - a[1])
-                .map(([cat, total]) => (
-                  <span key={cat} className="text-xs text-gray-400">
-                    {cat} : <span className="font-medium text-gray-600">{formatMontant(total)}</span>
-                  </span>
-                ))}
+            <div className="-mt-4 flex flex-wrap gap-x-4 gap-y-0.5">
+              {repartitionParCategorie.map(([cat, total]) => (
+                <span key={cat} className="text-xs text-gray-400">
+                  {cat} : <span className="font-medium text-gray-600">{formatMontant(total)}</span>
+                </span>
+              ))}
             </div>
           )}
         </div>
@@ -125,7 +125,7 @@ export default function DepensesPage() {
           <select
             value={categorieFiltre}
             onChange={(e) => setCategorieFiltre(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="px-4 py-2 border border-gray-300 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint bg-white text-gray-700"
           >
             <option value="">Toutes categories</option>
             {CATEGORIES_STANDARD.map((cat) => (
@@ -136,67 +136,74 @@ export default function DepensesPage() {
             type="month"
             value={mois}
             onChange={(e) => setMois(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="px-4 py-2 border border-gray-300 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint"
           />
-          <button onClick={() => setShowForm(!showForm)}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
-            + Nouvelle depense
-          </button>
+          <Button variant="primary" onClick={() => setShowForm(!showForm)}>
+            + Nouvelle dépense
+          </Button>
         </div>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-6 mb-6 grid grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Libelle *</label>
-            <input required value={form.libelle} onChange={(e) => setForm({ ...form, libelle: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="Ex: Facture electricite Juin" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Montant (GNF) *</label>
-            <input required type="number" value={form.montant} onChange={(e) => setForm({ ...form, montant: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="0" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Categorie</label>
-            <select value={form.categorie} onChange={(e) => setForm({ ...form, categorie: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+        <Card className="mb-6">
+          <form onSubmit={handleSubmit} className="grid grid-cols-3 gap-4">
+            <Input
+              label="Libellé"
+              required
+              value={form.libelle}
+              onChange={(e) => setForm({ ...form, libelle: e.target.value })}
+              placeholder="Ex: Facture electricite Juin"
+            />
+            <Input
+              label="Montant (GNF)"
+              required
+              type="number"
+              value={form.montant}
+              onChange={(e) => setForm({ ...form, montant: e.target.value })}
+              placeholder="0"
+            />
+            <Select
+              label="Catégorie"
+              value={form.categorie}
+              onChange={(e) => setForm({ ...form, categorie: e.target.value })}
+            >
               <option value="">Choisir...</option>
               {CATEGORIES_STANDARD.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
-            </select>
-          </div>
-          <div className="col-span-3 flex gap-3">
-            <button type="submit" disabled={saving}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
-              {saving ? 'Enregistrement...' : 'Enregistrer'}
-            </button>
-            <button type="button" onClick={() => setShowForm(false)}
-              className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-200">
-              Annuler
-            </button>
-          </div>
-        </form>
+            </Select>
+            <div className="col-span-3 flex gap-3">
+              <Button type="submit" variant="primary" loading={saving}>
+                Enregistrer
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
+                Annuler
+              </Button>
+            </div>
+          </form>
+        </Card>
       )}
 
-
       {errorMsg && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+        <div className="bg-danger-bg border border-danger/20 text-danger px-4 py-3 rounded-card mb-4">
           {errorMsg}
         </div>
       )}
-      
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+
+      <Card padding="none" className="overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Chargement...</div>
+          <div className="p-6">
+            <SkeletonTable rows={6} cols={6} />
+          </div>
         ) : depenses.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Aucune depense ce mois</div>
+          <EmptyState
+            icon="💸"
+            title="Aucune dépense ce mois"
+            description="Enregistrez vos charges (loyer, salaires, factures...) pour suivre le bénéfice net."
+          />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-app-bg border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600">Date</th>
                 <th className="text-left px-6 py-3 text-gray-600">Libelle</th>
@@ -208,21 +215,22 @@ export default function DepensesPage() {
             </thead>
             <tbody>
               {depenses.map((d) => (
-                <tr key={d.id} className="border-b last:border-0 hover:bg-gray-50">
+                <tr key={d.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg">
                   <td className="px-6 py-4 text-gray-600">{formatDateTime(d.createdAt)}</td>
-                  <td className="px-6 py-4 font-medium text-gray-800">{d.libelle}</td>
+                  <td className="px-6 py-4 font-medium text-navy">{d.libelle}</td>
                   <td className="px-6 py-4 text-gray-600">{d.categorie || '-'}</td>
                   <td className="px-6 py-4 text-gray-600">{d.user?.nom || '-'}</td>
-                  <td className="px-6 py-4 text-right font-medium text-red-600">{formatMontant(d.montant)}</td>
+                  <td className="px-6 py-4 text-right font-medium text-danger">{formatMontant(d.montant)}</td>
                   <td className="px-6 py-4 text-right">
                     {isAdmin ? (
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setConfirmArchiver({ id: d.id, montant: d.montant })}
-                        disabled={archivingId === d.id}
-                        className="text-gray-500 hover:text-red-600 text-xs font-medium disabled:opacity-50"
+                        loading={archivingId === d.id}
                       >
-                        {archivingId === d.id ? 'Archivage...' : 'Archiver'}
-                      </button>
+                        Archiver
+                      </Button>
                     ) : (
                       <span title="Réservé aux administrateurs" className="text-gray-300 cursor-help">🔒</span>
                     )}
@@ -232,7 +240,7 @@ export default function DepensesPage() {
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
 
       <Modal
         open={!!confirmArchiver}

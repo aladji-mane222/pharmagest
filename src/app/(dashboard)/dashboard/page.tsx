@@ -5,6 +5,7 @@ import { formatMontant, formatDateTime } from '@/lib/utils'
 import DashboardClient from '@/components/dashboard/DashboardClient'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { Card, PageHeader, Button, Badge, EmptyState } from '@/components/ui'
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
@@ -67,20 +68,20 @@ export default async function DashboardPage() {
     console.error('[dashboard] Base injoignable :', error)
     return (
       <div className="p-8">
-        <div className="bg-white rounded-xl shadow p-8 border border-gray-100 text-center max-w-md mx-auto mt-12">
+        <Card className="text-center max-w-md mx-auto mt-12">
           <p className="text-3xl mb-3">📡</p>
-          <h1 className="text-lg font-semibold text-gray-800 mb-2">Connexion impossible</h1>
+          <h1 className="text-lg font-semibold text-navy mb-2">Connexion impossible</h1>
           <p className="text-gray-500 text-sm mb-6">
             Impossible de joindre le serveur pour le moment. Vérifie ta connexion internet,
             puis réessaie dans quelques instants.
           </p>
           <a
             href="/dashboard"
-            className="inline-block bg-green-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-green-700 transition-colors"
+            className="inline-block bg-mint text-navy rounded-card px-4 py-2 text-sm font-medium hover:bg-mint-dark hover:text-white transition-colors"
           >
             Réessayer
           </a>
-        </div>
+        </Card>
       </div>
     )
   }
@@ -99,42 +100,28 @@ export default async function DashboardPage() {
   return (
     <div className="p-8">
 
-      {/* ── En-tête + raccourcis rapides ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Tableau de bord</h1>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/ventes"
-            className="bg-green-600 text-white rounded-lg px-3 py-1 text-sm hover:bg-green-700 transition-colors"
-          >
-            + Nouvelle vente
-          </Link>
-          <Link
-            href="/caisse"
-            className="bg-green-600 text-white rounded-lg px-3 py-1 text-sm hover:bg-green-700 transition-colors"
-          >
-            Ma caisse
-          </Link>
-          <Link
-            href="/depenses"
-            className="bg-green-600 text-white rounded-lg px-3 py-1 text-sm hover:bg-green-700 transition-colors"
-          >
-            Saisir dépense
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="Tableau de bord"
+        actions={
+          <>
+            <Link href="/ventes"><Button variant="primary" size="sm">+ Nouvelle vente</Button></Link>
+            <Link href="/caisse"><Button variant="primary" size="sm">Ma caisse</Button></Link>
+            <Link href="/depenses"><Button variant="primary" size="sm">Saisir dépense</Button></Link>
+          </>
+        }
+      />
 
       <DashboardClient initialData={initialData} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 mt-8">
 
         {/* ── Alertes stock bas ── */}
-        <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
+        <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-700 flex items-center gap-2">
+            <h2 className="font-semibold text-navy flex items-center gap-2">
               ⚠️ Alertes Stock Bas
             </h2>
-            <Link href="/stock" className="text-xs text-green-600 hover:underline">
+            <Link href="/stock" className="text-xs text-mint-dark hover:underline">
               Voir tout →
             </Link>
           </div>
@@ -146,26 +133,24 @@ export default async function DashboardPage() {
                 <li key={med.id}>
                   <Link
                     href={`/medicaments/${med.id}`}
-                    className="flex justify-between items-center text-sm p-2 hover:bg-gray-50 rounded-lg transition-colors"
+                    className="flex justify-between items-center text-sm p-2 hover:bg-app-bg rounded-card transition-colors"
                   >
-                    <span className="text-gray-700 font-medium">{med.nom}</span>
-                    <span className="px-2 py-1 bg-orange-100 text-orange-600 rounded font-bold text-xs">
-                      {med.stockTotal} unités
-                    </span>
+                    <span className="text-navy font-medium">{med.nom}</span>
+                    <Badge variant="warning">{med.stockTotal} unités</Badge>
                   </Link>
                 </li>
               ))}
             </ul>
           )}
-        </div>
+        </Card>
 
         {/* ── Péremptions proches ── */}
-        <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
+        <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-gray-700 flex items-center gap-2">
+            <h2 className="font-semibold text-navy flex items-center gap-2">
               📅 Péremptions proches
             </h2>
-            <Link href="/stock" className="text-xs text-green-600 hover:underline">
+            <Link href="/stock" className="text-xs text-mint-dark hover:underline">
               Voir tout →
             </Link>
           </div>
@@ -181,41 +166,33 @@ export default async function DashboardPage() {
                 return (
                   <li
                     key={lot.id}
-                    className="flex justify-between items-center text-sm p-2 hover:bg-gray-50 rounded-lg transition-colors"
+                    className="flex justify-between items-center text-sm p-2 hover:bg-app-bg rounded-card transition-colors"
                   >
-                    <span className="text-gray-700 font-medium">{lot.medicament.nom}</span>
-                    <span
-                      className={`px-2 py-1 rounded font-bold text-xs ${
-                        urgent
-                          ? 'bg-red-100 text-red-600'
-                          : 'bg-orange-100 text-orange-600'
-                      }`}
-                    >
-                      J-{jours}
-                    </span>
+                    <span className="text-navy font-medium">{lot.medicament.nom}</span>
+                    <Badge variant={urgent ? 'danger' : 'warning'}>J-{jours}</Badge>
                   </li>
                 )
               })}
             </ul>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* ── Ventes récentes ── */}
-      <div className="bg-white rounded-xl shadow p-6 border border-gray-100">
+      <Card>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-gray-700">🛒 Ventes récentes</h2>
-          <Link href="/ventes/historique" className="text-xs text-green-600 hover:underline">
+          <h2 className="font-semibold text-navy">🛒 Ventes récentes</h2>
+          <Link href="/ventes/historique" className="text-xs text-mint-dark hover:underline">
             Voir tout →
           </Link>
         </div>
         {ventesRecentes.length === 0 ? (
-          <p className="text-gray-400 text-sm">Aucune vente pour le moment</p>
+          <EmptyState icon="🛒" title="Aucune vente pour le moment" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-500 border-b">
+                <tr className="text-left text-gray-500 border-b border-gray-100">
                   <th className="pb-3 font-semibold">Date</th>
                   <th className="pb-3 font-semibold">Caissier</th>
                   <th className="pb-3 text-right font-semibold">Montant</th>
@@ -226,17 +203,17 @@ export default async function DashboardPage() {
                 {ventesRecentes.map((vente) => (
                   <tr
                     key={vente.id}
-                    className="border-b last:border-0 hover:bg-gray-50 transition-colors"
+                    className="border-b border-gray-100 last:border-0 hover:bg-app-bg transition-colors"
                   >
                     <td className="py-3 text-gray-600">{formatDateTime(vente.createdAt)}</td>
                     <td className="py-3 text-gray-600">{vente.user.nom}</td>
-                    <td className="py-3 text-right font-bold text-green-600">
+                    <td className="py-3 text-right font-bold text-success">
                       {formatMontant(vente.montantTotal)}
                     </td>
                     <td className="py-3 text-right">
                       <Link
                         href={`/ventes/${vente.id}`}
-                        className="text-xs text-green-600 hover:underline whitespace-nowrap"
+                        className="text-xs text-mint-dark hover:underline whitespace-nowrap"
                       >
                         Voir →
                       </Link>
@@ -247,7 +224,7 @@ export default async function DashboardPage() {
             </table>
           </div>
         )}
-      </div>
+      </Card>
 
     </div>
   )

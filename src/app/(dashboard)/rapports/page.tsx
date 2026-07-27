@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
@@ -9,6 +8,7 @@ import RapportPDF from '@/components/rapports/RapportPDF'
 import BeneficeEvolutionChart from '@/components/rapports/BeneficeEvolutionChart'
 import DepensesCategorieChart from '@/components/rapports/DepensesCategorieChart'
 import ExportPanel, { type SectionExportOption } from '@/components/rapports/ExportPanel'
+import { Card, PageHeader, Button, Select } from '@/components/ui'
 
 type TypeRapport = 'ventes' | 'stock' | 'benefice' | 'credits' | 'commandes' | 'depenses'
 
@@ -69,7 +69,7 @@ const SECTIONS_EXPORT_SUPPLEMENTAIRES: Record<string, SectionExportOption[]> = {
 const STATUT_COULEURS: Record<string, string> = {
   Rupture:    'bg-red-100 text-red-700',
   'Stock bas': 'bg-orange-100 text-orange-700',
-  Dormant:    'bg-blue-100 text-blue-600',
+  Dormant:    'bg-blue-100 text-info-text',
   Normal:     'bg-gray-100 text-gray-500',
 }
 
@@ -335,19 +335,19 @@ export default function RapportsPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Rapports</h1>
+      <PageHeader title="Rapports" />
 
       {kpi && (
-        <div className="bg-white rounded-xl shadow p-6 mb-6">
+        <div className="bg-white rounded-card shadow-sm border border-gray-100 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-700 text-sm">Ce mois-ci</h2>
             <span className="text-xs text-gray-400">vs mois précédent</span>
           </div>
           <div className="grid grid-cols-4 gap-4">
             {([
-              { label: "Chiffre d'affaires", cle: 'ca' as const, couleur: 'text-green-600' },
-              { label: 'Bénéfice net',        cle: 'beneficeNet' as const, couleur: 'text-blue-600' },
-              { label: 'Dépenses',            cle: 'totalDepenses' as const, couleur: 'text-red-600' },
+              { label: "Chiffre d'affaires", cle: 'ca' as const, couleur: 'text-success' },
+              { label: 'Bénéfice net',        cle: 'beneficeNet' as const, couleur: 'text-info-text' },
+              { label: 'Dépenses',            cle: 'totalDepenses' as const, couleur: 'text-danger' },
               { label: 'Panier moyen',        cle: 'panierMoyen' as const, couleur: 'text-gray-700' },
             ]).map(({ label, cle, couleur }) => {
               const evo = kpi.evolution[cle]
@@ -361,7 +361,7 @@ export default function RapportsPage() {
                   {evo === null ? (
                     <p className="text-xs text-gray-400 mt-1">—</p>
                   ) : (
-                    <p className={`text-xs mt-1 font-medium ${estBonneNouvelle ? 'text-green-600' : 'text-red-600'}`}>
+                    <p className={`text-xs mt-1 font-medium ${estBonneNouvelle ? 'text-success' : 'text-danger'}`}>
                       {estPositif ? '▲' : '▼'} {Math.abs(evo)}%
                     </p>
                   )}
@@ -372,60 +372,50 @@ export default function RapportsPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow p-6 mb-6">
+      <div className="bg-white rounded-card shadow-sm border border-gray-100 p-6 mb-6">
         <div className="grid grid-cols-4 gap-4 items-end">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Type de rapport</label>
-            <select value={type} onChange={(e) => setType(e.target.value as TypeRapport)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
-              <option value="benefice">Benefice net</option>
-              <option value="ventes">Ventes</option>
-              <option value="stock">Stock</option>
-              <option value="credits">Credits clients</option>
-              <option value="commandes">Commandes</option>
-              <option value="depenses">Dépenses</option>
-            </select>
-          </div>
+          <Select label="Type de rapport" value={type} onChange={(e) => setType(e.target.value as TypeRapport)}>
+            <option value="benefice">Benefice net</option>
+            <option value="ventes">Ventes</option>
+            <option value="stock">Stock</option>
+            <option value="credits">Credits clients</option>
+            <option value="commandes">Commandes</option>
+            <option value="depenses">Dépenses</option>
+          </Select>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Date debut</label>
             <input type="date" value={debut} onChange={(e) => setDebut(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
+              className="w-full px-4 py-2 border border-gray-300 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Date fin</label>
             <input type="date" value={fin} onChange={(e) => setFin(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
+              className="w-full px-4 py-2 border border-gray-300 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint" />
           </div>
           {type === 'commandes' && Boolean(data?.fournisseursDisponibles) ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fournisseur</label>
-              <select value={fournisseurFiltre} onChange={(e) => setFournisseurFiltre(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
-                <option value="">Tous les fournisseurs</option>
-                {(data?.fournisseursDisponibles as { id: string; nom: string }[]).map((f) => (
-                  <option key={f.id} value={f.id}>{f.nom}</option>
-                ))}
-              </select>
-            </div>
+            <Select label="Fournisseur" value={fournisseurFiltre} onChange={(e) => setFournisseurFiltre(e.target.value)}>
+              <option value="">Tous les fournisseurs</option>
+              {(data?.fournisseursDisponibles as { id: string; nom: string }[]).map((f) => (
+                <option key={f.id} value={f.id}>{f.nom}</option>
+              ))}
+            </Select>
           ) : (
-            <button onClick={genererRapport} disabled={loading}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
-              {loading ? 'Chargement...' : 'Generer'}
-            </button>
+            <Button variant="primary" onClick={genererRapport} loading={loading}>
+              Generer
+            </Button>
           )}
         </div>
         {type === 'commandes' && Boolean(data?.fournisseursDisponibles) && (
           <div className="mt-4">
-            <button onClick={genererRapport} disabled={loading}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
-              {loading ? 'Chargement...' : 'Generer'}
-            </button>
+            <Button variant="primary" onClick={genererRapport} loading={loading}>
+              Generer
+            </Button>
           </div>
         )}
       </div>
 
       {data && (
-        <div className="bg-white rounded-xl shadow p-6">
+        <div className="bg-white rounded-card shadow-sm border border-gray-100 p-6">
           <div className="flex justify-end mb-4">
             {sectionsExportDisponibles.length > 0 ? (
               <ExportPanel
@@ -439,7 +429,7 @@ export default function RapportsPage() {
               <button
                 onClick={() => handleExportPDF()}
                 disabled={generatingPDF}
-                className="text-xs text-gray-500 hover:text-blue-600 hover:underline disabled:opacity-50">
+                className="text-xs text-gray-500 hover:text-info-text hover:underline disabled:opacity-50">
                 {generatingPDF ? 'Génération PDF...' : 'Exporter PDF'}
               </button>
             )}
@@ -451,24 +441,24 @@ export default function RapportsPage() {
               <div className="grid grid-cols-4 gap-4 mb-4">
                 <div className="bg-green-50 rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Chiffre d'affaires</p>
-                  <p className="text-2xl font-bold text-green-600">{formatMontant(data.ca as number)}</p>
+                  <p className="text-2xl font-bold text-success">{formatMontant(data.ca as number)}</p>
                 </div>
                 <div className="bg-yellow-50 rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">CMV</p>
-                  <p className="text-2xl font-bold text-yellow-600">{formatMontant(data.cmv as number)}</p>
+                  <p className="text-2xl font-bold text-warning">{formatMontant(data.cmv as number)}</p>
                 </div>
                 <div className="bg-red-50 rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Dépenses</p>
-                  <p className="text-2xl font-bold text-red-600">{formatMontant(data.totalDepenses as number)}</p>
+                  <p className="text-2xl font-bold text-danger">{formatMontant(data.totalDepenses as number)}</p>
                 </div>
                 <div className={`rounded-xl p-5 text-center ${(data.beneficeNet as number) >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Bénéfice net</p>
-                  <p className={`text-2xl font-bold ${(data.beneficeNet as number) >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
+                  <p className={`text-2xl font-bold ${(data.beneficeNet as number) >= 0 ? 'text-info-text' : 'text-warning-text'}`}>
                     {formatMontant(data.beneficeNet as number)}
                   </p>
                 </div>
               </div>
-              <p className="text-sm text-gray-600 text-center mb-6 bg-gray-50 rounded-lg py-3 px-4">
+              <p className="text-sm text-gray-600 text-center mb-6 bg-gray-50 rounded-card py-3 px-4">
                 Ce que la pharmacie a réellement gagné : le chiffre d'affaires, moins ce que les médicaments vendus ont coûté à l'achat (CMV), moins les charges (dépenses).
                 <span className="block text-xs text-gray-400 mt-1">Bénéfice net = CA − CMV − Dépenses</span>
               </p>
@@ -485,7 +475,7 @@ export default function RapportsPage() {
               <div className="flex justify-between items-start mb-4">
                 <h2 className="font-semibold text-gray-700 text-lg">Rapport Ventes</h2>
                 <div className="text-right">
-                  <p className="text-green-600 font-bold text-lg">Total : {formatMontant(data.total as number)}</p>
+                  <p className="text-success font-bold text-lg">Total : {formatMontant(data.total as number)}</p>
                   <p className="text-sm text-gray-500">
                     Ticket moyen <span className="text-gray-400" title="Montant moyen d'une vente = total des ventes / nombre de ventes">(?)</span> :{' '}
                     <span className="font-medium text-gray-700">{formatMontant(data.ticketMoyen as number)}</span>
@@ -497,7 +487,7 @@ export default function RapportsPage() {
                     }
                     const positif = comp.evolutionPourcentage >= 0
                     return (
-                      <p className={`text-sm mt-2 font-bold px-3 py-1.5 rounded-lg inline-block ${positif ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      <p className={`text-sm mt-2 font-bold px-3 py-1.5 rounded-card inline-block ${positif ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                         {positif ? '▲' : '▼'} {Math.abs(comp.evolutionPourcentage)}% vs période précédente ({formatMontant(comp.totalPeriodePrecedente)})
                       </p>
                     )
@@ -515,13 +505,13 @@ export default function RapportsPage() {
                         <th className="text-left px-4 py-2 text-gray-600">Médicament</th>
                         <th
                           onClick={() => basculerTri('quantite')}
-                          className={`text-right px-4 py-2 cursor-pointer select-none hover:text-blue-600 ${triTop === 'quantite' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}
+                          className={`text-right px-4 py-2 cursor-pointer select-none hover:text-info-text ${triTop === 'quantite' ? 'text-info-text font-semibold' : 'text-gray-600'}`}
                         >
                           Quantité vendue {triTop === 'quantite' && (triTopDir === 'desc' ? '▼' : '▲')}
                         </th>
                         <th
                           onClick={() => basculerTri('ca')}
-                          className={`text-right px-4 py-2 cursor-pointer select-none hover:text-blue-600 ${triTop === 'ca' ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}
+                          className={`text-right px-4 py-2 cursor-pointer select-none hover:text-info-text ${triTop === 'ca' ? 'text-info-text font-semibold' : 'text-gray-600'}`}
                         >
                           CA généré {triTop === 'ca' && (triTopDir === 'desc' ? '▼' : '▲')}
                         </th>
@@ -532,7 +522,7 @@ export default function RapportsPage() {
                         <tr key={m.nom} className="border-b last:border-0">
                           <td className="px-4 py-2 font-medium">{m.nom}</td>
                           <td className="px-4 py-2 text-right text-gray-600">{m.quantite}</td>
-                          <td className="px-4 py-2 text-right font-medium text-green-600">{formatMontant(m.ca)}</td>
+                          <td className="px-4 py-2 text-right font-medium text-success">{formatMontant(m.ca)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -557,7 +547,7 @@ export default function RapportsPage() {
                         <td className="px-4 py-3 font-medium">{v.numeroFacture ?? '—'}</td>
                         <td className="px-4 py-3 text-gray-600">{formatDateTime(v.createdAt)}</td>
                         <td className="px-4 py-3">{v.user.nom}</td>
-                        <td className="px-4 py-3 text-right font-medium text-green-600">{formatMontant(v.montantTotal)}</td>
+                        <td className="px-4 py-3 text-right font-medium text-success">{formatMontant(v.montantTotal)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -578,7 +568,7 @@ export default function RapportsPage() {
                       <tr key={row.nom} className="border-b last:border-0">
                         <td className="px-4 py-2 font-medium">{row.nom}</td>
                         <td className="px-4 py-2 text-right text-gray-600">{row.nbVentes}</td>
-                        <td className="px-4 py-2 text-right font-medium text-green-600">{formatMontant(row.total)}</td>
+                        <td className="px-4 py-2 text-right font-medium text-success">{formatMontant(row.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -599,7 +589,7 @@ export default function RapportsPage() {
                       <tr key={row.mode} className="border-b last:border-0">
                         <td className="px-4 py-2 font-medium">{row.mode.replace('_', ' ')}</td>
                         <td className="px-4 py-2 text-right text-gray-600">{row.nbVentes}</td>
-                        <td className="px-4 py-2 text-right font-medium text-green-600">{formatMontant(row.total)}</td>
+                        <td className="px-4 py-2 text-right font-medium text-success">{formatMontant(row.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -613,7 +603,7 @@ export default function RapportsPage() {
               <div className="flex justify-between items-center mb-4">
                 <h2 className="font-semibold text-gray-700 text-lg">Rapport Stock</h2>
                 <div className="text-right">
-                  <p className="text-blue-600 font-bold">Valeur totale : {formatMontant(data.valeurTotale as number)}</p>
+                  <p className="text-info-text font-bold">Valeur totale : {formatMontant(data.valeurTotale as number)}</p>
                   <p className="text-sm text-gray-500">{data.nbProduitsDormants as number} produit(s) dormant(s) (aucune vente depuis 90j)</p>
                 </div>
               </div>
@@ -637,7 +627,7 @@ export default function RapportsPage() {
                     <tr key={m.id} className="border-b last:border-0">
                       <td className="px-4 py-3 font-medium">{m.nom}</td>
                       <td className="px-4 py-3 text-right">{m.stockTotal}</td>
-                      <td className="px-4 py-3 text-right text-blue-600">{formatMontant(m.valeur)}</td>
+                      <td className="px-4 py-3 text-right text-info-text">{formatMontant(m.valeur)}</td>
                       <td className="px-4 py-3 text-right text-gray-600">{m.rotation !== null ? m.rotation : '—'}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded-full text-xs ${STATUT_COULEURS[m.statut] ?? 'bg-gray-100 text-gray-500'}`}>
@@ -658,7 +648,7 @@ export default function RapportsPage() {
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h2 className="font-semibold text-gray-700 text-lg">Rapport des Dépenses</h2>
-                <p className="text-red-600 font-bold text-lg">Total : {formatMontant(data.total as number)}</p>
+                <p className="text-danger font-bold text-lg">Total : {formatMontant(data.total as number)}</p>
               </div>
 
               <BarreOnglets />
@@ -677,7 +667,7 @@ export default function RapportsPage() {
                       <tr key={c.categorie} className="border-b last:border-0">
                         <td className="px-4 py-2 font-medium">{c.categorie}</td>
                         <td className="px-4 py-2 text-right text-gray-600">{c.nb}</td>
-                        <td className="px-4 py-2 text-right font-medium text-red-600">{formatMontant(c.montant)}</td>
+                        <td className="px-4 py-2 text-right font-medium text-danger">{formatMontant(c.montant)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -702,7 +692,7 @@ export default function RapportsPage() {
                         <td className="px-4 py-3 font-medium">{d.libelle}</td>
                         <td className="px-4 py-3">{d.categorie}</td>
                         <td className="px-4 py-3 text-gray-600">{d.user.nom}</td>
-                        <td className="px-4 py-3 text-right font-medium text-red-600">{formatMontant(d.montant)}</td>
+                        <td className="px-4 py-3 text-right font-medium text-danger">{formatMontant(d.montant)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -715,7 +705,7 @@ export default function RapportsPage() {
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h2 className="font-semibold text-gray-700 text-lg">Rapport Credits Clients</h2>
-                <p className="text-red-600 font-bold">Total du : {formatMontant(data.totalDu as number)}</p>
+                <p className="text-danger font-bold">Total du : {formatMontant(data.totalDu as number)}</p>
               </div>
 
               <div className="grid grid-cols-4 gap-4 mb-6">
@@ -749,7 +739,7 @@ export default function RapportsPage() {
                     <tr key={c.id} className="border-b last:border-0">
                       <td className="px-4 py-3 font-medium">{c.nom}</td>
                       <td className="px-4 py-3 text-gray-600">{c.telephone || '-'}</td>
-                      <td className="px-4 py-3 text-right font-medium text-red-600">{formatMontant(c.soldeCredit)}</td>
+                      <td className="px-4 py-3 text-right font-medium text-danger">{formatMontant(c.soldeCredit)}</td>
                       <td className="px-4 py-3 text-right text-gray-600">
                         {c.ancienneteJours !== null ? `${c.ancienneteJours} j` : '—'}
                       </td>
@@ -770,17 +760,17 @@ export default function RapportsPage() {
               <div className="grid grid-cols-4 gap-4 mb-6">
                 <div className="bg-blue-50 rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Total commandé</p>
-                  <p className="text-2xl font-bold text-blue-600">{formatMontant(data.montantTotalCommande as number)}</p>
+                  <p className="text-2xl font-bold text-info-text">{formatMontant(data.montantTotalCommande as number)}</p>
                 </div>
                 <div className="bg-green-50 rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Total reçu</p>
-                  <p className="text-2xl font-bold text-green-600">{formatMontant(data.montantTotalRecu as number)}</p>
+                  <p className="text-2xl font-bold text-success">{formatMontant(data.montantTotalRecu as number)}</p>
                 </div>
                 <div className="bg-orange-50 rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">
                     Fiabilité livraison <span title="Tous fournisseurs confondus sur la période choisie. Pour la fiabilité par fournisseur individuel, voir /fournisseurs.">(?)</span>
                   </p>
-                  <p className="text-2xl font-bold text-orange-600">
+                  <p className="text-2xl font-bold text-warning-text">
                     {(data.fiabilite as { pourcentageATemps: number | null }).pourcentageATemps !== null
                       ? `${(data.fiabilite as { pourcentageATemps: number }).pourcentageATemps}%`
                       : '—'}
@@ -791,7 +781,7 @@ export default function RapportsPage() {
                 </div>
                 <div className="bg-red-50 rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Écarts détectés</p>
-                  <p className="text-2xl font-bold text-red-600">{(data.ecarts as { nombre: number }).nombre}</p>
+                  <p className="text-2xl font-bold text-danger">{(data.ecarts as { nombre: number }).nombre}</p>
                   <p className="text-xs text-gray-400 mt-1">
                     {formatMontant((data.ecarts as { valeur: number }).valeur)}
                   </p>
@@ -834,7 +824,7 @@ export default function RapportsPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">{formatMontant(c.montantCommande)}</td>
-                        <td className="px-4 py-3 text-right text-green-600 font-medium">{formatMontant(c.montantRecu)}</td>
+                        <td className="px-4 py-3 text-right text-success font-medium">{formatMontant(c.montantRecu)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -855,7 +845,7 @@ export default function RapportsPage() {
                       <tr key={row.nom} className="border-b last:border-0">
                         <td className="px-4 py-2 font-medium">{row.nom}</td>
                         <td className="px-4 py-2 text-right text-gray-600">{row.nbCommandes}</td>
-                        <td className="px-4 py-2 text-right font-medium text-blue-600">{formatMontant(row.montantCommande)}</td>
+                        <td className="px-4 py-2 text-right font-medium text-info-text">{formatMontant(row.montantCommande)}</td>
                       </tr>
                     ))}
                   </tbody>

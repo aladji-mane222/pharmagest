@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { useToast } from '@/components/ui'
+import { useToast, Card, PageHeader, Button, Input, Select, Skeleton } from '@/components/ui'
 
 interface Pharmacie {
   id: string
@@ -61,102 +61,106 @@ export default function ParametresPage() {
     setSaving(false)
   }
 
-  if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
+  if (loading) {
+    return (
+      <div className="p-8 max-w-2xl">
+        <PageHeader title="Paramètres" />
+        <Skeleton className="h-40 mb-6" />
+        <Skeleton className="h-32 mb-6" />
+        <Skeleton className="h-32" />
+      </div>
+    )
+  }
 
   return (
     <div className="p-8 max-w-2xl">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Parametres</h1>
+      <PageHeader title="Paramètres" />
 
-      <div className="bg-white rounded-xl shadow p-6 mb-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Informations de la pharmacie</h2>
+      <Card className="mb-6">
+        <h2 className="font-semibold text-navy mb-4">Informations de la pharmacie</h2>
         {!estAdmin && (
-          <div className="bg-orange-50 text-orange-700 text-sm rounded-lg px-4 py-3 mb-4">
+          <div className="bg-warning-bg text-warning-text text-sm rounded-card px-4 py-3 mb-4">
             Reserve aux administrateurs — tu peux consulter mais pas modifier ces reglages.
           </div>
         )}
         <fieldset disabled={!estAdmin} className="contents">
         <form onSubmit={(e) => handleSubmit(e, { nom: form.nom, adresse: form.adresse, telephone: form.telephone, email: form.email })} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nom de la pharmacie</label>
-            <input value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
-            <input value={form.adresse} onChange={(e) => setForm({ ...form, adresse: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
-            <input value={form.telephone} onChange={(e) => setForm({ ...form, telephone: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
-          </div>
-          {success && <p className="text-green-600 text-sm">Parametres sauvegardes !</p>}
-          <button type="submit" disabled={saving}
-            className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
-            {saving ? 'Sauvegarde...' : 'Sauvegarder'}
-          </button>
+          <Input
+            label="Nom de la pharmacie"
+            value={form.nom}
+            onChange={(e) => setForm({ ...form, nom: e.target.value })}
+          />
+          <Input
+            label="Adresse"
+            value={form.adresse}
+            onChange={(e) => setForm({ ...form, adresse: e.target.value })}
+          />
+          <Input
+            label="Telephone"
+            value={form.telephone}
+            onChange={(e) => setForm({ ...form, telephone: e.target.value })}
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+          {success && <p className="text-success text-sm">Parametres sauvegardes !</p>}
+          <Button type="submit" variant="primary" loading={saving}>
+            Sauvegarder
+          </Button>
         </form>
         </fieldset>
-      </div>
+      </Card>
 
       {/* Format de recu — separe du bloc admin ci-dessus : modifiable par
           TOUS les roles (besoin operationnel du quotidien), contrairement
           aux infos administratives de la pharmacie. Decision confirmee
           par Nabe le 23/07/2026. Envoi cible : seul formatRecu part dans
           le PATCH, jamais les champs admin-only. */}
-      <div className="bg-white rounded-xl shadow p-6 mb-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Format de reçu</h2>
+      <Card className="mb-6">
+        <h2 className="font-semibold text-navy mb-4">Format de reçu</h2>
         <form onSubmit={(e) => handleSubmit(e, { formatRecu: form.formatRecu })} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Format d&apos;impression du recu</label>
-            <select
+            <Select
+              label="Format d'impression du reçu"
               value={form.formatRecu}
               onChange={(e) => setForm({ ...form, formatRecu: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             >
               <option value="A4">Feuille A4 / PDF standard</option>
               <option value="THERMIQUE_58">Imprimante thermique 58mm</option>
               <option value="THERMIQUE_80">Imprimante thermique 80mm</option>
-            </select>
+            </Select>
             <p className="text-xs text-gray-400 mt-1">
               Determine la mise en page du recu imprime depuis la caisse.
             </p>
           </div>
-          {success && <p className="text-green-600 text-sm">Parametres sauvegardes !</p>}
-          <button type="submit" disabled={saving}
-            className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
-            {saving ? 'Sauvegarde...' : 'Sauvegarder'}
-          </button>
+          {success && <p className="text-success text-sm">Parametres sauvegardes !</p>}
+          <Button type="submit" variant="primary" loading={saving}>
+            Sauvegarder
+          </Button>
         </form>
-      </div>
+      </Card>
 
-      <div className="bg-white rounded-xl shadow p-6 mb-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Securite caisse</h2>
+      <Card className="mb-6">
+        <h2 className="font-semibold text-navy mb-4">Securite caisse</h2>
         {!estAdmin && (
-          <div className="bg-orange-50 text-orange-700 text-sm rounded-lg px-4 py-3 mb-4">
+          <div className="bg-warning-bg text-warning-text text-sm rounded-card px-4 py-3 mb-4">
             Reserve aux administrateurs — tu peux consulter mais pas modifier ce reglage.
           </div>
         )}
         <fieldset disabled={!estAdmin} className="contents">
           <form onSubmit={(e) => handleSubmit(e, { dureeMaxSessionCaisseH: form.dureeMaxSessionCaisseH })} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Duree max d&apos;une session caisse (heures)
-              </label>
-              <input
+              <Input
+                label="Duree max d'une session caisse (heures)"
                 type="number"
                 min={1}
                 value={form.dureeMaxSessionCaisseH}
                 onChange={(e) => setForm({ ...form, dureeMaxSessionCaisseH: e.target.value })}
                 onWheel={(e) => (e.target as HTMLInputElement).blur()}
                 placeholder="Illimite si vide"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               />
               <p className="text-xs text-gray-400 mt-1">
                 Au-dela de cette duree, une alerte s&apos;affiche sur la page Caisse pour rappeler
@@ -164,17 +168,16 @@ export default function ParametresPage() {
                 caissier trop longtemps sur la meme session. Laisser vide pour aucune limite.
               </p>
             </div>
-            {success && <p className="text-green-600 text-sm">Parametres sauvegardes !</p>}
-            <button type="submit" disabled={saving}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
-              {saving ? 'Sauvegarde...' : 'Sauvegarder'}
-            </button>
+            {success && <p className="text-success text-sm">Parametres sauvegardes !</p>}
+            <Button type="submit" variant="primary" loading={saving}>
+              Sauvegarder
+            </Button>
           </form>
         </fieldset>
-      </div>
+      </Card>
 
-      <div className="bg-white rounded-xl shadow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Mon compte</h2>
+      <Card>
+        <h2 className="font-semibold text-navy mb-4">Mon compte</h2>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-500">Nom</span>
@@ -189,7 +192,7 @@ export default function ParametresPage() {
             <span className="font-medium">{session?.user?.role}</span>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }
