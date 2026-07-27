@@ -1,12 +1,12 @@
+
 'use client'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import Modal from '@/components/ui/Modal'
-import { useToast } from '@/components/ui/Toast'
 import ImportModal, { ImportField } from '@/components/ui/ImportModal'
 import { formaterNumeroFournisseur } from '@/lib/numerotation'
+import { Modal, useToast, Button, Card, PageHeader, EmptyState, Badge, Input, SkeletonTable } from '@/components/ui'
 
 interface Fournisseur {
   id: string
@@ -24,11 +24,13 @@ interface Fournisseur {
   }
 }
 
-const STYLES_FIABILITE: Record<string, { classe: string; label: string }> = {
-  fiable:               { classe: 'bg-green-100 text-green-700',  label: 'Fiable' },
-  generalement_fiable:  { classe: 'bg-orange-100 text-orange-700', label: 'Généralement fiable' },
-  souvent_en_retard:    { classe: 'bg-red-100 text-red-700',       label: 'Souvent en retard' },
-  insuffisant:          { classe: 'bg-gray-100 text-gray-500',     label: 'Historique insuffisant' },
+type BadgeVariant = 'success' | 'warning' | 'danger' | 'neutral'
+
+const STYLES_FIABILITE: Record<string, { variant: BadgeVariant; label: string }> = {
+  fiable:               { variant: 'success', label: 'Fiable' },
+  generalement_fiable:  { variant: 'warning', label: 'Généralement fiable' },
+  souvent_en_retard:    { variant: 'danger',  label: 'Souvent en retard' },
+  insuffisant:          { variant: 'neutral', label: 'Historique insuffisant' },
 }
 
 const CHAMPS_IMPORT_FOURNISSEURS: ImportField[] = [
@@ -117,25 +119,21 @@ export default function FournisseursPage() {
 
   return (
     <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Fournisseurs</h1>
-        <div className="flex gap-3">
-          {isAdmin && (
-            <button
-              onClick={() => setImportOuvert(true)}
-              className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50"
-            >
-              Importer
-            </button>
-          )}
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-          >
-            + Nouveau fournisseur
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Fournisseurs"
+        actions={
+          <>
+            {isAdmin && (
+              <Button variant="secondary" onClick={() => setImportOuvert(true)}>
+                Importer
+              </Button>
+            )}
+            <Button variant="primary" onClick={() => setShowForm(!showForm)}>
+              + Nouveau fournisseur
+            </Button>
+          </>
+        }
+      />
 
       <ImportModal
         open={importOuvert}
@@ -148,82 +146,68 @@ export default function FournisseursPage() {
       />
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-6 mb-6 grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
-            <input
+        <Card className="mb-6">
+          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+            <Input
+              label="Nom"
               required
               value={form.nom}
               onChange={(e) => setForm({ ...form, nom: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="Nom du fournisseur"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
-            <input
+            <Input
+              label="Contact"
               value={form.contact}
               onChange={(e) => setForm({ ...form, contact: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="Nom du contact"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-            <input
+            <Input
+              label="Téléphone"
               value={form.telephone}
               onChange={(e) => setForm({ ...form, telephone: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="+224 xxx xxx xxx"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
+            <Input
+              label="Email"
               type="email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="email@fournisseur.com"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Délai livraison (jours)</label>
-            <input
+            <Input
+              label="Délai livraison (jours)"
               type="number"
               value={form.delaiLivraison}
               onChange={(e) => setForm({ ...form, delaiLivraison: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="3"
             />
-          </div>
-          <div className="flex items-end gap-3">
-            <button
-              type="submit"
-              disabled={saving}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
-            >
-              {saving ? 'Enregistrement...' : 'Enregistrer'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-200"
-            >
-              Annuler
-            </button>
-          </div>
-        </form>
+            <div className="flex items-end gap-3">
+              <Button type="submit" variant="primary" loading={saving}>
+                Enregistrer
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
+                Annuler
+              </Button>
+            </div>
+          </form>
+        </Card>
       )}
 
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <Card padding="none" className="overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Chargement...</div>
+          <div className="p-6">
+            <SkeletonTable rows={6} cols={6} />
+          </div>
         ) : fournisseurs.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Aucun fournisseur</div>
+          <EmptyState
+            icon="🚚"
+            title="Aucun fournisseur pour l'instant"
+            description="Ajoutez votre premier fournisseur pour passer des commandes."
+            action={<Button variant="primary" onClick={() => setShowForm(true)}>+ Ajouter le premier fournisseur</Button>}
+          />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-app-bg border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Nom</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Contact</th>
@@ -235,8 +219,8 @@ export default function FournisseursPage() {
             </thead>
             <tbody>
               {fournisseurs.map((f) => (
-                <tr key={f.id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="px-6 py-4 font-medium text-gray-800">
+                <tr key={f.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg">
+                  <td className="px-6 py-4 font-medium text-navy">
                     <Link href={`/fournisseurs/${f.id}`} className="hover:underline hover:text-mint-dark">
                       {f.nom}
                     </Link>
@@ -258,34 +242,31 @@ export default function FournisseursPage() {
                           ? `${fiab.commandesATemps} livraison(s) à temps sur ${fiab.totalCommandesRecues} reçue(s) (90 derniers jours)`
                           : `Moins de 3 commandes reçues avec date prévue sur les 90 derniers jours`
                       return (
-                        <span
-                          title={titre}
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${style.classe}`}
-                        >
-                          {style.label}
-                          {fiab?.pourcentageATemps !== null && fiab?.pourcentageATemps !== undefined && (
-                            <> ({fiab.pourcentageATemps}%)</>
-                          )}
+                        <span title={titre}>
+                          <Badge variant={style.variant}>
+                            {style.label}
+                            {fiab?.pourcentageATemps !== null && fiab?.pourcentageATemps !== undefined && (
+                              <> ({fiab.pourcentageATemps}%)</>
+                            )}
+                          </Badge>
                         </span>
                       )
                     })()}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
-                      <Link
-                        href={`/fournisseurs/${f.id}`}
-                        className="text-xs px-3 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                      >
-                        Détail
+                      <Link href={`/fournisseurs/${f.id}`}>
+                        <Button variant="secondary" size="sm">Détail</Button>
                       </Link>
                       {isAdmin && (
-                        <button
+                        <Button
+                          variant="danger"
+                          size="sm"
                           onClick={() => archiver(f.id)}
-                          disabled={archivingId === f.id}
-                          className="text-xs px-3 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
+                          loading={archivingId === f.id}
                         >
-                          {archivingId === f.id ? '...' : 'Archiver'}
-                        </button>
+                          Archiver
+                        </Button>
                       )}
                     </div>
                   </td>
@@ -294,7 +275,7 @@ export default function FournisseursPage() {
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
 
       <Modal
         open={!!confirmArchiverId}

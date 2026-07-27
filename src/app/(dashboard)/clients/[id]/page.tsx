@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -5,8 +6,8 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
-import { Modal, useToast } from '@/components/ui'
 import { formaterNumeroClient } from '@/lib/numerotation'
+import { Modal, useToast, Card, Button, Badge, Input, Select, EmptyState, Skeleton, SkeletonCard } from '@/components/ui'
 
 interface LigneVente {
   id: string
@@ -37,10 +38,12 @@ interface Client {
   ventes: Vente[]
 }
 
-const STATUT_STYLE: Record<string, string> = {
-  COMPLETE:  'bg-green-100 text-green-700',
-  PARTIELLE: 'bg-orange-100 text-orange-700',
-  ANNULEE:   'bg-red-100 text-red-700',
+type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral'
+
+const STATUT_BADGE: Record<string, BadgeVariant> = {
+  COMPLETE:  'success',
+  PARTIELLE: 'warning',
+  ANNULEE:   'danger',
 }
 
 const STATUT_LABEL: Record<string, string> = {
@@ -162,47 +165,69 @@ export default function ClientDetailPage() {
     setConfirmArchive(false)
   }
 
-  if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
-  if (erreur)  return (
-    <div className="p-8">
-      <p className="text-red-500 mb-4">{erreur}</p>
-      <Link href="/clients" className="text-green-600 hover:underline text-sm">← Retour aux clients</Link>
-    </div>
+  // Lien retour uniformisé avec le reste de l'app (Phase 5 — 3 styles
+  // differents trouves sur clients/fournisseurs/ventes avant ce lot),
+  // affiche systematiquement y compris pendant chargement/erreur.
+  const lienRetour = (
+    <Link href="/clients" className="text-sm text-gray-500 hover:text-mint-dark hover:underline mb-4 inline-block">
+      ← Retour aux clients
+    </Link>
   )
+
+  if (loading) {
+    return (
+      <div className="p-8 max-w-3xl">
+        {lienRetour}
+        <Skeleton className="h-8 w-64 mb-6" />
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <SkeletonCard />
+      </div>
+    )
+  }
+
+  if (erreur) {
+    return (
+      <div className="p-8">
+        {lienRetour}
+        <p className="text-danger">{erreur}</p>
+      </div>
+    )
+  }
+
   if (!client) return null
 
   const pct = client.plafondCredit > 0
     ? Math.round((client.soldeCredit / client.plafondCredit) * 100)
     : 0
-  const couleurBarre = pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-orange-400' : 'bg-green-500'
+  const couleurBarre = pct > 80 ? 'bg-danger' : pct > 50 ? 'bg-warning' : 'bg-success'
 
   return (
     <div className="p-8 max-w-3xl">
+      {lienRetour}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Link href="/clients" className="text-gray-400 hover:text-gray-700 text-sm">← Clients</Link>
-          <h1 className="text-2xl font-bold text-gray-800">{client.nom}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold text-navy">{client.nom}</h1>
           {formaterNumeroClient(client.numeroClient) && (
             <span className="text-gray-400 text-sm">{formaterNumeroClient(client.numeroClient)}</span>
           )}
-          {!client.actif && (
-            <span className="px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">Archivé</span>
-          )}
+          {!client.actif && <Badge variant="neutral">Archivé</Badge>}
         </div>
         {client.actif && (
           <div className="flex gap-2 items-center">
             {isAdmin ? (
               <>
-                <button onClick={() => setShowEdit(!showEdit)}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700">
+                <Button variant="secondary" size="sm" onClick={() => setShowEdit(!showEdit)}>
                   Modifier
-                </button>
+                </Button>
                 {client.soldeCredit === 0 && (
-                  <button onClick={() => setConfirmArchive(true)} disabled={archiving}
-                    className="px-4 py-2 text-sm bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50">
-                    {archiving ? 'Archivage...' : 'Archiver'}
-                  </button>
+                  <Button variant="danger" size="sm" onClick={() => setConfirmArchive(true)} loading={archiving}>
+                    Archiver
+                  </Button>
                 )}
               </>
             ) : (
@@ -212,56 +237,54 @@ export default function ClientDetailPage() {
         )}
       </div>
 
-      {errArch && <p className="text-red-500 text-sm mb-4">{errArch}</p>}
+      {errArch && <p className="text-danger text-sm mb-4">{errArch}</p>}
 
       {/* Formulaire modification */}
       {showEdit && (
-        <form onSubmit={handleModifier}
-          className="bg-white rounded-xl shadow p-6 mb-6 grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
-            <input required value={formEdit.nom}
+        <Card className="mb-6">
+          <form onSubmit={handleModifier} className="grid grid-cols-2 gap-4">
+            <Input
+              label="Nom"
+              required
+              value={formEdit.nom}
               onChange={(e) => setFormEdit({ ...formEdit, nom: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-            <input value={formEdit.telephone}
+            />
+            <Input
+              label="Téléphone"
+              value={formEdit.telephone}
               onChange={(e) => setFormEdit({ ...formEdit, telephone: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="+224 xxx xxx xxx" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input type="email" value={formEdit.email}
+              placeholder="+224 xxx xxx xxx"
+            />
+            <Input
+              label="Email"
+              type="email"
+              value={formEdit.email}
               onChange={(e) => setFormEdit({ ...formEdit, email: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Plafond crédit (GNF)</label>
-            <input type="number" value={formEdit.plafondCredit}
+            />
+            <Input
+              label="Plafond crédit (GNF)"
+              type="number"
+              value={formEdit.plafondCredit}
               onChange={(e) => setFormEdit({ ...formEdit, plafondCredit: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
-          </div>
-          {errEdit && <p className="col-span-2 text-red-500 text-sm">{errEdit}</p>}
-          <div className="col-span-2 flex gap-3">
-            <button type="submit" disabled={savingEdit}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm">
-              {savingEdit ? 'Sauvegarde...' : 'Sauvegarder'}
-            </button>
-            <button type="button" onClick={() => setShowEdit(false)}
-              className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-200 text-sm">
-              Annuler
-            </button>
-          </div>
-        </form>
+            />
+            {errEdit && <p className="col-span-2 text-danger text-sm">{errEdit}</p>}
+            <div className="col-span-2 flex gap-3">
+              <Button type="submit" variant="primary" size="sm" loading={savingEdit}>
+                Sauvegarder
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setShowEdit(false)}>
+                Annuler
+              </Button>
+            </div>
+          </form>
+        </Card>
       )}
 
       {/* Carte infos + crédit */}
       <div className="grid grid-cols-2 gap-6 mb-6">
         {/* Infos */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold text-gray-700 mb-4">Informations</h2>
+        <Card>
+          <h2 className="font-semibold text-navy mb-4">Informations</h2>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-500">Téléphone</span>
@@ -276,15 +299,15 @@ export default function ClientDetailPage() {
               <span className="font-medium">{client.ventes.length}</span>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Crédit */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold text-gray-700 mb-4">Crédit</h2>
+        <Card>
+          <h2 className="font-semibold text-navy mb-4">Crédit</h2>
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Solde dû</span>
-              <span className={`font-bold text-lg ${client.soldeCredit > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              <span className={`font-bold text-lg ${client.soldeCredit > 0 ? 'text-danger' : 'text-success'}`}>
                 {formatMontant(client.soldeCredit)}
               </span>
             </div>
@@ -296,7 +319,7 @@ export default function ClientDetailPage() {
               <div>
                 <div className="flex justify-between text-xs text-gray-400 mb-1">
                   <span>Utilisation</span>
-                  <span className={pct > 80 ? 'text-red-500 font-medium' : ''}>{pct}%</span>
+                  <span className={pct > 80 ? 'text-danger font-medium' : ''}>{pct}%</span>
                 </div>
                 <div className="w-full bg-gray-100 rounded-full h-2">
                   <div className={`h-2 rounded-full transition-all ${couleurBarre}`}
@@ -305,74 +328,62 @@ export default function ClientDetailPage() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Section remboursement */}
       {isAdmin && client.actif && client.soldeCredit > 0 && (
-        <div className="bg-white rounded-xl shadow p-6 mb-6">
-          <h2 className="font-semibold text-gray-700 mb-4">Enregistrer un remboursement</h2>
+        <Card className="mb-6">
+          <h2 className="font-semibold text-navy mb-4">Enregistrer un remboursement</h2>
           <div className="grid grid-cols-3 gap-4">
+            <Input
+              label={`Montant (GNF) — max ${formatMontant(client.soldeCredit)}`}
+              type="number"
+              value={montantRemb}
+              onChange={(e) => setMontantRemb(e.target.value)}
+              onWheel={(e) => (e.target as HTMLInputElement).blur()}
+              max={client.soldeCredit}
+              placeholder="0"
+            />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Montant (GNF) — max {formatMontant(client.soldeCredit)}
-              </label>
-              <input
-                type="number"
-                value={montantRemb}
-                onChange={(e) => setMontantRemb(e.target.value)}
-                onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                max={client.soldeCredit}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="0" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Mode de paiement</label>
-              <select
-                value={modeRemb}
-                onChange={(e) => setModeRemb(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
+              <Select label="Mode de paiement" value={modeRemb} onChange={(e) => setModeRemb(e.target.value)}>
                 <option value="ESPECES">Especes</option>
                 <option value="MOBILE_MONEY">Mobile Money</option>
                 <option value="ORANGE_MONEY">Orange Money</option>
                 <option value="MTN_MONEY">MTN Money</option>
                 <option value="PAIEMENT_MARCHAND">Paiement Marchand</option>
                 <option value="CARTE">Carte</option>
-              </select>
+              </Select>
               {modeRemb === 'ESPECES' && (
                 <p className="text-xs text-gray-400 mt-1">Necessite une session caisse ouverte</p>
               )}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Note (optionnel)</label>
-              <input
-                value={noteRemb}
-                onChange={(e) => setNoteRemb(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="Ex: versement du 17/07" />
-            </div>
+            <Input
+              label="Note (optionnel)"
+              value={noteRemb}
+              onChange={(e) => setNoteRemb(e.target.value)}
+              placeholder="Ex: versement du 17/07"
+            />
           </div>
-          {errRemb && <p className="text-red-500 text-sm mt-2">{errRemb}</p>}
-          {okRemb  && <p className="text-green-600 text-sm mt-2">Remboursement enregistré ✓</p>}
-          <button onClick={handleRembourser} disabled={savingRemb}
-            className="mt-3 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm font-medium">
-            {savingRemb ? 'Enregistrement...' : 'Enregistrer le remboursement'}
-          </button>
-        </div>
+          {errRemb && <p className="text-danger text-sm mt-2">{errRemb}</p>}
+          {okRemb  && <p className="text-success text-sm mt-2">Remboursement enregistré ✓</p>}
+          <Button variant="primary" size="sm" className="mt-3" onClick={handleRembourser} loading={savingRemb}>
+            Enregistrer le remboursement
+          </Button>
+        </Card>
       )}
 
       {/* Historique ventes */}
-      <div className="bg-white rounded-xl shadow overflow-hidden">
-        <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center">
-          <h2 className="font-semibold text-gray-700">20 dernières ventes</h2>
+      <Card padding="none" className="overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 bg-app-bg flex justify-between items-center">
+          <h2 className="font-semibold text-navy">20 dernières ventes</h2>
           <span className="text-xs text-gray-400">{client.ventes.length} vente{client.ventes.length > 1 ? 's' : ''}</span>
         </div>
         {client.ventes.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Aucune vente enregistrée</div>
+          <EmptyState icon="🧾" title="Aucune vente enregistrée" />
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b">
+            <thead className="border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-500 font-medium">Date</th>
                 <th className="text-left px-6 py-3 text-gray-500 font-medium">Articles</th>
@@ -383,7 +394,7 @@ export default function ClientDetailPage() {
             </thead>
             <tbody>
               {client.ventes.map((v) => (
-                <tr key={v.id} className="border-b last:border-0 hover:bg-gray-50">
+                <tr key={v.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg">
                   <td className="px-6 py-3 text-gray-600 whitespace-nowrap">{formatDateTime(v.createdAt)}</td>
                   <td className="px-6 py-3 text-gray-600 text-xs">
                     {v.lignes.slice(0, 2).map((l) => l.medicament.nom).join(', ')}
@@ -391,13 +402,12 @@ export default function ClientDetailPage() {
                   </td>
                   <td className="px-6 py-3 text-right font-medium">{formatMontant(v.montantTotal)}</td>
                   <td className="px-6 py-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUT_STYLE[v.statut] ?? 'bg-gray-100 text-gray-600'}`}>
+                    <Badge variant={STATUT_BADGE[v.statut] ?? 'neutral'}>
                       {STATUT_LABEL[v.statut] ?? v.statut}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="px-6 py-3">
-                    <Link href={`/ventes/${v.id}`}
-                      className="text-green-600 hover:underline text-xs">
+                    <Link href={`/ventes/${v.id}`} className="text-mint-dark hover:underline text-xs">
                       Voir
                     </Link>
                   </td>
@@ -406,7 +416,7 @@ export default function ClientDetailPage() {
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
 
       <Modal
         open={confirmArchive}

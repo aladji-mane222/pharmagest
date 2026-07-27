@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatMontant } from '@/lib/utils'
+import { Card, PageHeader, EmptyState, SkeletonTable } from '@/components/ui'
 
 interface Client {
   id: string
@@ -14,17 +15,17 @@ interface Client {
 
 function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="bg-white rounded-xl shadow p-5 border border-gray-100">
+    <Card padding="sm">
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-2xl font-bold text-gray-800">{value}</p>
+      <p className="text-2xl font-bold text-navy">{value}</p>
       {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
-    </div>
+    </Card>
   )
 }
 
 function BarreProgression({ pct }: { pct: number }) {
-  const couleur = pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-orange-400' : 'bg-green-500'
-  const texte   = pct > 80 ? 'text-red-600' : pct > 50 ? 'text-orange-500' : 'text-green-600'
+  const couleur = pct > 80 ? 'bg-danger' : pct > 50 ? 'bg-warning' : 'bg-success'
+  const texte   = pct > 80 ? 'text-danger' : pct > 50 ? 'text-warning-text' : 'text-success'
   return (
     <div className="flex items-center gap-2">
       <div className="w-24 bg-gray-100 rounded-full h-2 overflow-hidden">
@@ -53,10 +54,10 @@ export default function CreditsPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Crédits en cours</h1>
-        <p className="text-gray-500 text-sm mt-1">Clients avec un solde crédit impayé</p>
-      </div>
+      <PageHeader
+        title="Crédits en cours"
+        description="Clients avec un solde crédit impayé"
+      />
 
       {/* ── 3 KPIs ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -78,14 +79,20 @@ export default function CreditsPage() {
       </div>
 
       {/* ── Tableau ── */}
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <Card padding="none" className="overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Chargement...</div>
+          <div className="p-6">
+            <SkeletonTable rows={5} cols={6} />
+          </div>
         ) : clients.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Aucun crédit en cours</div>
+          <EmptyState
+            icon="💳"
+            title="Aucun crédit en cours"
+            description="Tous les clients sont à jour de paiement."
+          />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-app-bg border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600">Nom</th>
                 <th className="text-left px-6 py-3 text-gray-600">Telephone</th>
@@ -108,10 +115,10 @@ export default function CreditsPage() {
                 const lienWa = `https://wa.me/${telNettoyé}?text=${messageWa}`
 
                 return (
-                  <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium text-gray-800">{c.nom}</td>
+                  <tr key={c.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg">
+                    <td className="px-6 py-4 font-medium text-navy">{c.nom}</td>
                     <td className="px-6 py-4 text-gray-600">{c.telephone || '—'}</td>
-                    <td className="px-6 py-4 text-right font-semibold text-red-600">
+                    <td className="px-6 py-4 text-right font-semibold text-danger">
                       {formatMontant(c.soldeCredit)}
                     </td>
                     <td className="px-6 py-4 text-right text-gray-600">
@@ -127,7 +134,7 @@ export default function CreditsPage() {
                             href={lienWa}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs font-medium text-green-700 hover:text-green-900 whitespace-nowrap"
+                            className="text-xs font-medium text-success hover:underline whitespace-nowrap"
                             title={`Relancer ${c.nom} sur WhatsApp`}
                           >
                             📱 Relancer
@@ -135,7 +142,7 @@ export default function CreditsPage() {
                         )}
                         <Link
                           href={`/clients/${c.id}`}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                          className="text-xs font-medium text-mint-dark hover:underline whitespace-nowrap"
                         >
                           Voir fiche
                         </Link>
@@ -147,7 +154,7 @@ export default function CreditsPage() {
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
     </div>
   )
 }

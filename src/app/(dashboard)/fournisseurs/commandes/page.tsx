@@ -1,13 +1,13 @@
-
 'use client'
 
 import { useEffect, useState, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { formatMontant, formatDateTime, formatDate } from '@/lib/utils'
 import { exporterExcel, exporterCSV } from '@/lib/export'
 import { pdf } from '@react-pdf/renderer'
 import CommandesPDF from '@/components/fournisseurs/CommandesPDF'
-import Modal from '@/components/ui/Modal'
+import { Modal, Card, Button, EmptyState, SkeletonTable, BadgeStatutCommande } from '@/components/ui'
 import { TOLERANCE_RETARD_JOURS } from '@/lib/livraison'
 
 interface Commande {
@@ -597,16 +597,6 @@ function CommandesPageInner() {
     setExportEnCours(false)
   }
 
-  const statutCouleur = (statut: string) => {
-    switch (statut) {
-      case 'BROUILLON': return 'bg-gray-100 text-gray-700'
-      case 'ENVOYEE':   return 'bg-blue-100 text-blue-700'
-      case 'RECUE':     return 'bg-green-100 text-green-700'
-      case 'ANNULEE':   return 'bg-red-100 text-red-700'
-      default:          return 'bg-gray-100 text-gray-700'
-    }
-  }
-
   const badgeLivraison = (cmd: Commande) => {
     if (!cmd.dateLivraisonPrevue) {
       return <span className="text-gray-300 text-xs">—</span>
@@ -648,39 +638,48 @@ function CommandesPageInner() {
     return sum + q * p
   }, 0)
 
-  if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
+  if (loading) {
+    return (
+      <div className="p-8">
+        <Link href="/fournisseurs" className="text-sm text-gray-500 hover:text-mint-dark hover:underline mb-4 inline-block">
+          ← Retour aux fournisseurs
+        </Link>
+        <h1 className="text-2xl font-semibold text-navy mb-6">Commandes Fournisseurs</h1>
+        <Card padding="none" className="overflow-hidden">
+          <div className="p-6">
+            <SkeletonTable rows={6} cols={7} />
+          </div>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="p-8">
+      <Link href="/fournisseurs" className="text-sm text-gray-500 hover:text-mint-dark hover:underline mb-4 inline-block">
+        ← Retour aux fournisseurs
+      </Link>
+
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Commandes Fournisseurs</h1>
+        <h1 className="text-2xl font-semibold text-navy">Commandes Fournisseurs</h1>
         <div className="flex gap-3">
-          <button
+          <Button
+            variant={showSuggestions ? 'secondary' : 'secondary'}
+            className={showSuggestions ? 'bg-warning-bg border-warning/30 text-warning-text' : ''}
             onClick={toggleSuggestions}
-            className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
-              showSuggestions
-                ? 'bg-amber-50 border-amber-300 text-amber-700'
-                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}
           >
             📋 Commandes suggérées
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="secondary"
+            className={(filtreOuvert || filtreActif) ? 'bg-info-bg border-info/30 text-info-text' : ''}
             onClick={() => setFiltreOuvert(!filtreOuvert)}
-            className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
-              filtreOuvert || filtreActif
-                ? 'bg-blue-50 border-blue-300 text-blue-700'
-                : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}
           >
             🔍 Filtrer{filtreActif ? ' (actif)' : ''}
-          </button>
-          <button
-            onClick={() => { setShowForm(!showForm); setErreur(null) }}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-          >
+          </Button>
+          <Button variant="primary" onClick={() => { setShowForm(!showForm); setErreur(null) }}>
             + Nouvelle commande
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -987,12 +986,19 @@ function CommandesPageInner() {
       )}
 
       {/* Liste des commandes */}
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <Card padding="none" className="overflow-hidden">
         {commandes.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Aucune commande</div>
+          <EmptyState
+            icon="📦"
+            title={filtreActif ? 'Aucune commande ne correspond' : 'Aucune commande pour l’instant'}
+            description={filtreActif ? 'Essayez un autre filtre.' : 'Lancez votre première commande fournisseur.'}
+            action={!filtreActif && (
+              <Button variant="primary" onClick={() => { setShowForm(true); setErreur(null) }}>+ Nouvelle commande</Button>
+            )}
+          />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-app-bg border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600">Date</th>
                 <th className="text-left px-6 py-3 text-gray-600">Fournisseur</th>
@@ -1018,9 +1024,7 @@ function CommandesPageInner() {
                   <td className="px-6 py-4 text-right">{formatMontant(cmd.montantTotal)}</td>
                   <td className="px-6 py-4 text-center">{badgeLivraison(cmd)}</td>
                   <td className="px-6 py-4 text-center">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${statutCouleur(cmd.statut)}`}>
-                      {LABELS_STATUT[cmd.statut] ?? cmd.statut}
-                    </span>
+                    <BadgeStatutCommande statut={cmd.statut} />
                   </td>
                   <td className="px-6 py-4 text-center">
                     <div className="flex gap-2 justify-center">
@@ -1049,7 +1053,7 @@ function CommandesPageInner() {
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
 
       {/* Modale de reception reelle : quantite et date de peremption
           saisies ligne par ligne, plus aucune valeur inventee. */}

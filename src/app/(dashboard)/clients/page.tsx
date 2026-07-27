@@ -5,8 +5,8 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatMontant } from '@/lib/utils'
 import ImportModal, { ImportField } from '@/components/ui/ImportModal'
-import { useToast } from '@/components/ui/Toast'
 import { formaterNumeroClient } from '@/lib/numerotation'
+import { useToast, Button, Card, PageHeader, EmptyState, Badge, Input, SkeletonTable } from '@/components/ui'
 
 interface Client {
   id: string
@@ -73,25 +73,21 @@ export default function ClientsPage() {
 
   return (
     <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Clients</h1>
-        <div className="flex gap-3">
-          {isAdmin && (
-            <button
-              onClick={() => setImportOuvert(true)}
-              className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50"
-            >
-              Importer
-            </button>
-          )}
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-          >
-            + Nouveau client
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Clients"
+        actions={
+          <>
+            {isAdmin && (
+              <Button variant="secondary" onClick={() => setImportOuvert(true)}>
+                Importer
+              </Button>
+            )}
+            <Button variant="primary" onClick={() => setShowForm(!showForm)}>
+              + Nouveau client
+            </Button>
+          </>
+        }
+      />
 
       <ImportModal
         open={importOuvert}
@@ -104,62 +100,44 @@ export default function ClientsPage() {
       />
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-6 mb-6 grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
-            <input
+        <Card className="mb-6">
+          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+            <Input
+              label="Nom"
               required
               value={form.nom}
               onChange={(e) => setForm({ ...form, nom: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="Nom du client"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Telephone</label>
-            <input
+            <Input
+              label="Téléphone"
               value={form.telephone}
               onChange={(e) => setForm({ ...form, telephone: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="+224 xxx xxx xxx"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
+            <Input
+              label="Email"
               type="email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="email@client.com"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Plafond credit (GNF)</label>
-            <input
+            <Input
+              label="Plafond crédit (GNF)"
               type="number"
               value={form.plafondCredit}
               onChange={(e) => setForm({ ...form, plafondCredit: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
             />
-          </div>
-          <div className="col-span-2 flex gap-3">
-            <button
-              type="submit"
-              disabled={saving}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
-            >
-              {saving ? 'Enregistrement...' : 'Enregistrer'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-200"
-            >
-              Annuler
-            </button>
-          </div>
-        </form>
+            <div className="col-span-2 flex gap-3">
+              <Button type="submit" variant="primary" loading={saving}>
+                Enregistrer
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>
+                Annuler
+              </Button>
+            </div>
+          </form>
+        </Card>
       )}
 
       <div className="mb-4">
@@ -168,18 +146,27 @@ export default function ClientsPage() {
           placeholder="Rechercher un client..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint"
         />
       </div>
 
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <Card padding="none" className="overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Chargement...</div>
+          <div className="p-6">
+            <SkeletonTable rows={6} cols={6} />
+          </div>
         ) : clients.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Aucun client</div>
+          <EmptyState
+            icon="👥"
+            title={search.trim() ? 'Aucun client ne correspond' : 'Aucun client pour l’instant'}
+            description={search.trim() ? 'Essayez une autre recherche.' : 'Ajoutez votre premier client pour suivre ses achats et son crédit.'}
+            action={!search.trim() && (
+              <Button variant="primary" onClick={() => setShowForm(true)}>+ Ajouter le premier client</Button>
+            )}
+          />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-app-bg border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600">Nom</th>
                 <th className="text-left px-6 py-3 text-gray-600">Telephone</th>
@@ -195,20 +182,18 @@ export default function ClientsPage() {
                   ? Math.min(100, (c.soldeCredit / c.plafondCredit) * 100)
                   : c.soldeCredit > 0 ? 100 : 0
                 return (
-                  <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium text-gray-800">
+                  <tr key={c.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg">
+                    <td className="px-6 py-4 font-medium text-navy">
                       {c.nom}
                       {formaterNumeroClient(c.numeroClient) && (
                         <span className="text-xs text-gray-400 font-normal ml-2">{formaterNumeroClient(c.numeroClient)}</span>
                       )}
                       {c.soldeCredit > 0 && (
-                        <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs font-medium ml-2">
-                          Crédit
-                        </span>
+                        <Badge variant="danger" className="ml-2">Crédit</Badge>
                       )}
                     </td>
                     <td className="px-6 py-4 text-gray-600">{c.telephone || '-'}</td>
-                    <td className={`px-6 py-4 text-right font-medium ${c.soldeCredit > 0 ? 'text-red-500' : 'text-gray-600'}`}>
+                    <td className={`px-6 py-4 text-right font-medium ${c.soldeCredit > 0 ? 'text-danger' : 'text-gray-600'}`}>
                       {formatMontant(c.soldeCredit)}
                     </td>
                     <td className="px-6 py-4 text-right text-gray-600">
@@ -217,7 +202,7 @@ export default function ClientsPage() {
                     <td className="px-6 py-4">
                       <div className="w-24 bg-gray-100 rounded-full h-1.5">
                         <div
-                          className={`h-1.5 rounded-full ${pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-orange-400' : 'bg-green-500'}`}
+                          className={`h-1.5 rounded-full ${pct > 80 ? 'bg-danger' : pct > 50 ? 'bg-warning' : 'bg-success'}`}
                           style={{ width: pct + '%' }}
                         />
                       </div>
@@ -225,7 +210,7 @@ export default function ClientsPage() {
                     <td className="px-6 py-4 text-right">
                       <Link
                         href={`/clients/${c.id}`}
-                        className="text-green-600 hover:text-green-800 text-xs font-medium whitespace-nowrap"
+                        className="text-mint-dark hover:underline text-xs font-medium whitespace-nowrap"
                       >
                         Voir fiche →
                       </Link>
@@ -236,7 +221,7 @@ export default function ClientsPage() {
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
     </div>
   )
 }
