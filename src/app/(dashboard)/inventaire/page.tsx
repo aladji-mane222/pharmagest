@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -254,7 +253,11 @@ export default function InventairePage() {
                   <th className="text-left py-2 text-gray-500">Médicament</th>
                   <th className="text-right py-2 text-gray-500">Stock système</th>
                   <th className="text-right py-2 text-gray-500">Quantité réelle</th>
-                  <th className="text-right py-2 text-gray-500 pr-4">Écart</th>
+                  <th className="text-right py-2 text-gray-500 pr-4">
+                    <span title="Quantité réelle saisie moins stock système. Positif = surplus, négatif = manque.">
+                      Écart ⓘ
+                    </span>
+                  </th>
                   <th className="text-left py-2 text-gray-500 pl-4">Motif de l'écart</th>
                 </tr>
               </thead>

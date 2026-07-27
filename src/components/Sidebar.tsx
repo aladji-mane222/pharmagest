@@ -70,6 +70,7 @@ const menuGroups: MenuGroup[] = [
     label: 'GESTION',
     items: [
       { href: '/parametres', label: 'Paramètres', icon: '⚙️' },
+      { href: '/aide',       label: 'Aide',        icon: '❓' },
     ],
   },
 ]

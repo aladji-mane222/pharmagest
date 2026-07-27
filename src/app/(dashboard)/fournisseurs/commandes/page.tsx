@@ -663,13 +663,15 @@ function CommandesPageInner() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold text-navy">Commandes Fournisseurs</h1>
         <div className="flex gap-3">
-          <Button
-            variant={showSuggestions ? 'secondary' : 'secondary'}
-            className={showSuggestions ? 'bg-warning-bg border-warning/30 text-warning-text' : ''}
-            onClick={toggleSuggestions}
-          >
-            📋 Commandes suggérées
-          </Button>
+          <span title="Propose automatiquement les médicaments en stock bas ou en rupture, avec une quantité suggérée basée sur le stock minimum.">
+            <Button
+              variant="secondary"
+              className={showSuggestions ? 'bg-warning-bg border-warning/30 text-warning-text' : ''}
+              onClick={toggleSuggestions}
+            >
+              📋 Commandes suggérées ⓘ
+            </Button>
+          </span>
           <Button
             variant="secondary"
             className={(filtreOuvert || filtreActif) ? 'bg-info-bg border-info/30 text-info-text' : ''}

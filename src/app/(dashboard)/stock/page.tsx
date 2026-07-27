@@ -117,14 +117,15 @@ export default function StockPage() {
 
       <div className="flex gap-2 mb-6">
         {FILTRES.map((f) => (
-          <Button
-            key={f.value}
-            variant={filtre === f.value ? 'primary' : 'secondary'}
-            size="sm"
-            onClick={() => setFiltre(f.value)}
-          >
-            {f.label}
-          </Button>
+          <span key={f.value} title={f.value === 'dormants' ? 'Médicaments sans aucune vente depuis 90 jours' : undefined}>
+            <Button
+              variant={filtre === f.value ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => setFiltre(f.value)}
+            >
+              {f.label}
+            </Button>
+          </span>
         ))}
       </div>
 
