@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatMontant, formatDateTime } from '@/lib/utils'
-import { useToast, Modal } from '@/components/ui'
+import { useToast, Modal, Card, PageHeader, Button, Badge, Skeleton, SkeletonCard } from '@/components/ui'
 import { ouvrirRecuPDF, telechargerRecuPDF, construireMessageWhatsApp, DonneesRecu } from '@/lib/recu'
 
 interface LigneVente {
@@ -43,10 +43,12 @@ const MODE_LABELS: Record<string, string> = {
   MIXTE:             'Mixte',
 }
 
-const STATUT_STYLE: Record<string, string> = {
-  COMPLETE:  'bg-green-100 text-green-700',
-  PARTIELLE: 'bg-orange-100 text-orange-700',
-  ANNULEE:   'bg-red-100 text-red-700',
+type BadgeVariant = 'success' | 'warning' | 'danger' | 'neutral'
+
+const STATUT_BADGE: Record<string, BadgeVariant> = {
+  COMPLETE:  'success',
+  PARTIELLE: 'warning',
+  ANNULEE:   'danger',
 }
 
 const STATUT_LABEL: Record<string, string> = {
@@ -116,11 +118,25 @@ export default function VenteDetailPage() {
     setAnnulation(false)
   }
 
-  if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
+  const lienRetour = (
+    <Link href="/ventes/historique" className="text-sm text-gray-500 hover:text-mint-dark hover:underline mb-4 inline-block">
+      ← Retour à l'historique
+    </Link>
+  )
+
+  if (loading) {
+    return (
+      <div className="p-8 max-w-3xl">
+        {lienRetour}
+        <Skeleton className="h-8 w-64 mb-6" />
+        <SkeletonCard />
+      </div>
+    )
+  }
   if (erreur)  return (
     <div className="p-8">
-      <p className="text-red-500 mb-4">{erreur}</p>
-      <Link href="/ventes/historique" className="text-green-600 hover:underline text-sm">← Retour à l'historique</Link>
+      {lienRetour}
+      <p className="text-danger">{erreur}</p>
     </div>
   )
   if (!vente) return null
@@ -144,48 +160,37 @@ export default function VenteDetailPage() {
 
   return (
     <div className="p-8 max-w-3xl">
+      {lienRetour}
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Link href="/ventes/historique"
-            className="text-gray-400 hover:text-gray-700 transition-colors text-sm">
-            ← Historique
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-800">
-            Détail de la vente
-            {vente.numeroFacture && (
-              <span className="text-gray-400 font-normal ml-2">— {vente.numeroFacture}</span>
+      <PageHeader
+        title={`Détail de la vente${vente.numeroFacture ? ` — ${vente.numeroFacture}` : ''}`}
+        actions={
+          <>
+            {vente.statut !== 'ANNULEE' && (
+              <Button variant="secondary" size="sm" onClick={() => setShowRecu(true)}>
+                🖨️ Imprimer / Envoyer
+              </Button>
             )}
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {vente.statut !== 'ANNULEE' && (
-            <button
-              onClick={() => setShowRecu(true)}
-              className="bg-mint/10 text-navy border border-mint/30 px-4 py-2 rounded-lg text-sm font-medium hover:bg-mint/20 transition-colors">
-              🖨️ Imprimer / Envoyer
-            </button>
-          )}
-          {isAdmin && vente.statut !== 'ANNULEE' && (
-            <button
-              onClick={() => setShowModal(true)}
-              className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors">
-              Annuler la vente
-            </button>
-          )}
-        </div>
-      </div>
+            {isAdmin && vente.statut !== 'ANNULEE' && (
+              <Button variant="danger" size="sm" onClick={() => setShowModal(true)}>
+                Annuler la vente
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* Carte infos générales */}
-      <div className="bg-white rounded-xl shadow p-6 mb-6">
+      <Card className="mb-6">
         <div className="flex justify-between items-start mb-4">
           <div>
             <p className="text-sm text-gray-500">Date</p>
-            <p className="font-medium text-gray-800">{formatDateTime(vente.createdAt)}</p>
+            <p className="font-medium text-navy">{formatDateTime(vente.createdAt)}</p>
           </div>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${STATUT_STYLE[vente.statut] ?? 'bg-gray-100 text-gray-700'}`}>
+          <Badge variant={STATUT_BADGE[vente.statut] ?? 'neutral'}>
             {STATUT_LABEL[vente.statut] ?? vente.statut}
-          </span>
+          </Badge>
         </div>
         {vente.statut === 'ANNULEE' && vente.motifAnnulation && (
           <p className="text-sm text-gray-500 mb-2">Motif : {vente.motifAnnulation}</p>
@@ -194,11 +199,11 @@ export default function VenteDetailPage() {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <p className="text-gray-500">Caissier</p>
-            <p className="font-medium text-gray-800">{vente.user.nom}</p>
+            <p className="font-medium text-navy">{vente.user.nom}</p>
           </div>
           <div>
             <p className="text-gray-500">Mode de paiement</p>
-            <p className="font-medium text-gray-800">{MODE_LABELS[vente.modePaiement] ?? vente.modePaiement}</p>
+            <p className="font-medium text-navy">{MODE_LABELS[vente.modePaiement] ?? vente.modePaiement}</p>
             {vente.modePaiement === 'MIXTE' && vente.paiements && vente.paiements.length > 0 && (
               <ul className="text-sm text-gray-500 mt-1">
                 {vente.paiements.map((p, i) => (
@@ -211,7 +216,7 @@ export default function VenteDetailPage() {
             <div>
               <p className="text-gray-500">Client</p>
               <Link href={`/clients/${vente.client.id}`}
-                className="font-medium text-green-600 hover:underline">
+                className="font-medium text-mint-dark hover:underline">
                 {vente.client.nom}
               </Link>
               {vente.client.telephone && (
@@ -220,15 +225,15 @@ export default function VenteDetailPage() {
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* Lignes de vente */}
-      <div className="bg-white rounded-xl shadow overflow-hidden mb-6">
-        <div className="px-6 py-4 border-b bg-gray-50">
-          <h2 className="font-semibold text-gray-700">Articles vendus</h2>
+      <Card padding="none" className="overflow-hidden mb-6">
+        <div className="px-6 py-4 border-b border-gray-100 bg-app-bg">
+          <h2 className="font-semibold text-navy">Articles vendus</h2>
         </div>
         <table className="w-full text-sm">
-          <thead className="border-b">
+          <thead className="border-b border-gray-100">
             <tr>
               <th className="text-left px-6 py-3 text-gray-500 font-medium">Médicament</th>
               <th className="text-center px-6 py-3 text-gray-500 font-medium">Qté</th>
@@ -238,8 +243,8 @@ export default function VenteDetailPage() {
           </thead>
           <tbody>
             {vente.lignes.map((ligne) => (
-              <tr key={ligne.id} className="border-b last:border-0 hover:bg-gray-50">
-                <td className="px-6 py-3 font-medium text-gray-800">
+              <tr key={ligne.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg">
+                <td className="px-6 py-3 font-medium text-navy">
                   {ligne.medicament.nom}
                   <span className="ml-1 text-xs text-gray-400">{ligne.medicament.unite}</span>
                 </td>
@@ -250,11 +255,11 @@ export default function VenteDetailPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
 
       {/* Récapitulatif financier */}
-      <div className="bg-white rounded-xl shadow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Récapitulatif</h2>
+      <Card>
+        <h2 className="font-semibold text-navy mb-4">Récapitulatif</h2>
         <div className="space-y-2 text-sm max-w-xs ml-auto">
           {vente.remise > 0 && (
             <>
@@ -262,19 +267,19 @@ export default function VenteDetailPage() {
                 <span>Sous-total</span>
                 <span>{formatMontant(vente.montantTotal + vente.remise)}</span>
               </div>
-              <div className="flex justify-between text-orange-500">
+              <div className="flex justify-between text-warning-text">
                 <span>Remise</span>
                 <span>−{formatMontant(vente.remise)}</span>
               </div>
             </>
           )}
-          <div className="flex justify-between font-bold text-base border-t pt-2">
+          <div className="flex justify-between font-bold text-base border-t border-gray-100 pt-2">
             <span>Total</span>
-            <span className="text-gray-800">{formatMontant(vente.montantTotal)}</span>
+            <span className="text-navy">{formatMontant(vente.montantTotal)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
             <span>Montant payé</span>
-            <span className="text-green-600 font-medium">{formatMontant(vente.montantPaye)}</span>
+            <span className="text-success font-medium">{formatMontant(vente.montantPaye)}</span>
           </div>
           {vente.monnaie > 0 && (
             <div className="flex justify-between text-gray-600">
@@ -283,54 +288,42 @@ export default function VenteDetailPage() {
             </div>
           )}
           {resteADu > 0 && (
-            <div className="flex justify-between font-medium text-red-600 border-t pt-2">
+            <div className="flex justify-between font-medium text-danger border-t border-gray-100 pt-2">
               <span>Reste dû (crédit)</span>
               <span>{formatMontant(resteADu)}</span>
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* Modal annulation */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-xl">
-            <h2 className="text-lg font-bold text-gray-800 mb-1">Annuler la vente</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              Le stock sera remis à jour automatiquement.
-              {resteADu > 0 && ` Le crédit de ${formatMontant(resteADu)} sera déduit du solde client.`}
-            </p>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Motif <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={motif}
-                onChange={(e) => setMotif(e.target.value)}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 text-sm resize-none"
-                placeholder="Ex: Erreur de saisie, retour client..."
-              />
-            </div>
-            {erreurAnnulation && (
-              <p className="text-red-500 text-sm mb-3">{erreurAnnulation}</p>
-            )}
-            <div className="flex gap-3">
-              <button
-                onClick={annulerVente}
-                disabled={annulation}
-                className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium text-sm">
-                {annulation ? 'Annulation...' : 'Confirmer l\'annulation'}
-              </button>
-              <button
-                onClick={() => { setShowModal(false); setMotif(''); setErreurAnnulation(null) }}
-                className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg hover:bg-gray-200 text-sm">
-                Retour
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showModal}
+        onClose={() => { setShowModal(false); setMotif(''); setErreurAnnulation(null) }}
+        onConfirm={annulerVente}
+        title="Annuler la vente"
+        variant="danger"
+        confirmLabel="Confirmer l'annulation"
+        loading={annulation}
+      >
+        <p className="text-sm text-gray-600 mb-4">
+          Le stock sera remis à jour automatiquement.
+          {resteADu > 0 && ` Le crédit de ${formatMontant(resteADu)} sera déduit du solde client.`}
+        </p>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Motif <span className="text-danger">*</span>
+        </label>
+        <textarea
+          value={motif}
+          onChange={(e) => setMotif(e.target.value)}
+          rows={3}
+          className="w-full px-4 py-2 border border-gray-300 rounded-card focus:outline-none focus:ring-2 focus:ring-danger/40 text-sm resize-none"
+          placeholder="Ex: Erreur de saisie, retour client..."
+        />
+        {erreurAnnulation && (
+          <p className="text-danger text-sm mt-2">{erreurAnnulation}</p>
+        )}
+      </Modal>
       {/* Modal recu — impression / WhatsApp depuis l'historique, meme logique
           que juste apres la vente (Corrige le 17/07 : avant, on ne pouvait
           imprimer ou renvoyer un recu que juste apres l'avoir encaissee). */}
@@ -357,7 +350,7 @@ export default function VenteDetailPage() {
                 ))}
               </div>
               <div className="border-t pt-2 space-y-1 text-sm">
-                <div className="flex justify-between font-bold text-green-600">
+                <div className="flex justify-between font-bold text-success">
                   <span>Total</span>
                   <span>{formatMontant(vente.montantTotal)}</span>
                 </div>
@@ -383,7 +376,7 @@ export default function VenteDetailPage() {
                   </div>
                 )}
                 {resteADu > 0 && (
-                  <div className="flex justify-between text-red-600 font-medium">
+                  <div className="flex justify-between text-danger font-medium">
                     <span>Reste a payer (credit{vente.client ? ` — ${vente.client.nom}` : ''})</span>
                     <span>{formatMontant(resteADu)}</span>
                   </div>
@@ -459,7 +452,7 @@ export default function VenteDetailPage() {
           value={whatsappNumero}
           onChange={(e) => setWhatsappNumero(e.target.value)}
           placeholder="Ex: 224620000000"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="w-full px-4 py-2 border border-gray-300 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint"
         />
         {vente.client?.telephone && (
           <p className="text-xs text-gray-400 mt-1">Pre-rempli avec le numero de {vente.client.nom} — modifiable si besoin.</p>
