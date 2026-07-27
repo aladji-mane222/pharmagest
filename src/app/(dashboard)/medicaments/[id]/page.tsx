@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { formatMontant, formatDate } from '@/lib/utils'
-import { Modal, useToast } from '@/components/ui'
+import { Modal, useToast, Card, PageHeader, Button, Input, Select, Skeleton, SkeletonCard } from '@/components/ui'
 
 interface Lot {
   id: string
@@ -150,128 +151,131 @@ export default function FicheMedicamentPage() {
     }
   }
 
-  if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
-  if (!med) return <div className="p-8 text-red-500">Medicament non trouve</div>
+  // Le lien retour est affiché systematiquement, meme pendant le
+  // chargement et en cas d'erreur — avant ce correctif, un medicament
+  // introuvable ou en cours de chargement laissait l'utilisateur bloque
+  // sur cette page sans aucun moyen d'en sortir sans le bouton retour du
+  // navigateur (trouve lors de l'audit Phase 5 du 26/07/2026).
+  const lienRetour = (
+    <Link href="/medicaments" className="text-sm text-gray-500 hover:text-mint-dark hover:underline mb-4 inline-block">
+      ← Retour aux médicaments
+    </Link>
+  )
+
+  if (loading) {
+    return (
+      <div className="p-8 max-w-3xl">
+        {lienRetour}
+        <Skeleton className="h-8 w-64 mb-6" />
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <SkeletonCard />
+      </div>
+    )
+  }
+
+  if (!med) {
+    return (
+      <div className="p-8">
+        {lienRetour}
+        <p className="text-danger">Médicament non trouvé</p>
+      </div>
+    )
+  }
 
   return (
     <div className="p-8 max-w-3xl">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">{med.nom}</h1>
-        <div className="flex gap-2">
-          {!modeEdition && (
-            <button
-              onClick={() => setModeEdition(true)}
-              className="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-200 text-sm font-medium"
-            >
-              Modifier
-            </button>
-          )}
-          <button
-            onClick={() => setConfirmArchive(true)}
-            className="bg-red-100 text-red-600 px-4 py-2 rounded-lg hover:bg-red-200 text-sm font-medium"
-          >
-            Archiver
-          </button>
-        </div>
-      </div>
+      {lienRetour}
+
+      <PageHeader
+        title={med.nom}
+        actions={
+          <>
+            {!modeEdition && (
+              <Button variant="secondary" size="sm" onClick={() => setModeEdition(true)}>
+                Modifier
+              </Button>
+            )}
+            <Button variant="danger" size="sm" onClick={() => setConfirmArchive(true)}>
+              Archiver
+            </Button>
+          </>
+        }
+      />
 
       {med.lots.some((lot) => lot.prixAchat !== null && lot.prixAchat > med.prixVente) && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 mb-4">
+        <div className="bg-danger-bg border border-danger/20 text-danger text-sm rounded-card px-4 py-3 mb-4">
           ⚠️ Au moins un lot a été acheté plus cher que le prix de vente actuel ({formatMontant(med.prixVente)}) —
           vérifie le tableau des lots ci-dessous : soit une erreur de saisie, soit le prix de vente doit être augmenté.
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold text-gray-700 mb-4">Informations</h2>
+        <Card>
+          <h2 className="font-semibold text-navy mb-4">Informations</h2>
 
           {modeEdition ? (
             <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Nom *</label>
-                <input
-                  type="text"
-                  value={form.nom}
-                  onChange={(e) => setForm({ ...form, nom: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              <Input
+                label="Nom"
+                required
+                value={form.nom}
+                onChange={(e) => setForm({ ...form, nom: e.target.value })}
+              />
+              <Input
+                label="Catégorie"
+                value={form.categorie}
+                onChange={(e) => setForm({ ...form, categorie: e.target.value })}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Prix de vente (GNF)"
+                  required
+                  type="number"
+                  value={form.prixVente}
+                  onChange={(e) => setForm({ ...form, prixVente: e.target.value })}
+                />
+                <Input
+                  label="Prix d'achat (GNF)"
+                  type="number"
+                  value={form.prixAchat}
+                  onChange={(e) => setForm({ ...form, prixAchat: e.target.value })}
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Categorie</label>
-                <input
-                  type="text"
-                  value={form.categorie}
-                  onChange={(e) => setForm({ ...form, categorie: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              <div className="grid grid-cols-2 gap-3">
+                <Select
+                  label="Unité"
+                  value={form.unite}
+                  onChange={(e) => setForm({ ...form, unite: e.target.value })}
+                >
+                  <option value="comprime">Comprime</option>
+                  <option value="flacon">Flacon</option>
+                  <option value="ampoule">Ampoule</option>
+                  <option value="boite">Boite</option>
+                  <option value="sachet">Sachet</option>
+                </Select>
+                <Input
+                  label="Stock minimum"
+                  type="number"
+                  value={form.stockMinimum}
+                  onChange={(e) => setForm({ ...form, stockMinimum: e.target.value })}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Prix de vente (GNF) *</label>
-                  <input
-                    type="number"
-                    value={form.prixVente}
-                    onChange={(e) => setForm({ ...form, prixVente: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Prix d achat (GNF)</label>
-                  <input
-                    type="number"
-                    value={form.prixAchat}
-                    onChange={(e) => setForm({ ...form, prixAchat: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Unite</label>
-                  <select
-                    value={form.unite}
-                    onChange={(e) => setForm({ ...form, unite: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  >
-                    <option value="comprime">Comprime</option>
-                    <option value="flacon">Flacon</option>
-                    <option value="ampoule">Ampoule</option>
-                    <option value="boite">Boite</option>
-                    <option value="sachet">Sachet</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Stock minimum</label>
-                  <input
-                    type="number"
-                    value={form.stockMinimum}
-                    onChange={(e) => setForm({ ...form, stockMinimum: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Code-barres</label>
-                  <input
-                    type="text"
-                    value={form.codeBarre}
-                    onChange={(e) => setForm({ ...form, codeBarre: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="Scanner ou saisir le code"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">DCI (nom generique)</label>
-                  <input
-                    type="text"
-                    value={form.dci}
-                    onChange={(e) => setForm({ ...form, dci: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="Ex: Paracetamol"
-                  />
-                </div>
+                <Input
+                  label="Code-barres"
+                  value={form.codeBarre}
+                  onChange={(e) => setForm({ ...form, codeBarre: e.target.value })}
+                  placeholder="Scanner ou saisir le code"
+                />
+                <Input
+                  label="DCI (nom générique)"
+                  value={form.dci}
+                  onChange={(e) => setForm({ ...form, dci: e.target.value })}
+                  placeholder="Ex: Paracetamol"
+                />
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -279,7 +283,7 @@ export default function FicheMedicamentPage() {
                   id="ordonnanceObligatoire"
                   checked={form.ordonnanceObligatoire}
                   onChange={(e) => setForm({ ...form, ordonnanceObligatoire: e.target.checked })}
-                  className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                  className="w-4 h-4 rounded border-gray-300 text-mint focus:ring-mint"
                 />
                 <label htmlFor="ordonnanceObligatoire" className="text-xs font-medium text-gray-600">
                   Vente sur ordonnance uniquement
@@ -290,27 +294,24 @@ export default function FicheMedicamentPage() {
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="w-full rounded-card border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint"
                   rows={3}
                 />
               </div>
 
-              {erreurEdition && <p className="text-red-500 text-xs">{erreurEdition}</p>}
+              {erreurEdition && <p className="text-danger text-xs">{erreurEdition}</p>}
 
               <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => enregistrer()}
-                  disabled={saving}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
-                >
-                  {saving ? 'Enregistrement...' : 'Enregistrer'}
-                </button>
-                <button
+                <Button variant="primary" size="sm" onClick={() => enregistrer()} loading={saving}>
+                  Enregistrer
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => { setModeEdition(false); setErreurEdition(''); charger() }}
-                  className="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 text-sm"
                 >
                   Annuler
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -325,7 +326,7 @@ export default function FicheMedicamentPage() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-gray-500">Prix de vente</dt>
-                <dd className="font-medium text-green-600">{formatMontant(med.prixVente)}</dd>
+                <dd className="font-medium text-success">{formatMontant(med.prixVente)}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-gray-500">Prix d achat</dt>
@@ -351,42 +352,42 @@ export default function FicheMedicamentPage() {
           )}
 
           {med.stockTotal === 0 && equivalents.length > 0 && (
-            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm font-medium text-blue-800 mb-2">
+            <div className="mt-4 bg-info-bg border border-info/20 rounded-card p-4">
+              <p className="text-sm font-medium text-info-text mb-2">
                 💊 Rupture — équivalent{equivalents.length > 1 ? 's' : ''} disponible{equivalents.length > 1 ? 's' : ''} (même DCI)
               </p>
               <ul className="space-y-1">
                 {equivalents.map((eq) => (
                   <li key={eq.id}>
-                    <a href={`/medicaments/${eq.id}`} className="text-sm text-blue-700 hover:underline">
-                      {eq.nom} <span className="text-blue-400">(stock : {eq.stockTotal})</span>
-                    </a>
+                    <Link href={`/medicaments/${eq.id}`} className="text-sm text-info-text hover:underline">
+                      {eq.nom} <span className="opacity-70">(stock : {eq.stockTotal})</span>
+                    </Link>
                   </li>
                 ))}
               </ul>
             </div>
           )}
-        </div>
+        </Card>
 
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold text-gray-700 mb-4">Stock actuel</h2>
-          <p className={`text-4xl font-bold ${med.stockTotal < med.stockMinimum ? 'text-red-500' : 'text-green-600'}`}>
+        <Card>
+          <h2 className="font-semibold text-navy mb-4">Stock actuel</h2>
+          <p className={`text-4xl font-bold ${med.stockTotal < med.stockMinimum ? 'text-danger' : 'text-success'}`}>
             {med.stockTotal}
           </p>
           <p className="text-gray-500 text-sm mt-1">{med.unite}s en stock</p>
           {med.stockTotal < med.stockMinimum && (
-            <p className="text-red-500 text-sm mt-2">Stock bas — reapprovisionner</p>
+            <p className="text-danger text-sm mt-2">Stock bas — reapprovisionner</p>
           )}
-        </div>
+        </Card>
       </div>
 
-      <div className="bg-white rounded-xl shadow p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Lots actifs</h2>
+      <Card>
+        <h2 className="font-semibold text-navy mb-4">Lots actifs</h2>
         {med.lots.length === 0 ? (
           <p className="text-gray-400 text-sm">Aucun lot actif</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b">
+            <thead className="border-b border-gray-100">
               <tr>
                 <th className="text-left py-2 text-gray-500">Numero lot</th>
                 <th className="text-left py-2 text-gray-500">Peremption</th>
@@ -403,7 +404,7 @@ export default function FicheMedicamentPage() {
                   med.prixAchat !== null &&
                   lot.prixAchat > med.prixAchat * 1.2
                 return (
-                  <tr key={lot.id} className="border-b last:border-0">
+                  <tr key={lot.id} className="border-b border-gray-100 last:border-0">
                     <td className="py-2">{lot.numeroLot || '-'}</td>
                     <td className="py-2">{formatDate(lot.datePeremption)}</td>
                     <td className="py-2 text-right font-medium">{lot.quantite}</td>
@@ -438,7 +439,7 @@ export default function FicheMedicamentPage() {
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
 
       <Modal
         open={confirmArchive}

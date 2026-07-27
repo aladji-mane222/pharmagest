@@ -1,8 +1,9 @@
+
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import { formatDateTime } from '@/lib/utils'
-import { useToast } from '@/components/ui'
+import { useToast, Card, PageHeader, Button, Badge, EmptyState, SkeletonTable } from '@/components/ui'
 
 interface LigneInventaire {
   id: string
@@ -33,52 +34,52 @@ function CardsRapport({
 }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-      <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-        <p className="text-xs text-green-600 font-medium mb-0.5">✅ Conformes</p>
-        <p className="text-2xl font-bold text-green-700">{nbConformes}</p>
-      </div>
+      <Card padding="sm" className="bg-success-bg border-success/20">
+        <p className="text-xs text-success font-medium mb-0.5">✅ Conformes</p>
+        <p className="text-2xl font-bold text-success">{nbConformes}</p>
+      </Card>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-        <p className="text-xs text-blue-600 font-medium mb-0.5">📈 Surplus</p>
-        <p className="text-2xl font-bold text-blue-700">
+      <Card padding="sm" className="bg-info-bg border-info/20">
+        <p className="text-xs text-info-text font-medium mb-0.5">📈 Surplus</p>
+        <p className="text-2xl font-bold text-info-text">
           {nbSurplus}
-          <span className="text-sm font-normal ml-1 text-blue-500">
+          <span className="text-sm font-normal ml-1 opacity-70">
             ligne{nbSurplus !== 1 ? 's' : ''}
           </span>
         </p>
-      </div>
+      </Card>
 
-      <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-        <p className="text-xs text-red-600 font-medium mb-0.5">📉 Manques</p>
-        <p className="text-2xl font-bold text-red-700">
+      <Card padding="sm" className="bg-danger-bg border-danger/20">
+        <p className="text-xs text-danger font-medium mb-0.5">📉 Manques</p>
+        <p className="text-2xl font-bold text-danger">
           {nbManque}
-          <span className="text-sm font-normal ml-1 text-red-400">
+          <span className="text-sm font-normal ml-1 opacity-70">
             ligne{nbManque !== 1 ? 's' : ''}
           </span>
         </p>
-      </div>
+      </Card>
 
-      <div className={`border rounded-lg px-4 py-3 ${
-        valeurEcartTotal > 0 ? 'bg-green-50 border-green-200'
-        : valeurEcartTotal < 0 ? 'bg-red-50 border-red-200'
+      <Card padding="sm" className={
+        valeurEcartTotal > 0 ? 'bg-success-bg border-success/20'
+        : valeurEcartTotal < 0 ? 'bg-danger-bg border-danger/20'
         : 'bg-gray-50 border-gray-200'
-      }`}>
+      }>
         <p className={`text-xs font-medium mb-0.5 ${
-          valeurEcartTotal > 0 ? 'text-green-600'
-          : valeurEcartTotal < 0 ? 'text-red-600'
+          valeurEcartTotal > 0 ? 'text-success'
+          : valeurEcartTotal < 0 ? 'text-danger'
           : 'text-gray-500'
         }`}>
           💰 Impact valeur
         </p>
         <p className={`text-lg font-bold ${
-          valeurEcartTotal > 0 ? 'text-green-700'
-          : valeurEcartTotal < 0 ? 'text-red-700'
+          valeurEcartTotal > 0 ? 'text-success'
+          : valeurEcartTotal < 0 ? 'text-danger'
           : 'text-gray-500'
         }`}>
           {valeurEcartTotal > 0 ? '+' : ''}
           {valeurEcartTotal.toLocaleString('fr-FR')} GNF
         </p>
-      </div>
+      </Card>
     </div>
   )
 }
@@ -197,49 +198,50 @@ export default function InventairePage() {
       ).length
     : 0
 
-  if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
+  if (loading) {
+    return (
+      <div className="p-8">
+        <PageHeader title="Inventaire" />
+        <Card padding="none" className="overflow-hidden">
+          <div className="p-6">
+            <SkeletonTable rows={6} cols={6} />
+          </div>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="p-8">
 
       {/* ── HEADER ───────────────────────────────────────────────────────── */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div className="flex items-center gap-4">
           {(actif || lecture) && (
             <button
               onClick={() => { setActif(null); setLecture(null) }}
-              className="text-gray-500 hover:text-gray-800 text-sm"
+              className="text-gray-500 hover:text-navy text-sm"
             >
               ← Liste
             </button>
           )}
-          <h1 className="text-2xl font-bold text-gray-800">
-            {lecture
-              ? `Inventaire du ${formatDateTime(lecture.createdAt)}`
-              : 'Inventaire'}
+          <h1 className="text-2xl font-semibold text-navy">
+            {lecture ? `Inventaire du ${formatDateTime(lecture.createdAt)}` : 'Inventaire'}
           </h1>
-          {lecture && (
-            <span className="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700">
-              VALIDÉ · lecture seule
-            </span>
-          )}
+          {lecture && <Badge variant="success">VALIDÉ · lecture seule</Badge>}
         </div>
 
         {!actif && !lecture && (
-          <button
-            onClick={lancerInventaire}
-            disabled={saving}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
-          >
-            {saving ? 'Lancement...' : 'Lancer un inventaire'}
-          </button>
+          <Button variant="primary" onClick={lancerInventaire} loading={saving}>
+            Lancer un inventaire
+          </Button>
         )}
       </div>
 
       {/* ── VUE SAISIE (EN_COURS) ────────────────────────────────────────── */}
       {actif && (
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold text-gray-700 mb-4">
+        <Card>
+          <h2 className="font-semibold text-navy mb-4">
             Inventaire en cours — saisir les quantités réelles
           </h2>
 
@@ -247,7 +249,7 @@ export default function InventairePage() {
 
           <div className="overflow-x-auto mb-6">
             <table className="w-full text-sm">
-              <thead className="border-b">
+              <thead className="border-b border-gray-100">
                 <tr>
                   <th className="text-left py-2 text-gray-500">Médicament</th>
                   <th className="text-right py-2 text-gray-500">Stock système</th>
@@ -265,7 +267,7 @@ export default function InventairePage() {
                   return (
                     <tr
                       key={ligne.id}
-                      className={`border-b last:border-0 transition-colors ${motifManquant ? 'bg-red-50' : ''}`}
+                      className={`border-b border-gray-100 last:border-0 transition-colors ${motifManquant ? 'bg-danger-bg' : ''}`}
                     >
                       <td className="py-2 pr-4">{ligne.medicament.nom}</td>
                       <td className="py-2 text-right text-gray-600">{stockSysteme}</td>
@@ -275,12 +277,12 @@ export default function InventairePage() {
                           min="0"
                           defaultValue={0}
                           onChange={(e) => mettreAJourQuantite(ligne.id, e.target.value)}
-                          className="w-24 px-2 py-1 border border-gray-300 rounded text-right focus:outline-none focus:ring-2 focus:ring-green-400"
+                          className="w-24 px-2 py-1 border border-gray-300 rounded-card text-right focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint"
                         />
                       </td>
                       <td className={`py-2 text-right font-medium pr-4 ${
-                        ligne.ecart < 0 ? 'text-red-500'
-                        : ligne.ecart > 0 ? 'text-green-600'
+                        ligne.ecart < 0 ? 'text-danger'
+                        : ligne.ecart > 0 ? 'text-success'
                         : 'text-gray-400'
                       }`}>
                         {ligne.ecart > 0 ? '+' : ''}{ligne.ecart}
@@ -292,9 +294,9 @@ export default function InventairePage() {
                             value={ligne.motifEcart || ''}
                             onChange={(e) => mettreAJourMotif(ligne.id, e.target.value)}
                             placeholder="Motif obligatoire…"
-                            className={`w-full px-3 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-green-400 text-sm ${
+                            className={`w-full px-3 py-1 border rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 text-sm ${
                               motifManquant
-                                ? 'border-red-400 bg-white ring-1 ring-red-300'
+                                ? 'border-danger bg-white ring-1 ring-danger/30'
                                 : 'border-gray-300'
                             }`}
                           />
@@ -310,36 +312,37 @@ export default function InventairePage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <button
+            <Button
+              variant="primary"
               onClick={validerInventaire}
-              disabled={saving || lignesAvecEcartSansMotif > 0}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              loading={saving}
+              disabled={lignesAvecEcartSansMotif > 0}
             >
-              {saving ? 'Validation...' : 'Valider et ajuster le stock'}
-            </button>
+              Valider et ajuster le stock
+            </Button>
             {lignesAvecEcartSansMotif > 0 && (
-              <p className="text-sm text-red-600">
+              <p className="text-sm text-danger">
                 {lignesAvecEcartSansMotif} ligne{lignesAvecEcartSansMotif > 1 ? 's' : ''} avec
                 écart nécessite{lignesAvecEcartSansMotif > 1 ? 'nt' : ''} un motif
               </p>
             )}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ── VUE LECTURE SEULE (VALIDE) ───────────────────────────────────── */}
       {lecture && (
-        <div className="bg-white rounded-xl shadow p-6">
+        <Card>
           <p className="text-sm text-gray-500 mb-4">
             Validé par{' '}
-            <span className="font-medium text-gray-700">{lecture.user.nom}</span>
+            <span className="font-medium text-navy">{lecture.user.nom}</span>
           </p>
 
           <CardsRapport {...rapport} />
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b">
+              <thead className="border-b border-gray-100">
                 <tr>
                   <th className="text-left py-2 text-gray-500">Médicament</th>
                   <th className="text-right py-2 text-gray-500">Stock théorique</th>
@@ -353,13 +356,13 @@ export default function InventairePage() {
                   // Stock théorique au moment de l'inventaire = quantiteReelle − ecart
                   const stockTheorique = ligne.quantiteReelle - ligne.ecart
                   return (
-                    <tr key={ligne.id} className="border-b last:border-0">
-                      <td className="py-3 pr-4 font-medium text-gray-800">{ligne.medicament.nom}</td>
+                    <tr key={ligne.id} className="border-b border-gray-100 last:border-0">
+                      <td className="py-3 pr-4 font-medium text-navy">{ligne.medicament.nom}</td>
                       <td className="py-3 text-right text-gray-600">{stockTheorique}</td>
-                      <td className="py-3 text-right text-gray-800">{ligne.quantiteReelle}</td>
+                      <td className="py-3 text-right text-navy">{ligne.quantiteReelle}</td>
                       <td className={`py-3 text-right font-medium pr-4 ${
-                        ligne.ecart < 0 ? 'text-red-500'
-                        : ligne.ecart > 0 ? 'text-green-600'
+                        ligne.ecart < 0 ? 'text-danger'
+                        : ligne.ecart > 0 ? 'text-success'
                         : 'text-gray-400'
                       }`}>
                         {ligne.ecart > 0 ? '+' : ''}{ligne.ecart}
@@ -375,68 +378,67 @@ export default function InventairePage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ── LISTE DES INVENTAIRES ────────────────────────────────────────── */}
       {!actif && !lecture && (
-        <div className="bg-white rounded-xl shadow overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="text-left px-6 py-3 text-gray-600">Date</th>
-                <th className="text-left px-6 py-3 text-gray-600">Par</th>
-                <th className="text-center px-6 py-3 text-gray-600">Lignes</th>
-                <th className="text-center px-6 py-3 text-gray-600">Écarts</th>
-                <th className="text-center px-6 py-3 text-gray-600">Statut</th>
-                <th className="px-6 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {inventaires.length === 0 ? (
+        <Card padding="none" className="overflow-hidden">
+          {inventaires.length === 0 ? (
+            <EmptyState
+              icon="📋"
+              title="Aucun inventaire pour l'instant"
+              description="Lancez votre premier inventaire pour comparer le stock théorique au stock réel."
+              action={<Button variant="primary" onClick={lancerInventaire} loading={saving}>Lancer un inventaire</Button>}
+            />
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-app-bg border-b border-gray-100">
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
-                    Aucun inventaire
-                  </td>
+                  <th className="text-left px-6 py-3 text-gray-600">Date</th>
+                  <th className="text-left px-6 py-3 text-gray-600">Par</th>
+                  <th className="text-center px-6 py-3 text-gray-600">Lignes</th>
+                  <th className="text-center px-6 py-3 text-gray-600">Écarts</th>
+                  <th className="text-center px-6 py-3 text-gray-600">Statut</th>
+                  <th className="px-6 py-3"></th>
                 </tr>
-              ) : inventaires.map((inv) => (
-                <tr key={inv.id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="px-6 py-4">{formatDateTime(inv.createdAt)}</td>
-                  <td className="px-6 py-4 text-gray-700">{inv.user.nom}</td>
-                  <td className="px-6 py-4 text-center text-gray-500">{inv.nbLignes ?? '—'}</td>
-                  <td className="px-6 py-4 text-center">
-                    {inv.nbEcarts != null && inv.nbEcarts > 0 ? (
-                      <span className="font-medium text-orange-600">{inv.nbEcarts}</span>
-                    ) : (
-                      <span className="text-gray-300">—</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      inv.statut === 'VALIDE'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {inv.statut}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => ouvrirInventaire(inv)}
-                      className={`text-sm font-medium ${
-                        inv.statut === 'VALIDE'
-                          ? 'text-blue-600 hover:text-blue-800'
-                          : 'text-green-600 hover:text-green-800'
-                      }`}
-                    >
-                      {inv.statut === 'VALIDE' ? 'Revoir →' : 'Reprendre →'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {inventaires.map((inv) => (
+                  <tr key={inv.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg">
+                    <td className="px-6 py-4">{formatDateTime(inv.createdAt)}</td>
+                    <td className="px-6 py-4 text-gray-700">{inv.user.nom}</td>
+                    <td className="px-6 py-4 text-center text-gray-500">{inv.nbLignes ?? '—'}</td>
+                    <td className="px-6 py-4 text-center">
+                      {inv.nbEcarts != null && inv.nbEcarts > 0 ? (
+                        <span className="font-medium text-warning-text">{inv.nbEcarts}</span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <Badge variant={inv.statut === 'VALIDE' ? 'success' : 'warning'}>
+                        {inv.statut}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => ouvrirInventaire(inv)}
+                        className={`text-sm font-medium ${
+                          inv.statut === 'VALIDE'
+                            ? 'text-info-text hover:underline'
+                            : 'text-mint-dark hover:underline'
+                        }`}
+                      >
+                        {inv.statut === 'VALIDE' ? 'Revoir →' : 'Reprendre →'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
       )}
 
     </div>

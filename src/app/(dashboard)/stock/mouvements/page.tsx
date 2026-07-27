@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatDateTime, formatDate } from '@/lib/utils'
+import { Card, PageHeader, EmptyState, Badge, Button, Select, Input, SkeletonTable } from '@/components/ui'
 
 interface Mouvement {
   id: string
@@ -17,17 +18,19 @@ interface Mouvement {
   inventaire: { id: string; createdAt: string } | null
 }
 
-const BADGE: Record<string, { bg: string; label: string }> = {
-  ENTREE:     { bg: 'bg-green-100 text-green-700',   label: 'Entrée' },
-  SORTIE:     { bg: 'bg-red-100 text-red-700',       label: 'Sortie' },
-  RETOUR:     { bg: 'bg-orange-100 text-orange-700', label: 'Retour' },
-  AJUSTEMENT: { bg: 'bg-blue-100 text-blue-700',     label: 'Ajustement' },
+type BadgeVariant = 'success' | 'danger' | 'warning' | 'info' | 'neutral'
+
+const BADGE: Record<string, { variant: BadgeVariant; label: string }> = {
+  ENTREE:     { variant: 'success', label: 'Entrée' },
+  SORTIE:     { variant: 'danger',  label: 'Sortie' },
+  RETOUR:     { variant: 'warning', label: 'Retour' },
+  AJUSTEMENT: { variant: 'info',    label: 'Ajustement' },
 }
 
 function afficherQuantite(type: string, quantite: number) {
-  if (type === 'ENTREE' || type === 'RETOUR') return { signe: `+${quantite}`, couleur: 'text-green-600' }
-  if (type === 'SORTIE')                       return { signe: `-${quantite}`, couleur: 'text-red-600' }
-  return                                               { signe: `${quantite}`,  couleur: 'text-blue-600' }
+  if (type === 'ENTREE' || type === 'RETOUR') return { signe: `+${quantite}`, couleur: 'text-success' }
+  if (type === 'SORTIE')                       return { signe: `-${quantite}`, couleur: 'text-danger' }
+  return                                               { signe: `${quantite}`,  couleur: 'text-info' }
 }
 
 // Origine du mouvement (Phase 3.8) : un seul des trois champs relation
@@ -38,21 +41,21 @@ function afficherQuantite(type: string, quantite: number) {
 function Origine({ m }: { m: Mouvement }) {
   if (m.vente) {
     return (
-      <Link href={`/ventes/${m.vente.id}`} className="text-green-600 hover:underline">
+      <Link href={`/ventes/${m.vente.id}`} className="text-mint-dark hover:underline">
         Vente {m.vente.numeroFacture || ''}
       </Link>
     )
   }
   if (m.commande) {
     return (
-      <Link href={`/fournisseurs/commandes?commandeId=${m.commande.id}`} className="text-green-600 hover:underline">
+      <Link href={`/fournisseurs/commandes?commandeId=${m.commande.id}`} className="text-mint-dark hover:underline">
         Commande {m.commande.numeroCommande || ''}
       </Link>
     )
   }
   if (m.inventaire) {
     return (
-      <Link href="/inventaire" className="text-green-600 hover:underline">
+      <Link href="/inventaire" className="text-mint-dark hover:underline">
         Inventaire du {formatDate(m.inventaire.createdAt)}
       </Link>
     )
@@ -103,73 +106,53 @@ export default function MouvementsStockPage() {
     setPage(1)
   }
 
+  const filtresActifs = !!(type || dateDebut || dateFin)
+
   return (
     <div className="p-8">
+      <Link href="/stock" className="text-sm text-gray-500 hover:text-mint-dark hover:underline mb-4 inline-block">
+        ← Retour au stock
+      </Link>
 
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Journal des mouvements</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          {total > 0
-            ? `${total} mouvement${total > 1 ? 's' : ''} au total`
-            : 'Aucun mouvement enregistré'}
-        </p>
-      </div>
+      <PageHeader
+        title="Journal des mouvements"
+        description={total > 0 ? `${total} mouvement${total > 1 ? 's' : ''} au total` : 'Aucun mouvement enregistré'}
+      />
 
       {/* SECTION 1 — Filtres */}
-      <div className="bg-white rounded-xl shadow p-4 mb-6 flex flex-wrap items-end gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
-          <select
-            value={type}
-            onChange={onFiltreChange(setType)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-          >
-            <option value="">Tous les types</option>
-            <option value="ENTREE">Entrée</option>
-            <option value="SORTIE">Sortie</option>
-            <option value="RETOUR">Retour</option>
-            <option value="AJUSTEMENT">Ajustement</option>
-          </select>
-        </div>
+      <Card padding="sm" className="mb-6 flex flex-wrap items-end gap-4">
+        <Select label="Type" value={type} onChange={onFiltreChange(setType)}>
+          <option value="">Tous les types</option>
+          <option value="ENTREE">Entrée</option>
+          <option value="SORTIE">Sortie</option>
+          <option value="RETOUR">Retour</option>
+          <option value="AJUSTEMENT">Ajustement</option>
+        </Select>
 
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Du</label>
-          <input
-            type="date"
-            value={dateDebut}
-            onChange={onFiltreChange(setDateDebut)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-          />
-        </div>
+        <Input label="Du" type="date" value={dateDebut} onChange={onFiltreChange(setDateDebut)} />
 
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Au</label>
-          <input
-            type="date"
-            value={dateFin}
-            onChange={onFiltreChange(setDateFin)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-          />
-        </div>
+        <Input label="Au" type="date" value={dateFin} onChange={onFiltreChange(setDateFin)} />
 
-        <button
-          onClick={reinitialiser}
-          className="px-4 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
-        >
+        <Button variant="secondary" onClick={reinitialiser}>
           Réinitialiser
-        </button>
-      </div>
+        </Button>
+      </Card>
 
       {/* SECTION 2 — Tableau */}
-      <div className="bg-white rounded-xl shadow overflow-hidden mb-4">
+      <Card padding="none" className="overflow-hidden mb-4">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Chargement...</div>
+          <div className="p-6">
+            <SkeletonTable rows={8} cols={6} />
+          </div>
         ) : mouvements.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Aucun mouvement trouvé</div>
+          <EmptyState
+            icon="🔄"
+            title={filtresActifs ? 'Aucun mouvement ne correspond' : 'Aucun mouvement enregistré'}
+            description={filtresActifs ? 'Essayez une autre période ou un autre type.' : 'Les mouvements de stock apparaîtront ici.'}
+          />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-app-bg border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600">Date / Heure</th>
                 <th className="text-left px-6 py-3 text-gray-600">Médicament</th>
@@ -181,21 +164,19 @@ export default function MouvementsStockPage() {
             </thead>
             <tbody>
               {mouvements.map((m) => {
-                const badge = BADGE[m.type] ?? { bg: 'bg-gray-100 text-gray-600', label: m.type }
+                const badge = BADGE[m.type] ?? { variant: 'neutral' as const, label: m.type }
                 const { signe, couleur } = afficherQuantite(m.type, m.quantite)
                 return (
-                  <tr key={m.id} className="border-b last:border-0 hover:bg-gray-50">
+                  <tr key={m.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg">
                     <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
                       {formatDateTime(m.createdAt)}
                     </td>
-                    <td className="px-6 py-4 font-medium text-gray-800">
+                    <td className="px-6 py-4 font-medium text-navy">
                       {m.medicament.nom}
                       <span className="ml-1 text-xs text-gray-400">{m.medicament.unite}</span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${badge.bg}`}>
-                        {badge.label}
-                      </span>
+                      <Badge variant={badge.variant}>{badge.label}</Badge>
                     </td>
                     <td className={`px-6 py-4 text-right font-semibold ${couleur}`}>
                       {signe}
@@ -212,7 +193,7 @@ export default function MouvementsStockPage() {
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
 
       {/* SECTION 3 — Pagination */}
       {totalPages > 1 && (
@@ -221,20 +202,12 @@ export default function MouvementsStockPage() {
             Page {page} sur {totalPages} — {total} mouvement{total > 1 ? 's' : ''} au total
           </p>
           <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => p - 1)}
-              disabled={page <= 1}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
+            <Button variant="secondary" size="sm" onClick={() => setPage((p) => p - 1)} disabled={page <= 1}>
               ← Précédent
-            </button>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= totalPages}
-              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages}>
               Suivant →
-            </button>
+            </Button>
           </div>
         </div>
       )}

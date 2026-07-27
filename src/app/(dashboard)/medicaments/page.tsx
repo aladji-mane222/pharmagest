@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatMontant } from '@/lib/utils'
 import ImportModal, { ImportField } from '@/components/ui/ImportModal'
+import { Button, Card, PageHeader, EmptyState, BadgeStock, SkeletonTable } from '@/components/ui'
 
 interface Medicament {
   id: string
@@ -77,31 +78,24 @@ export default function MedicamentsPage() {
   }, [search, categorieFiltree, page])
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT))
+  const filtresActifs = search.trim() !== '' || categorieFiltree !== ''
 
   return (
     <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Médicaments</h1>
-          <p className="text-gray-500 text-sm">{total} médicaments au total</p>
-        </div>
-        {isAdmin && (
-          <div className="flex gap-3">
-            <button
-              onClick={() => setImportOuvert(true)}
-              className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-            >
+      <PageHeader
+        title="Médicaments"
+        description={`${total} médicament${total > 1 ? 's' : ''} au total`}
+        actions={isAdmin && (
+          <>
+            <Button variant="secondary" onClick={() => setImportOuvert(true)}>
               Importer
-            </button>
-            <Link
-              href="/medicaments/nouveau"
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-            >
-              + Nouveau médicament
+            </Button>
+            <Link href="/medicaments/nouveau">
+              <Button variant="primary">+ Nouveau médicament</Button>
             </Link>
-          </div>
+          </>
         )}
-      </div>
+      />
 
       <ImportModal
         open={importOuvert}
@@ -120,12 +114,12 @@ export default function MedicamentsPage() {
           placeholder="Rechercher un médicament..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+          className="flex-1 max-w-md px-4 py-2 border border-gray-300 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint"
         />
         <select
           value={categorieFiltree}
           onChange={(e) => setCategorieFiltree(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-white text-gray-700"
+          className="px-4 py-2 border border-gray-300 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint bg-white text-gray-700"
         >
           <option value="">Toutes catégories</option>
           {categories.map((cat) => (
@@ -134,14 +128,31 @@ export default function MedicamentsPage() {
         </select>
       </div>
 
-      <div className="bg-white rounded-xl shadow overflow-hidden">
+      <Card padding="none" className="overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Chargement...</div>
+          <div className="p-6">
+            <SkeletonTable rows={6} cols={5} />
+          </div>
         ) : medicaments.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">Aucun médicament trouvé</div>
+          <EmptyState
+            icon="💊"
+            title={filtresActifs ? 'Aucun médicament ne correspond' : 'Aucun médicament pour l’instant'}
+            description={
+              filtresActifs
+                ? 'Essayez une autre recherche ou une autre catégorie.'
+                : isAdmin
+                  ? 'Ajoutez votre premier médicament ou importez un catalogue existant.'
+                  : 'Les médicaments apparaîtront ici une fois ajoutés.'
+            }
+            action={!filtresActifs && isAdmin && (
+              <Link href="/medicaments/nouveau">
+                <Button variant="primary">+ Ajouter le premier médicament</Button>
+              </Link>
+            )}
+          />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-app-bg border-b border-gray-100">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Nom</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Catégorie</th>
@@ -151,40 +162,37 @@ export default function MedicamentsPage() {
               </tr>
             </thead>
             <tbody>
-              {medicaments.map((med) => {
-                const stockBas = med.stockTotal < med.stockMinimum
-                return (
-                  <tr key={med.id} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium text-gray-800">
+              {medicaments.map((med) => (
+                <tr key={med.id} className="border-b border-gray-100 last:border-0 hover:bg-app-bg">
+                  <td className="px-6 py-4 font-medium text-navy">
+                    <div className="flex items-center gap-2">
                       {med.nom}
-                      {stockBas && (
-                        <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs font-medium ml-2">
-                          Stock bas
-                        </span>
+                      {med.stockTotal < med.stockMinimum && (
+                        <BadgeStock quantite={med.stockTotal} seuil={med.stockMinimum} />
                       )}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{med.categorie || '-'}</td>
-                    <td className="px-6 py-4">
-                      <span className={`font-medium ${stockBas ? 'text-red-500' : 'text-green-600'}`}>
-                        {med.stockTotal} {med.unite}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{formatMontant(med.prixVente)}</td>
-                    <td className="px-6 py-4">
-                      <Link
-                        href={`/medicaments/${med.id}`}
-                        className="text-green-600 hover:underline"
-                      >
-                        Voir
-                      </Link>
-                    </td>
-                  </tr>
-                )
-              })}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-gray-600">{med.categorie || '-'}</td>
+                  <td className="px-6 py-4">
+                    <span className={`font-medium ${med.stockTotal < med.stockMinimum ? 'text-danger' : 'text-navy'}`}>
+                      {med.stockTotal} {med.unite}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-gray-600">{formatMontant(med.prixVente)}</td>
+                  <td className="px-6 py-4">
+                    <Link
+                      href={`/medicaments/${med.id}`}
+                      className="text-mint-dark hover:underline"
+                    >
+                      Voir
+                    </Link>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
 
       {!loading && total > 0 && (
         <div className="flex justify-between items-center mt-4 text-sm text-gray-600">
@@ -192,21 +200,23 @@ export default function MedicamentsPage() {
             {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} sur {total}
           </span>
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
             >
               ← Précédent
-            </button>
+            </Button>
             <span className="px-2 py-1.5 text-gray-500">Page {page} / {totalPages}</span>
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
             >
               Suivant →
-            </button>
+            </Button>
           </div>
         </div>
       )}

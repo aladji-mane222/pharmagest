@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -6,6 +5,7 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatMontant, formatDate } from '@/lib/utils'
 import ImportModal, { ImportField } from '@/components/ui/ImportModal'
+import { Button, Card, PageHeader, EmptyState, Badge, SkeletonTable } from '@/components/ui'
 
 interface Lot {
   id: string
@@ -37,6 +37,14 @@ const CHAMPS_IMPORT_STOCK: ImportField[] = [
   { key: 'quantite', label: 'Quantite', required: true, guessKeywords: ['quantite', 'qte', 'stock'] },
   { key: 'prixAchat', label: 'Prix d\'achat', guessKeywords: ['prix achat', 'pu achat', 'achat'] },
 ]
+
+const FILTRES = [
+  { value: 'tous', label: 'Tous' },
+  { value: 'ruptures', label: 'Ruptures' },
+  { value: 'bas', label: 'Stock bas' },
+  { value: 'critiques', label: 'Péremptions' },
+  { value: 'dormants', label: 'Dormants' },
+] as const
 
 export default function StockPage() {
   const { data: sessionData } = useSession()
@@ -75,57 +83,50 @@ export default function StockPage() {
   const stockBasNonNul   = stock.filter((m) => m.stockBas && !m.rupture)
   const peremptionProche = stock.filter((m) => m.lotsCritiques > 0)
 
-  if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
+  if (loading) {
+    return (
+      <div className="p-8">
+        <PageHeader title="Stock" />
+        <Card padding="none" className="overflow-hidden">
+          <div className="p-6">
+            <SkeletonTable rows={8} cols={5} />
+          </div>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Stock</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Valeur totale : <span className="font-semibold text-blue-600">{formatMontant(valeurTotale)}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {isAdmin && (
-            <button
-              onClick={() => setImportOuvert(true)}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 transition-colors"
-            >
-              Importer le stock initial
-            </button>
-          )}
-          <Link
-            href="/stock/mouvements"
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-          >
-            🔄 Mouvements
-          </Link>
-          <div className="flex gap-2">
-            {(['tous', 'ruptures', 'bas', 'critiques', 'dormants'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFiltre(f)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  filtre === f ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {f === 'tous' ? 'Tous' : f === 'ruptures' ? 'Ruptures' : f === 'bas' ? 'Stock bas' : f === 'critiques' ? 'Péremptions' : 'Dormants'}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <ImportModal
-        open={importOuvert}
-        onClose={() => setImportOuvert(false)}
-        title="Importer le stock initial"
-        fields={CHAMPS_IMPORT_STOCK}
-        apiEndpoint="/api/stock/import"
-        templateHref="/modeles/stock-modele.xlsx"
-        onImported={() => chargerStock()}
+      <PageHeader
+        title="Stock"
+        description={`Valeur totale : ${formatMontant(valeurTotale)}`}
+        actions={
+          <>
+            {isAdmin && (
+              <Button variant="secondary" onClick={() => setImportOuvert(true)}>
+                Importer le stock initial
+              </Button>
+            )}
+            <Link href="/stock/mouvements">
+              <Button variant="secondary">🔄 Mouvements</Button>
+            </Link>
+          </>
+        }
       />
+
+      <div className="flex gap-2 mb-6">
+        {FILTRES.map((f) => (
+          <Button
+            key={f.value}
+            variant={filtre === f.value ? 'primary' : 'secondary'}
+            size="sm"
+            onClick={() => setFiltre(f.value)}
+          >
+            {f.label}
+          </Button>
+        ))}
+      </div>
 
       {(ruptures.length > 0 || stockBasNonNul.length > 0 || peremptionProche.length > 0) && (
         <p className="text-sm text-gray-600 mb-4">
@@ -138,27 +139,27 @@ export default function StockPage() {
       )}
 
       <div className="grid grid-cols-5 gap-6 mb-6">
-        <div className="bg-white rounded-xl shadow p-4">
+        <Card padding="sm">
           <p className="text-sm text-gray-500">Total médicaments</p>
-          <p className="text-2xl font-bold text-gray-800">{stock.length}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow p-4">
+          <p className="text-2xl font-bold text-navy">{stock.length}</p>
+        </Card>
+        <Card padding="sm">
           <p className="text-sm text-gray-500">Ruptures</p>
-          <p className="text-2xl font-bold text-red-600">{ruptures.length}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow p-4">
+          <p className="text-2xl font-bold text-danger">{ruptures.length}</p>
+        </Card>
+        <Card padding="sm">
           <p className="text-sm text-gray-500">Stock bas</p>
-          <p className="text-2xl font-bold text-orange-500">{stockBasNonNul.length}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow p-4">
+          <p className="text-2xl font-bold text-warning">{stockBasNonNul.length}</p>
+        </Card>
+        <Card padding="sm">
           <p className="text-sm text-gray-500">Péremptions proches</p>
           <p className="text-2xl font-bold text-yellow-500">{peremptionProche.length}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow p-4">
+        </Card>
+        <Card padding="sm">
           <p className="text-sm text-gray-500">Produits dormants</p>
-          <p className="text-2xl font-bold text-blue-400">{stock.filter((m) => m.produitDormant).length}</p>
+          <p className="text-2xl font-bold text-info">{stock.filter((m) => m.produitDormant).length}</p>
           <p className="text-xs text-gray-400 mt-0.5">Aucune vente depuis 90 jours</p>
-        </div>
+        </Card>
       </div>
 
       {/* ── Sections d'alertes distinctes (Phase 3.7) — plutot qu'une
@@ -167,35 +168,35 @@ export default function StockPage() {
       {(ruptures.length > 0 || stockBasNonNul.length > 0 || peremptionProche.length > 0) && (
         <div className="grid grid-cols-3 gap-6 mb-6">
           {ruptures.length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-              <h3 className="text-sm font-semibold text-red-700 mb-2">🔴 Ruptures ({ruptures.length})</h3>
+            <Card padding="sm" className="bg-danger-bg border-danger/20">
+              <h3 className="text-sm font-semibold text-danger mb-2">🔴 Ruptures ({ruptures.length})</h3>
               <ul className="space-y-1 max-h-40 overflow-y-auto">
                 {ruptures.map((m) => (
                   <li key={m.id}>
-                    <button onClick={() => setSelected(m)} className="text-sm text-red-800 hover:underline text-left">
+                    <button onClick={() => setSelected(m)} className="text-sm text-danger hover:underline text-left">
                       {m.nom}
                     </button>
                   </li>
                 ))}
               </ul>
-            </div>
+            </Card>
           )}
           {stockBasNonNul.length > 0 && (
-            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-              <h3 className="text-sm font-semibold text-orange-700 mb-2">🟠 Stock bas ({stockBasNonNul.length})</h3>
+            <Card padding="sm" className="bg-warning-bg border-warning/20">
+              <h3 className="text-sm font-semibold text-warning-text mb-2">🟠 Stock bas ({stockBasNonNul.length})</h3>
               <ul className="space-y-1 max-h-40 overflow-y-auto">
                 {stockBasNonNul.map((m) => (
                   <li key={m.id}>
-                    <button onClick={() => setSelected(m)} className="text-sm text-orange-800 hover:underline text-left">
-                      {m.nom} <span className="text-orange-500">({m.stockTotal}/{m.stockMinimum})</span>
+                    <button onClick={() => setSelected(m)} className="text-sm text-warning-text hover:underline text-left">
+                      {m.nom} <span className="opacity-70">({m.stockTotal}/{m.stockMinimum})</span>
                     </button>
                   </li>
                 ))}
               </ul>
-            </div>
+            </Card>
           )}
           {peremptionProche.length > 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+            <Card padding="sm" className="bg-yellow-50 border-yellow-200">
               <h3 className="text-sm font-semibold text-yellow-700 mb-2">🟡 Péremptions proches ({peremptionProche.length})</h3>
               <ul className="space-y-1 max-h-40 overflow-y-auto">
                 {peremptionProche.map((m) => (
@@ -206,7 +207,7 @@ export default function StockPage() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </Card>
           )}
         </div>
       )}
@@ -214,68 +215,68 @@ export default function StockPage() {
       <div className="grid grid-cols-3 gap-6">
 
         {/* ── Tableau principal ── */}
-        <div className="col-span-2 bg-white rounded-xl shadow overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="text-left px-4 py-3 text-gray-600">Médicament</th>
-                <th className="text-right px-4 py-3 text-gray-600">Stock</th>
-                <th className="text-right px-4 py-3 text-gray-600">Min</th>
-                <th className="text-right px-4 py-3 text-gray-600">Valeur</th>
-                <th className="text-center px-4 py-3 text-gray-600">Statut</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stockFiltre.map((med) => (
-                <tr
-                  key={med.id}
-                  onClick={() => setSelected(med)}
-                  className={`border-b last:border-0 cursor-pointer transition-colors ${
-                    selected?.id === med.id
-                      ? 'bg-green-50'
-                      : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <td className="px-4 py-3 font-medium text-gray-800">{med.nom}</td>
-                  <td className={`px-4 py-3 text-right font-medium ${med.rupture ? 'text-red-600' : med.stockBas ? 'text-orange-500' : 'text-green-600'}`}>
-                    {med.stockTotal} {med.unite}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-500">{med.stockMinimum}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">
-                    {med.prixAchat ? formatMontant(med.stockTotal * med.prixAchat) : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {med.rupture && (
-                      <span className="px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs">Rupture</span>
-                    )}
-                    {med.stockBas && !med.rupture && (
-                      <span className="px-2 py-1 bg-orange-100 text-orange-600 rounded-full text-xs">Bas</span>
-                    )}
-                    {med.lotsCritiques > 0 && (
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-600 rounded-full text-xs ml-1">Péremption</span>
-                    )}
-                    {med.produitDormant && (
-                      <span className="px-2 py-1 bg-blue-50 text-blue-500 rounded-full text-xs ml-1">Dormant</span>
-                    )}
-                    {!med.stockBas && med.lotsCritiques === 0 && !med.produitDormant && (
-                      <span className="px-2 py-1 bg-green-100 text-green-600 rounded-full text-xs">OK</span>
-                    )}
-                  </td>
+        <Card padding="none" className="col-span-2 overflow-hidden">
+          {stockFiltre.length === 0 ? (
+            <EmptyState
+              icon="📦"
+              title="Aucun médicament dans ce filtre"
+              description="Essayez un autre filtre pour voir plus de résultats."
+            />
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-app-bg border-b border-gray-100">
+                <tr>
+                  <th className="text-left px-4 py-3 text-gray-600">Médicament</th>
+                  <th className="text-right px-4 py-3 text-gray-600">Stock</th>
+                  <th className="text-right px-4 py-3 text-gray-600">Min</th>
+                  <th className="text-right px-4 py-3 text-gray-600">Valeur</th>
+                  <th className="text-center px-4 py-3 text-gray-600">Statut</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {stockFiltre.map((med) => (
+                  <tr
+                    key={med.id}
+                    onClick={() => setSelected(med)}
+                    className={`border-b border-gray-100 last:border-0 cursor-pointer transition-colors ${
+                      selected?.id === med.id ? 'bg-mint/10' : 'hover:bg-app-bg'
+                    }`}
+                  >
+                    <td className="px-4 py-3 font-medium text-navy">{med.nom}</td>
+                    <td className={`px-4 py-3 text-right font-medium ${med.rupture ? 'text-danger' : med.stockBas ? 'text-warning' : 'text-success'}`}>
+                      {med.stockTotal} {med.unite}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-500">{med.stockMinimum}</td>
+                    <td className="px-4 py-3 text-right text-gray-600">
+                      {med.prixAchat ? formatMontant(med.stockTotal * med.prixAchat) : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex justify-center gap-1 flex-wrap">
+                        {med.rupture && <Badge variant="danger">Rupture</Badge>}
+                        {med.stockBas && !med.rupture && <Badge variant="warning">Bas</Badge>}
+                        {med.lotsCritiques > 0 && <Badge variant="warning">Péremption</Badge>}
+                        {med.produitDormant && <Badge variant="info">Dormant</Badge>}
+                        {!med.stockBas && med.lotsCritiques === 0 && !med.produitDormant && (
+                          <Badge variant="success">OK</Badge>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
 
         {/* ── Panneau détail ── */}
-        <div className="bg-white rounded-xl shadow p-6">
+        <Card>
           {selected ? (
             <>
               <div className="flex items-start justify-between mb-4">
-                <h2 className="font-semibold text-gray-700">{selected.nom}</h2>
+                <h2 className="font-semibold text-navy">{selected.nom}</h2>
                 <Link
                   href={`/medicaments/${selected.id}`}
-                  className="text-xs text-green-600 hover:underline whitespace-nowrap ml-2"
+                  className="text-xs text-mint-dark hover:underline whitespace-nowrap ml-2"
                 >
                   Fiche →
                 </Link>
@@ -286,10 +287,10 @@ export default function StockPage() {
               ) : (
                 <ul className="space-y-3">
                   {selected.lots.map((lot) => (
-                    <li key={lot.id} className="border rounded-lg p-3 text-sm">
+                    <li key={lot.id} className="border border-gray-100 rounded-card p-3 text-sm">
                       <p className="font-medium">{lot.numeroLot || 'Sans numéro'}</p>
                       <p className="text-gray-500">Expire : {formatDate(lot.datePeremption)}</p>
-                      <p className="text-green-600 font-medium">{lot.quantite} unités</p>
+                      <p className="text-success font-medium">{lot.quantite} unités</p>
                     </li>
                   ))}
                 </ul>
@@ -300,9 +301,19 @@ export default function StockPage() {
               Cliquez sur un médicament pour voir ses lots
             </p>
           )}
-        </div>
+        </Card>
 
       </div>
+
+      <ImportModal
+        open={importOuvert}
+        onClose={() => setImportOuvert(false)}
+        title="Importer le stock initial"
+        fields={CHAMPS_IMPORT_STOCK}
+        apiEndpoint="/api/stock/import"
+        templateHref="/modeles/stock-modele.xlsx"
+        onImported={() => chargerStock()}
+      />
     </div>
   )
 }
