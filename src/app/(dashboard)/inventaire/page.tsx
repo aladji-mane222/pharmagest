@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { formatDateTime } from '@/lib/utils'
 import { useToast, Card, PageHeader, Button, Badge, EmptyState, SkeletonTable } from '@/components/ui'
 
@@ -85,12 +87,29 @@ function CardsRapport({
 
 // ── Page principale ──────────────────────────────────────────────────────────
 export default function InventairePage() {
+  const router = useRouter()
+  const { data: session, status } = useSession()
   const { showToast } = useToast()
   const [inventaires, setInventaires] = useState<Inventaire[]>([])
   const [actif,   setActif]   = useState<Inventaire | null>(null) // EN_COURS — saisie
   const [lecture, setLecture] = useState<Inventaire | null>(null) // VALIDE   — lecture seule
   const [loading, setLoading] = useState(true)
   const [saving,  setSaving]  = useState(false)
+  const [sauvegardeProgression, setSauvegardeProgression] = useState(false)
+  const [derniereSauvegarde, setDerniereSauvegarde] = useState<Date | null>(null)
+
+  // Reserve aux admins (decision Nabe le 27/07/2026) — redirection cote
+  // client en plus du lien cache dans la sidebar et du blocage API, au
+  // cas ou un caissier arrive directement sur l'URL.
+  useEffect(() => {
+    if (
+      status === 'authenticated' &&
+      session?.user?.role === 'CAISSIER' &&
+      !session.user.permissions?.includes('INVENTAIRE_COMPLET')
+    ) {
+      router.push('/dashboard')
+    }
+  }, [status, session, router])
 
   const chargerListe = () =>
     fetch('/api/inventaires')
@@ -151,6 +170,30 @@ export default function InventairePage() {
         l.id === ligneId ? { ...l, motifEcart: valeur } : l
       ),
     })
+  }
+
+  // Sauvegarde les quantites/motifs saisis SANS valider ni toucher au
+  // stock — permet d'etaler un inventaire sur plusieurs jours sans
+  // perdre la saisie en cours (demande de Nabe le 27/07/2026, suite a
+  // l'audit Phase 5 : avant ce correctif, quitter la page sans valider
+  // faisait perdre toute la saisie car rien n'etait persiste avant le
+  // clic final sur "Valider").
+  const sauvegarderProgression = async () => {
+    if (!actif) return
+    setSauvegardeProgression(true)
+    const res = await fetch(`/api/inventaires/${actif.id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ action: 'saisir', lignes: actif.lignes }),
+    })
+    if (res.ok) {
+      setDerniereSauvegarde(new Date())
+      showToast('Progression enregistrée — reprenez quand vous voulez', 'success')
+    } else {
+      const json = await res.json().catch(() => ({}))
+      showToast(json.error || 'Erreur lors de la sauvegarde', 'error')
+    }
+    setSauvegardeProgression(false)
   }
 
   const validerInventaire = async () => {
@@ -278,7 +321,7 @@ export default function InventairePage() {
                         <input
                           type="number"
                           min="0"
-                          defaultValue={0}
+                          defaultValue={ligne.quantiteReelle}
                           onChange={(e) => mettreAJourQuantite(ligne.id, e.target.value)}
                           className="w-24 px-2 py-1 border border-gray-300 rounded-card text-right focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint"
                         />
@@ -316,6 +359,13 @@ export default function InventairePage() {
 
           <div className="flex items-center gap-4">
             <Button
+              variant="secondary"
+              onClick={sauvegarderProgression}
+              loading={sauvegardeProgression}
+            >
+              💾 Enregistrer la progression
+            </Button>
+            <Button
               variant="primary"
               onClick={validerInventaire}
               loading={saving}
@@ -323,6 +373,11 @@ export default function InventairePage() {
             >
               Valider et ajuster le stock
             </Button>
+            {derniereSauvegarde && (
+              <p className="text-xs text-gray-400">
+                Dernière sauvegarde : {derniereSauvegarde.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            )}
             {lignesAvecEcartSansMotif > 0 && (
               <p className="text-sm text-danger">
                 {lignesAvecEcartSansMotif} ligne{lignesAvecEcartSansMotif > 1 ? 's' : ''} avec
@@ -330,6 +385,11 @@ export default function InventairePage() {
               </p>
             )}
           </div>
+          <p className="text-xs text-gray-400 mt-2">
+            "Enregistrer la progression" sauvegarde vos saisies sans toucher au stock — pratique
+            pour étaler un inventaire sur plusieurs jours. Le stock n'est ajusté qu'au clic sur
+            "Valider et ajuster le stock".
+          </p>
         </Card>
       )}
 

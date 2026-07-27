@@ -1,9 +1,9 @@
-
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { Prisma } from '@prisma/client'
+import { aLaPermission } from '@/lib/permissions'
 import { TOLERANCE_RETARD_JOURS, calculerNiveauFiabilite } from '@/lib/livraison'
 import { getMedicamentsVendusRecemment } from '@/lib/stock'
 import { calculerBeneficeNet, calculerEvolution } from '@/lib/rapports'
@@ -11,7 +11,9 @@ import { calculerBeneficeNet, calculerEvolution } from '@/lib/rapports'
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
-  if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
+  if (session.user.role === 'CAISSIER' && !(await aLaPermission(session.user.id, 'ACCES_RAPPORTS'))) {
+    return apiError('Acces refuse', 403)
+  }
 
   const { searchParams } = new URL(request.url)
   const type = searchParams.get('type') || 'ventes'

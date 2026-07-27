@@ -1,14 +1,18 @@
-
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { aLaPermission } from '@/lib/permissions'
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
-  if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
+  // Reserve aux admins par defaut, sauf caissier ayant recu la
+  // permission supplementaire ANNULER_VENTE (decision Nabe 27/07/2026).
+  if (session.user.role === 'CAISSIER' && !(await aLaPermission(session.user.id, 'ANNULER_VENTE'))) {
+    return apiError('Acces refuse', 403)
+  }
 
   const pharmacieId = session.user.pharmacieId
 

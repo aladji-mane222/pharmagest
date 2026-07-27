@@ -109,8 +109,35 @@ model User {
   mouvements     MouvementStock[]
   auditLogs      AuditLog[]
   remboursements RemboursementCredit[]
+  permissionsRecues    PermissionSupplementaire[] @relation("PermissionUtilisateur")
+  permissionsAccordees PermissionSupplementaire[] @relation("PermissionAccordePar")
 
   @@index([pharmacieId])
+}
+
+// Droits ponctuels accordes par un ADMIN a un CAISSIER, au-dela de ses
+// droits de base — permanents (expireLe null) ou temporaires (expireLe
+// rempli). Un utilisateur a au plus une ligne par type de permission
+// (@@unique). Demande de Nabe le 27/07/2026, avant la Phase 6.
+model PermissionSupplementaire {
+  id           String         @id @default(cuid())
+  userId       String
+  type         TypePermission
+  expireLe     DateTime?
+  accordeParId String
+  createdAt    DateTime       @default(now())
+
+  user       User @relation("PermissionUtilisateur", fields: [userId], references: [id], onDelete: Cascade)
+  accordePar User @relation("PermissionAccordePar", fields: [accordeParId], references: [id])
+
+  @@unique([userId, type])
+}
+
+enum TypePermission {
+  INVENTAIRE_COMPLET
+  ANNULER_VENTE
+  HISTORIQUE_COMPLET
+  ACCES_RAPPORTS
 }
 
 model Medicament {

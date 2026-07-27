@@ -3,10 +3,12 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { aLaPermission } from '@/lib/permissions'
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
+  if (session.user.role === 'CAISSIER' && !(await aLaPermission(session.user.id, 'INVENTAIRE_COMPLET'))) return apiError('Acces refuse', 403)
 
   const inventaire = await prisma.inventaire.findFirst({
     where: { id: params.id, pharmacieId: session.user.pharmacieId },
@@ -25,7 +27,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
-  if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
+  if (session.user.role === 'CAISSIER' && !(await aLaPermission(session.user.id, 'INVENTAIRE_COMPLET'))) return apiError('Acces refuse', 403)
 
   const body = await request.json()
   const { action, lignes } = body

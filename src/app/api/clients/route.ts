@@ -13,11 +13,23 @@ export async function GET(request: Request) {
   const search = searchParams.get('search') || ''
   const avecCredit = searchParams.get('avecCredit') === 'true'
 
+  // Si la recherche est un nombre, on cherche aussi sur numeroClient
+  // (ex: "42" ou "CLI-0042" doivent retrouver le client n°42) — pas
+  // seulement sur le nom (demande de Nabe le 27/07/2026, suite a l'audit
+  // Phase 5).
+  const numeroRecherche = parseInt(search.replace(/\D/g, ''), 10)
+  const rechercheParNumero = search.trim() !== '' && !isNaN(numeroRecherche)
+
   const clients = await prisma.client.findMany({
     where: {
       pharmacieId: session.user.pharmacieId,
       actif: true,
-      ...(search && { nom: { contains: search, mode: 'insensitive' as const } }),
+      ...(search && {
+        OR: [
+          { nom: { contains: search, mode: 'insensitive' as const } },
+          ...(rechercheParNumero ? [{ numeroClient: numeroRecherche }] : []),
+        ],
+      }),
       ...(avecCredit && { soldeCredit: { gt: 0 } }),
     },
     orderBy: avecCredit ? { soldeCredit: 'desc' } : { nom: 'asc' },

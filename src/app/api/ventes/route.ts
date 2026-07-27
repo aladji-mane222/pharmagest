@@ -6,6 +6,7 @@ import { apiError, apiSuccess } from '@/lib/utils'
 import { decrementerLotFifo } from '@/lib/fifo'
 import { createAuditLog } from '@/lib/audit'
 import { genererNumeroFacture } from '@/lib/numerotation'
+import { aLaPermission } from '@/lib/permissions'
 
 interface LigneVenteInput {
   medicamentId: string
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
     Prisma.sql`v."pharmacieId" = ${pharmacieId}`,
   ]
 
-  if (session.user.role === 'CAISSIER') {
+  if (session.user.role === 'CAISSIER' && !(await aLaPermission(session.user.id, 'HISTORIQUE_COMPLET'))) {
     conditions.push(Prisma.sql`v."userId" = ${session.user.id}`)
   }
 

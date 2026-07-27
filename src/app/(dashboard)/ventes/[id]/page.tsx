@@ -61,6 +61,7 @@ export default function VenteDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN'
+  const peutAnnuler = isAdmin || !!session?.user?.permissions?.includes('ANNULER_VENTE')
   const { showToast } = useToast()
 
   const [vente,   setVente]   = useState<Vente | null>(null)
@@ -172,7 +173,7 @@ export default function VenteDetailPage() {
                 🖨️ Imprimer / Envoyer
               </Button>
             )}
-            {isAdmin && vente.statut !== 'ANNULEE' && (
+            {peutAnnuler && vente.statut !== 'ANNULEE' && (
               <Button variant="danger" size="sm" onClick={() => setShowModal(true)}>
                 Annuler la vente
               </Button>

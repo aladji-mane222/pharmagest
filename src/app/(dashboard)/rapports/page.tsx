@@ -8,6 +8,7 @@ import RapportPDF from '@/components/rapports/RapportPDF'
 import BeneficeEvolutionChart from '@/components/rapports/BeneficeEvolutionChart'
 import DepensesCategorieChart from '@/components/rapports/DepensesCategorieChart'
 import ExportPanel, { type SectionExportOption } from '@/components/rapports/ExportPanel'
+import Link from 'next/link'
 import { Card, PageHeader, Button, Select } from '@/components/ui'
 
 type TypeRapport = 'ventes' | 'stock' | 'benefice' | 'credits' | 'commandes' | 'depenses'
@@ -335,7 +336,14 @@ export default function RapportsPage() {
 
   return (
     <div className="p-8">
-      <PageHeader title="Rapports" />
+      <PageHeader
+        title="Rapports"
+        actions={
+          <Link href="/rapports/audit">
+            <Button variant="secondary" size="sm">📋 Journal d'activité</Button>
+          </Link>
+        }
+      />
 
       {kpi && (
         <div className="bg-white rounded-card shadow-sm border border-gray-100 p-6 mb-6">

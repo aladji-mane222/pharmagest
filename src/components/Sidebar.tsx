@@ -8,6 +8,7 @@ type MenuItem = {
   href: string
   label: string
   icon: string
+  caissierHidden?: boolean
 }
 
 type MenuGroup = {
@@ -30,7 +31,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { href: '/medicaments', label: 'Médicaments', icon: '💊' },
       { href: '/stock',       label: 'Stock',       icon: '📦' },
-      { href: '/inventaire',  label: 'Inventaire',  icon: '📋' },
+      { href: '/inventaire',  label: 'Inventaire',  icon: '📋', caissierHidden: true },
     ],
   },
   {
@@ -60,7 +61,12 @@ const menuGroups: MenuGroup[] = [
     caissierHidden: true,
     items: [
       { href: '/personnel',  label: 'Personnel',  icon: '👤' },
-      { href: '/rapports',   label: 'Rapports',   icon: '📈' },
+    ],
+  },
+  {
+    label: 'RAPPORTS',
+    items: [
+      { href: '/rapports',   label: 'Rapports',   icon: '📈', caissierHidden: true },
     ],
   },
   {
@@ -97,6 +103,9 @@ export default function Sidebar() {
   // avant hydratation, trouve en testant reellement le 24/07/2026.
   const sessionChargee = status !== 'loading'
   const isCaissier = !sessionChargee || session?.user?.role === 'CAISSIER'
+  const permissions = session?.user?.permissions ?? []
+  const aInventaireComplet = permissions.includes('INVENTAIRE_COMPLET')
+  const aAccesRapports = permissions.includes('ACCES_RAPPORTS')
 
   const rolLabel =
     session?.user?.role === 'SUPER_ADMIN' ? 'Super Admin'
@@ -124,6 +133,14 @@ export default function Sidebar() {
         {menuGroups.map((group) => {
           if (group.caissierHidden && isCaissier) return null
 
+          const itemsVisibles = group.items.filter((item) => {
+            const exceptionAccordee =
+              (item.href === '/inventaire' && aInventaireComplet) ||
+              (item.href === '/rapports' && aAccesRapports)
+            return !(item.caissierHidden && isCaissier && !exceptionAccordee)
+          })
+          if (itemsVisibles.length === 0) return null
+
           return (
             <div key={group.label} className="mb-2">
               <p
@@ -134,6 +151,11 @@ export default function Sidebar() {
               </p>
 
               {group.items.map((item) => {
+                const exceptionAccordee =
+                  (item.href === '/inventaire' && aInventaireComplet) ||
+                  (item.href === '/rapports' && aAccesRapports)
+                if (item.caissierHidden && isCaissier && !exceptionAccordee) return null
+
                 const active = isItemActive(item.href, pathname)
 
                 return (

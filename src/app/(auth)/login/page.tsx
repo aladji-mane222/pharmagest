@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { signIn } from 'next-auth/react'
+import { signIn, getSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
@@ -26,7 +26,13 @@ export default function LoginPage() {
       setError('Email ou mot de passe incorrect')
       setLoading(false)
     } else {
-      router.push('/dashboard')
+      // Le SUPER_ADMIN gere toutes les pharmacies, pas une seule — il
+      // doit atterrir sur /superadmin, pas sur le tableau de bord d'une
+      // pharmacie en particulier (bug trouve par Nabe le 27/07/2026 :
+      // avant ce correctif, tout le monde etait envoye sur /dashboard
+      // sans distinction de role).
+      const session = await getSession()
+      router.push(session?.user?.role === 'SUPER_ADMIN' ? '/superadmin' : '/dashboard')
     }
   }
 

@@ -6,6 +6,7 @@ declare module 'next-auth' {
       id: string
       role: string
       pharmacieId: string
+      permissions: string[]
     } & DefaultSession['user']
   }
 
@@ -20,5 +21,6 @@ declare module 'next-auth/jwt' {
     role: string
     pharmacieId: string
     id: string
+    permissions?: string[]
   }
 }

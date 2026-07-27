@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatDateTime } from '@/lib/utils'
 import { useToast, Card, PageHeader, Button, Input, Select, Badge, EmptyState, SkeletonTable } from '@/components/ui'
@@ -14,6 +14,14 @@ interface User {
   createdAt: string
 }
 
+interface PermissionSupplementaire {
+  id: string
+  type: string
+  expireLe: string | null
+  accordePar: { nom: string }
+  createdAt: string
+}
+
 type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral'
 
 const roleBadge = (role: string): BadgeVariant => {
@@ -21,6 +29,16 @@ const roleBadge = (role: string): BadgeVariant => {
   if (role === 'ADMIN')       return 'warning'
   return 'neutral'
 }
+
+// Les 4 droits accordables ponctuellement a un caissier, au-dela de ses
+// droits de base — permanents ou temporaires selon la date d'expiration
+// (vide = permanent). Demande de Nabe le 27/07/2026, avant la Phase 6.
+const TYPES_PERMISSION: { type: string; label: string; description: string }[] = [
+  { type: 'INVENTAIRE_COMPLET', label: 'Inventaire',            description: 'Lancer, saisir et valider un inventaire' },
+  { type: 'ANNULER_VENTE',      label: 'Annuler une vente',     description: "Annuler une vente déjà encaissée" },
+  { type: 'HISTORIQUE_COMPLET', label: "Voir tout l'historique",description: 'Voir les ventes de tous les caissiers, pas seulement les siennes' },
+  { type: 'ACCES_RAPPORTS',     label: 'Accès rapports',        description: 'Consulter les rapports et le journal d\'activité' },
+]
 
 export default function PersonnelPage() {
   const { data: sessionData } = useSession()
@@ -41,6 +59,13 @@ export default function PersonnelPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState({ nom: '', role: '' })
   const [editSaving, setEditSaving] = useState(false)
+
+  // Panneau permissions supplémentaires
+  const [permissionsOuvertPour, setPermissionsOuvertPour] = useState<string | null>(null)
+  const [permissionsActuelles, setPermissionsActuelles] = useState<PermissionSupplementaire[]>([])
+  const [permissionsLoading, setPermissionsLoading] = useState(false)
+  const [permissionsForm, setPermissionsForm] = useState<Record<string, { active: boolean; expireLe: string }>>({})
+  const [permissionsSaving, setPermissionsSaving] = useState(false)
 
   useEffect(() => {
     fetch('/api/users')
@@ -112,16 +137,72 @@ export default function PersonnelPage() {
     }
   }
 
+  // ── Permissions supplémentaires ──
+  const ouvrirPermissions = async (u: User) => {
+    if (permissionsOuvertPour === u.id) {
+      setPermissionsOuvertPour(null)
+      return
+    }
+    setPermissionsOuvertPour(u.id)
+    setPermissionsLoading(true)
+    const res = await fetch(`/api/users/${u.id}/permissions`)
+    const json = await res.json()
+    const actuelles: PermissionSupplementaire[] = json.data || []
+    setPermissionsActuelles(actuelles)
+
+    const initial: Record<string, { active: boolean; expireLe: string }> = {}
+    for (const t of TYPES_PERMISSION) {
+      const existante = actuelles.find((p) => p.type === t.type)
+      initial[t.type] = {
+        active: !!existante,
+        expireLe: existante?.expireLe ? existante.expireLe.slice(0, 10) : '',
+      }
+    }
+    setPermissionsForm(initial)
+    setPermissionsLoading(false)
+  }
+
+  const sauvegarderPermissions = async (userId: string) => {
+    setPermissionsSaving(true)
+    try {
+      for (const t of TYPES_PERMISSION) {
+        const etatVoulu = permissionsForm[t.type]
+        const existaitDeja = permissionsActuelles.some((p) => p.type === t.type)
+
+        if (etatVoulu.active) {
+          // Accorder ou mettre a jour (upsert cote API)
+          await fetch(`/api/users/${userId}/permissions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: t.type,
+              expireLe: etatVoulu.expireLe || null,
+            }),
+          })
+        } else if (existaitDeja) {
+          // Etait accordee avant, decochee maintenant → revoquer
+          await fetch(`/api/users/${userId}/permissions?type=${t.type}`, { method: 'DELETE' })
+        }
+      }
+      showToast('Droits mis à jour', 'success')
+      setPermissionsOuvertPour(null)
+    } catch {
+      showToast('Erreur lors de la mise à jour des droits', 'error')
+    } finally {
+      setPermissionsSaving(false)
+    }
+  }
+
   const DROITS = [
-    { label: 'Faire une vente',       caissier: true,  pharmacien: true,  admin: true  },
-    { label: 'Voir son historique',   caissier: true,  pharmacien: true,  admin: true  },
-    { label: "Voir tout l'historique",caissier: false, pharmacien: true,  admin: true  },
-    { label: 'Gérer les médicaments', caissier: false, pharmacien: true,  admin: true  },
-    { label: 'Gérer les fournisseurs',caissier: false, pharmacien: true,  admin: true  },
-    { label: 'Archiver / annuler',    caissier: false, pharmacien: false, admin: true  },
-    { label: 'Accès rapports',        caissier: false, pharmacien: true,  admin: true  },
-    { label: 'Gérer le personnel',    caissier: false, pharmacien: false, admin: true  },
-    { label: 'Accès crédits',         caissier: false, pharmacien: true,  admin: true  },
+    { label: 'Faire une vente',       caissier: true,  admin: true  },
+    { label: 'Voir son historique',   caissier: true,  admin: true  },
+    { label: "Voir tout l'historique",caissier: false, admin: true  },
+    { label: 'Gérer les médicaments', caissier: false, admin: true  },
+    { label: 'Gérer les fournisseurs',caissier: false, admin: true  },
+    { label: 'Archiver / annuler',    caissier: false, admin: true  },
+    { label: 'Accès rapports',        caissier: false, admin: true  },
+    { label: 'Gérer le personnel',    caissier: false, admin: true  },
+    { label: 'Accès crédits',         caissier: false, admin: true  },
   ]
 
   if (loading) {
@@ -165,7 +246,6 @@ export default function PersonnelPage() {
                   <tr>
                     <th className="text-left px-6 py-3 text-gray-600 font-medium">Fonctionnalité</th>
                     <th className="text-center px-6 py-3 text-gray-600 font-medium">CAISSIER</th>
-                    <th className="text-center px-6 py-3 text-gray-600 font-medium">PHARMACIEN</th>
                     <th className="text-center px-6 py-3 text-gray-600 font-medium">ADMIN</th>
                   </tr>
                 </thead>
@@ -174,12 +254,15 @@ export default function PersonnelPage() {
                     <tr key={d.label} className="border-t border-gray-100">
                       <td className="px-6 py-3 text-gray-700">{d.label}</td>
                       <td className="px-6 py-3 text-center">{d.caissier  ? '✅' : '❌'}</td>
-                      <td className="px-6 py-3 text-center">{d.pharmacien ? '✅' : '❌'}</td>
                       <td className="px-6 py-3 text-center">{d.admin     ? '✅' : '❌'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <p className="px-6 py-3 text-xs text-gray-400 border-t border-gray-100">
+                Un caissier peut recevoir des droits supplémentaires ponctuels (permanents ou
+                temporaires) via le bouton "Droits" en face de son nom ci-dessous.
+              </p>
             </div>
           )}
         </Card>
@@ -251,10 +334,11 @@ export default function PersonnelPage() {
               {users.map((u) => {
                 const isMoi      = u.id === moiId
                 const isEditing  = editingId === u.id
+                const permissionsOuvertes = permissionsOuvertPour === u.id
 
                 return (
+                  <Fragment key={u.id}>
                   <tr
-                    key={u.id}
                     className={`border-b border-gray-100 last:border-0 transition-colors ${
                       !u.actif ? 'opacity-50 bg-app-bg' : 'hover:bg-app-bg'
                     }`}
@@ -320,6 +404,15 @@ export default function PersonnelPage() {
                         </div>
                       ) : (
                         <div className="flex justify-end gap-2">
+                          {u.role === 'CAISSIER' && u.actif && (
+                            <Button
+                              variant={permissionsOuvertes ? 'primary' : 'secondary'}
+                              size="sm"
+                              onClick={() => ouvrirPermissions(u)}
+                            >
+                              Droits
+                            </Button>
+                          )}
                           <Button variant="secondary" size="sm" onClick={() => startEdit(u)}>
                             Modifier
                           </Button>
@@ -330,6 +423,79 @@ export default function PersonnelPage() {
                       )}
                     </td>
                   </tr>
+
+                  {/* Panneau permissions supplémentaires */}
+                  {permissionsOuvertes && (
+                    <tr className="bg-app-bg border-b border-gray-100">
+                      <td colSpan={6} className="px-6 py-5">
+                        {permissionsLoading ? (
+                          <p className="text-sm text-gray-400">Chargement...</p>
+                        ) : (
+                          <div>
+                            <p className="text-sm font-medium text-navy mb-3">
+                              Droits supplémentaires accordés à {u.nom}
+                            </p>
+                            <div className="space-y-3">
+                              {TYPES_PERMISSION.map((t) => {
+                                const etat = permissionsForm[t.type] || { active: false, expireLe: '' }
+                                return (
+                                  <div key={t.type} className="flex items-center gap-4 flex-wrap">
+                                    <label className="flex items-center gap-2 min-w-[220px]">
+                                      <input
+                                        type="checkbox"
+                                        checked={etat.active}
+                                        onChange={(e) =>
+                                          setPermissionsForm({
+                                            ...permissionsForm,
+                                            [t.type]: { ...etat, active: e.target.checked },
+                                          })
+                                        }
+                                        className="w-4 h-4 rounded border-gray-300 text-mint focus:ring-mint"
+                                      />
+                                      <span className="text-sm font-medium text-navy">{t.label}</span>
+                                    </label>
+                                    <span className="text-xs text-gray-400 flex-1 min-w-[200px]">{t.description}</span>
+                                    {etat.active && (
+                                      <div className="flex items-center gap-2">
+                                        <label className="text-xs text-gray-500">Expire le</label>
+                                        <input
+                                          type="date"
+                                          value={etat.expireLe}
+                                          min={new Date().toISOString().slice(0, 10)}
+                                          onChange={(e) =>
+                                            setPermissionsForm({
+                                              ...permissionsForm,
+                                              [t.type]: { ...etat, expireLe: e.target.value },
+                                            })
+                                          }
+                                          className="px-2 py-1 border border-gray-300 rounded-card text-xs focus:outline-none focus:ring-1 focus:ring-mint"
+                                        />
+                                        <span className="text-xs text-gray-400">(vide = permanent)</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                            <div className="flex gap-3 mt-4">
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => sauvegarderPermissions(u.id)}
+                                loading={permissionsSaving}
+                              >
+                                Enregistrer les droits
+                              </Button>
+                              <Button variant="secondary" size="sm" onClick={() => setPermissionsOuvertPour(null)}>
+                                Fermer
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 )
               })}
             </tbody>

@@ -3,10 +3,18 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { aLaPermission } from '@/lib/permissions'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
+  // Inventaire reserve aux admins (decision Nabe le 27/07/2026, suite a
+  // l'audit Phase 5) — les ecarts peuvent reveler des infos sensibles
+  // (vol suspecte, erreurs repetees d'un caissier precis), sauf caissier
+  // ayant recu la permission supplementaire INVENTAIRE_COMPLET.
+  if (session.user.role === 'CAISSIER' && !(await aLaPermission(session.user.id, 'INVENTAIRE_COMPLET'))) {
+    return apiError('Acces refuse', 403)
+  }
 
   const pharmacieId = session.user.pharmacieId
 
@@ -32,7 +40,7 @@ export async function GET() {
 export async function POST() {
   const session = await getServerSession(authOptions)
   if (!session) return apiError('Non autorise', 401)
-  if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
+  if (session.user.role === 'CAISSIER' && !(await aLaPermission(session.user.id, 'INVENTAIRE_COMPLET'))) return apiError('Acces refuse', 403)
 
   const inventaireExistant = await prisma.inventaire.findFirst({
     where: { pharmacieId: session.user.pharmacieId, statut: 'EN_COURS' },

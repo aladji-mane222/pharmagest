@@ -3,6 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { verifierRateLimit, enregistrerEchec, reinitialiser } from '@/lib/rate-limit'
+import { listerPermissionsActives } from '@/lib/permissions'
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -74,6 +75,16 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role
         token.pharmacieId = user.pharmacieId
         token.id = user.id
+        // Embarque les permissions supplementaires actives au moment de
+        // la connexion — evite un aller-retour DB a chaque requete pour
+        // la seule navigation. NOTE : si un admin accorde/revoque une
+        // permission pendant que le caissier est deja connecte, ca ne
+        // se reflete dans son menu qu'a sa prochaine connexion (meme
+        // limite deja acceptee pour les changements de role, voir plus
+        // haut). Les routes API, elles, revalident toujours en direct.
+        token.permissions = user.role === 'CAISSIER'
+          ? await listerPermissionsActives(user.id)
+          : []
       }
       return token
     },
@@ -82,6 +93,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as string
         session.user.pharmacieId = token.pharmacieId as string
         session.user.id = token.id as string
+        session.user.permissions = (token.permissions as string[]) ?? []
       }
       return session
     },

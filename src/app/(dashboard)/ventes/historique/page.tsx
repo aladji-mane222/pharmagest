@@ -47,7 +47,7 @@ const LIMITE = 20
 
 export default function HistoriqueVentesPage() {
   const { data: session } = useSession()
-  const isCaissier = session?.user?.role === 'CAISSIER'
+  const isCaissier = session?.user?.role === 'CAISSIER' && !session?.user?.permissions?.includes('HISTORIQUE_COMPLET')
 
   const [ventes,     setVentes]     = useState<Vente[]>([])
   const [total,      setTotal]      = useState(0)
