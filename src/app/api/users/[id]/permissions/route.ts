@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
 import { creerNotification } from '@/lib/notifications'
+import type { TypePermission } from '@prisma/client'
 
 const TYPES_VALIDES = ['INVENTAIRE_COMPLET', 'ANNULER_VENTE', 'HISTORIQUE_COMPLET', 'ACCES_RAPPORTS']
 
@@ -53,7 +54,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 
   const body = await request.json().catch(() => ({}))
-  const { type, expireLe } = body
+  const { type, expireLe } = body as { type: TypePermission; expireLe?: string }
 
   if (!TYPES_VALIDES.includes(type)) {
     return apiError(`Type de permission invalide. Valeurs possibles : ${TYPES_VALIDES.join(', ')}`, 400)
@@ -128,7 +129,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   }
 
   await prisma.permissionSupplementaire.deleteMany({
-    where: { userId: params.id, type },
+    where: { userId: params.id, type: type as TypePermission },
   })
 
   await createAuditLog({
