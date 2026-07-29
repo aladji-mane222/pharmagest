@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
 import { aLaPermission } from '@/lib/permissions'
+import { notifierAdmins } from '@/lib/notifications'
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -131,6 +132,24 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       userId: session.user.id,
       pharmacieId,
     })
+
+    // Notification si l'impact valeur des ecarts est significatif — seuil
+    // de 50 000 GNF choisi par defaut (raisonnable pour une pharmacie de
+    // taille pilote), pas encore configurable par pharmacie. A ajuster
+    // avec Nabe si besoin.
+    const SEUIL_ECART_SIGNIFICATIF = 50_000
+    const valeurEcartTotal = inventaire.lignes.reduce(
+      (somme, l) => somme + l.ecart * (l.medicament.prixAchat ?? 0),
+      0
+    )
+    if (Math.abs(valeurEcartTotal) >= SEUIL_ECART_SIGNIFICATIF) {
+      await notifierAdmins(pharmacieId, {
+        type: 'ECART_INVENTAIRE',
+        titre: 'Écart d\'inventaire important',
+        message: `Impact de ${valeurEcartTotal >= 0 ? '+' : ''}${valeurEcartTotal.toLocaleString('fr-FR')} GNF sur l'inventaire validé le ${new Date().toLocaleDateString('fr-FR')}`,
+        lien: `/inventaire`,
+      }, session.user.id)
+    }
 
     return apiSuccess({ message: 'Inventaire valide avec succes' })
   }

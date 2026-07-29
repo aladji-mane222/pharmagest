@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { envoyerEmail, templateAlertStock } from '@/lib/email'
 import { envoyerRelancesCredit, TypeRelance } from '@/lib/cron/relances'
+import { notifierSiPasDejaEnAttente, notifierSuperAdminsSiPasDejaEnAttente } from '@/lib/notifications'
 
 export async function GET(request: Request) {
   // ── Auth CRON_SECRET (pas de session NextAuth — cron Vercel automatique) ──
@@ -71,9 +72,90 @@ export async function GET(request: Request) {
     }
     totalRelances += relances.length
 
-    // ── 5. Accumulation ──────────────────────────────────────────────────────
+    // ── 5. Notifications internes (Phase 6, 28/07/2026) ──────────────────────
+    // Une notification AGREGEE par pharmacie/par jour (pas une par
+    // medicament/lot) pour eviter de noyer les admins — deduplique via
+    // notifierSiPasDejaEnAttente tant que la precedente n'a pas ete lue.
+    const adminsPharmacie = await prisma.user.findMany({
+      where: { pharmacieId: pharmacie.id, role: { in: ['ADMIN', 'SUPER_ADMIN'] }, actif: true },
+      select: { id: true },
+    })
+
+    if (stockBas.length > 0) {
+      for (const admin of adminsPharmacie) {
+        await notifierSiPasDejaEnAttente(admin.id, {
+          type: 'STOCK_BAS',
+          titre: 'Médicaments en stock bas',
+          message: `${stockBas.length} médicament${stockBas.length > 1 ? 's' : ''} en stock bas ou en rupture`,
+          lien: '/stock',
+        })
+      }
+    }
+
+    if (lotsExpirant.length > 0) {
+      for (const admin of adminsPharmacie) {
+        await notifierSiPasDejaEnAttente(admin.id, {
+          type: 'PEREMPTION_PROCHE',
+          titre: 'Péremptions proches',
+          message: `${lotsExpirant.length} lot${lotsExpirant.length > 1 ? 's' : ''} arrivant à péremption dans les 90 jours`,
+          lien: '/stock',
+        })
+      }
+    }
+
+    // ── 6. Sessions de caisse restées ouvertes trop longtemps ────────────────
+    if (pharmacie.dureeMaxSessionCaisseH) {
+      const seuil = new Date(now.getTime() - pharmacie.dureeMaxSessionCaisseH * 60 * 60 * 1000)
+      const sessionsLongues = await prisma.sessionCaisse.findMany({
+        where: { pharmacieId: pharmacie.id, dateCloture: null, actif: true, dateOuverture: { lte: seuil } },
+        include: { user: { select: { nom: true } } },
+      })
+      for (const s of sessionsLongues) {
+        for (const admin of adminsPharmacie) {
+          await notifierSiPasDejaEnAttente(admin.id, {
+            type: 'SESSION_CAISSE_LONGUE',
+            titre: 'Session de caisse ouverte trop longtemps',
+            message: `La session de ${s.user.nom} est ouverte depuis plus de ${pharmacie.dureeMaxSessionCaisseH}h`,
+            lien: '/caisse',
+          })
+        }
+      }
+    }
+
+    // ── 7. Permissions supplementaires expirant sous 3 jours ─────────────────
+    const dans3Jours = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
+    const permissionsExpirantBientot = await prisma.permissionSupplementaire.findMany({
+      where: {
+        user: { pharmacieId: pharmacie.id },
+        expireLe: { gte: now, lte: dans3Jours },
+      },
+    })
+    for (const p of permissionsExpirantBientot) {
+      await notifierSiPasDejaEnAttente(p.userId, {
+        type: 'PERMISSION_EXPIRE_BIENTOT',
+        titre: 'Un de tes droits expire bientôt',
+        message: `Ton droit "${p.type}" expire le ${p.expireLe!.toLocaleDateString('fr-FR')}`,
+        lien: '/profil',
+      })
+    }
+
+    // ── 8. Accumulation ──────────────────────────────────────────────────────
     totalStockBas    += stockBas.length
     totalPeremptions += lotsExpirant.length
+  }
+
+  // ── 9. Licences pharmacie proches de l'expiration (SUPER_ADMIN) ───────────
+  const dans30Jours = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+  const pharmaciesLicenceExpirante = await prisma.pharmacie.findMany({
+    where: { licenceExpire: { gte: now, lte: dans30Jours } },
+  })
+  for (const p of pharmaciesLicenceExpirante) {
+    await notifierSuperAdminsSiPasDejaEnAttente({
+      type: 'LICENCE_EXPIRE_BIENTOT',
+      titre: 'Licence bientôt expirée',
+      message: `La licence de ${p.nom} expire le ${p.licenceExpire!.toLocaleDateString('fr-FR')}`,
+      lien: '/superadmin',
+    })
   }
 
   return apiSuccess({

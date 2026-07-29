@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
+import { useTheme } from '@/lib/theme'
+import NotificationBell from '@/components/NotificationBell'
 
 type MenuItem = {
   href: string
@@ -97,6 +99,7 @@ function isItemActive(itemHref: string, pathname: string): boolean {
 export default function Sidebar() {
   const pathname = usePathname()
   const { data: session, status } = useSession()
+  const { theme, toggleTheme } = useTheme()
   // Tant que la session charge, on ne SAIT PAS encore si c'est un
   // CAISSIER — traiter ce cas comme "restreint par defaut" plutot que
   // "autorise par defaut" evite le flash des liens Personnel/Rapports
@@ -119,12 +122,15 @@ export default function Sidebar() {
     >
       {/* ── Logo ── */}
       <div className="p-6" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">💊</span>
-          <div>
-            <h1 className="text-lg font-bold text-white tracking-wide">PharmaGest</h1>
-            <p className="text-xs mt-0.5" style={{ color: '#2ECC8A' }}>Pilotée par vous</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">💊</span>
+            <div>
+              <h1 className="text-lg font-bold text-white tracking-wide">PharmaGest</h1>
+              <p className="text-xs mt-0.5" style={{ color: '#2ECC8A' }}>Pilotée par vous</p>
+            </div>
           </div>
+          <NotificationBell />
         </div>
       </div>
 
@@ -201,7 +207,10 @@ export default function Sidebar() {
 
       {/* ── Utilisateur + déconnexion ── */}
       <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-        <div className="flex items-center gap-3 mb-3">
+        <Link
+          href="/profil"
+          className="flex items-center gap-3 mb-3 rounded-card px-1 py-1 -mx-1 transition-colors hover:bg-white/5"
+        >
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
             style={{ backgroundColor: '#2ECC8A', color: '#0D2847' }}
@@ -216,7 +225,18 @@ export default function Sidebar() {
               {rolLabel}
             </p>
           </div>
-        </div>
+        </Link>
+
+        <button
+          onClick={toggleTheme}
+          className="w-full flex items-center gap-2 text-xs px-1 py-1.5 rounded transition-colors mb-1"
+          style={{ color: 'rgba(255,255,255,0.40)' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#ffffff')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.40)')}
+        >
+          <span>{theme === 'dark' ? '☀️' : '🌙'}</span>
+          {theme === 'dark' ? 'Thème clair' : 'Thème sombre'}
+        </button>
 
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}

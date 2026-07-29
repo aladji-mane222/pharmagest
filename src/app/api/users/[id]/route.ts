@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { notifierAdmins } from '@/lib/notifications'
 import bcrypt from 'bcryptjs'
 
 export async function PATCH(
@@ -58,6 +59,15 @@ export async function PATCH(
     userId:  session.user.id,
     pharmacieId,
   })
+
+  if (actif === false && user.actif === true) {
+    await notifierAdmins(pharmacieId, {
+      type: 'COMPTE_DESACTIVE',
+      titre: 'Compte désactivé',
+      message: `Le compte de ${user.nom} a été désactivé`,
+      lien: '/personnel',
+    }, session.user.id)
+  }
 
   return apiSuccess(updated)
 }

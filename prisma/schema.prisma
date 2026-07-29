@@ -111,8 +111,45 @@ model User {
   remboursements RemboursementCredit[]
   permissionsRecues    PermissionSupplementaire[] @relation("PermissionUtilisateur")
   permissionsAccordees PermissionSupplementaire[] @relation("PermissionAccordePar")
+  notifications        Notification[]
 
   @@index([pharmacieId])
+}
+
+// Notifications internes — creees en "fan-out" (une ligne par
+// destinataire) au moment de l'evenement declencheur, ou par les crons
+// existants pour les conditions periodiques (stock bas, peremptions...).
+// Demande de Nabe le 27-28/07/2026, Phase 6.
+model Notification {
+  id        String            @id @default(cuid())
+  userId    String
+  type      TypeNotification
+  titre     String
+  message   String
+  lien      String?
+  lu        Boolean           @default(false)
+  createdAt DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lu])
+}
+
+enum TypeNotification {
+  STOCK_BAS
+  PEREMPTION_PROCHE
+  VENTE_CREDIT
+  ECART_INVENTAIRE
+  COMMANDE_ECART
+  REMBOURSEMENT_CREDIT
+  COMPTE_CREE
+  COMPTE_DESACTIVE
+  SESSION_CAISSE_LONGUE
+  PERMISSION_ACCORDEE
+  PERMISSION_RETIREE
+  PERMISSION_EXPIRE_BIENTOT
+  BACKUP_ECHEC
+  LICENCE_EXPIRE_BIENTOT
 }
 
 // Droits ponctuels accordes par un ADMIN a un CAISSIER, au-dela de ses

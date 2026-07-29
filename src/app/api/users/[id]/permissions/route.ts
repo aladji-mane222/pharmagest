@@ -3,8 +3,16 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { creerNotification } from '@/lib/notifications'
 
 const TYPES_VALIDES = ['INVENTAIRE_COMPLET', 'ANNULER_VENTE', 'HISTORIQUE_COMPLET', 'ACCES_RAPPORTS']
+
+const LABELS_PERMISSION: Record<string, string> = {
+  INVENTAIRE_COMPLET: 'Inventaire',
+  ANNULER_VENTE: 'Annuler une vente',
+  HISTORIQUE_COMPLET: "Voir tout l'historique",
+  ACCES_RAPPORTS: 'Accès rapports',
+}
 
 // GET — liste les permissions supplementaires (actives ou expirees) d'un
 // utilisateur, pour affichage dans /personnel.
@@ -88,6 +96,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     pharmacieId,
   })
 
+  await creerNotification({
+    userId: params.id,
+    type: 'PERMISSION_ACCORDEE',
+    titre: 'Nouveau droit accordé',
+    message: expireLeDate
+      ? `"${LABELS_PERMISSION[type]}" t'a été accordé jusqu'au ${expireLeDate.toLocaleDateString('fr-FR')}`
+      : `"${LABELS_PERMISSION[type]}" t'a été accordé de façon permanente`,
+    lien: '/profil',
+  })
+
   return apiSuccess(permission)
 }
 
@@ -110,7 +128,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   }
 
   await prisma.permissionSupplementaire.deleteMany({
-    where: { userId: params.id, type: type as any },
+    where: { userId: params.id, type },
   })
 
   await createAuditLog({
@@ -118,6 +136,14 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     details: { userId: params.id, userNom: user.nom, type },
     userId: session.user.id,
     pharmacieId,
+  })
+
+  await creerNotification({
+    userId: params.id,
+    type: 'PERMISSION_RETIREE',
+    titre: 'Droit retiré',
+    message: `"${LABELS_PERMISSION[type] ?? type}" t'a été retiré`,
+    lien: '/profil',
   })
 
   return apiSuccess({ message: 'Permission revoquee' })

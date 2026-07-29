@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
 import { envoyerEmail } from '@/lib/email'
+import { notifierSuperAdminsSiPasDejaEnAttente } from '@/lib/notifications'
 
 // ── Types B2 ─────────────────────────────────────────────────────────────────
 
@@ -215,6 +216,17 @@ export async function GET(request: Request) {
             `,
           }).catch((e: Error) => console.error('[Backup] Échec envoi email alerte:', e.message))
         }
+
+        // Notification interne en plus de l'email (Phase 6, 27/07/2026) —
+        // meme seuil (2 echecs en 48h) pour eviter de notifier sur un
+        // simple accroc reseau isole. Dedupliquee : ne recree pas de
+        // notification tant que la precedente n'a pas ete lue.
+        await notifierSuperAdminsSiPasDejaEnAttente({
+          type: 'BACKUP_ECHEC',
+          titre: 'Échec de sauvegarde répété',
+          message: `La sauvegarde de ${pharmacie.nom} a échoué ${nbEchecRecents} fois en 48h`,
+          lien: '/superadmin',
+        })
       }
 
       resultats.push({

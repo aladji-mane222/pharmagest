@@ -7,6 +7,7 @@ import { decrementerLotFifo } from '@/lib/fifo'
 import { createAuditLog } from '@/lib/audit'
 import { genererNumeroFacture } from '@/lib/numerotation'
 import { aLaPermission } from '@/lib/permissions'
+import { notifierAdmins } from '@/lib/notifications'
 
 interface LigneVenteInput {
   medicamentId: string
@@ -335,6 +336,17 @@ export async function POST(request: Request) {
     userId,
     pharmacieId,
   })
+
+  if (clientId && statut === 'PARTIELLE') {
+    const resteADoit = montantTotal - montantPayeFloat
+    const clientConcerne = await prisma.client.findUnique({ where: { id: clientId }, select: { nom: true } })
+    await notifierAdmins(pharmacieId, {
+      type: 'VENTE_CREDIT',
+      titre: 'Nouvelle vente à crédit',
+      message: `${clientConcerne?.nom ?? 'Un client'} doit ${resteADoit.toLocaleString('fr-FR')} GNF suite à la vente ${vente.numeroFacture ?? ''}`.trim(),
+      lien: `/ventes/${vente.id}`,
+    }, userId)
+  }
 
   return apiSuccess(vente, 201)
 }

@@ -1,9 +1,9 @@
-// CIBLE: src/app/api/clients/[id]/rembourser/route.ts
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { notifierAdmins } from '@/lib/notifications'
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -80,6 +80,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
     userId: session.user.id,
     pharmacieId,
   })
+
+  await notifierAdmins(pharmacieId, {
+    type: 'REMBOURSEMENT_CREDIT',
+    titre: 'Remboursement de crédit enregistré',
+    message: `${client.nom} a remboursé ${montantFloat.toLocaleString('fr-FR')} GNF — solde restant : ${clientMisAJour.soldeCredit.toLocaleString('fr-FR')} GNF`,
+    lien: `/clients/${params.id}`,
+  }, session.user.id)
 
   return apiSuccess(clientMisAJour)
 }

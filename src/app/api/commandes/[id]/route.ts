@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { notifierAdmins } from '@/lib/notifications'
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -168,6 +169,13 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         userId,
         pharmacieId,
       })
+
+      await notifierAdmins(pharmacieId, {
+        type: 'COMMANDE_ECART',
+        titre: 'Commande reçue avec écart',
+        message: `${ecarts.length} ligne${ecarts.length > 1 ? 's' : ''} avec écart sur la commande ${commande.numeroCommande ?? ''} (${commande.fournisseur.nom})`.trim(),
+        lien: `/fournisseurs/commandes?commandeId=${commande.id}`,
+      }, userId)
     }
 
     return apiSuccess({ message: 'Commande receptionnee avec succes', ecarts })

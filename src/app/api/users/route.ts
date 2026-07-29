@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { createAuditLog } from '@/lib/audit'
+import { notifierAdmins } from '@/lib/notifications'
 import bcrypt from 'bcryptjs'
 
 export async function GET() {
@@ -53,6 +54,13 @@ export async function POST(request: Request) {
     userId: session.user.id,
     pharmacieId: session.user.pharmacieId,
   })
+
+  await notifierAdmins(session.user.pharmacieId, {
+    type: 'COMPTE_CREE',
+    titre: 'Nouveau compte créé',
+    message: `${nom} (${role || 'CAISSIER'}) a été ajouté à l'équipe`,
+    lien: '/personnel',
+  }, session.user.id)
 
   return apiSuccess(user, 201)
 }
