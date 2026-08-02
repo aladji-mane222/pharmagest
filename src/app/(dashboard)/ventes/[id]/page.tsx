@@ -69,6 +69,7 @@ export default function VenteDetailPage() {
   const [erreur,  setErreur]  = useState<string | null>(null)
 
   const [nomPharmacie, setNomPharmacie] = useState('Ma Pharmacie')
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [formatRecu, setFormatRecu] = useState<'A4' | 'THERMIQUE_58' | 'THERMIQUE_80'>('A4')
   const [showRecu, setShowRecu] = useState(false)
   const [whatsappOuvert, setWhatsappOuvert] = useState(false)
@@ -94,6 +95,7 @@ export default function VenteDetailPage() {
       .then((r) => r.json())
       .then((json) => {
         if (json.data?.nom) setNomPharmacie(json.data.nom)
+        setLogoUrl(json.data?.logoUrl || null)
         if (json.data?.formatRecu) setFormatRecu(json.data.formatRecu)
       })
       .catch(() => {})
@@ -146,6 +148,7 @@ export default function VenteDetailPage() {
 
   const donneesRecuPourImpression = (): DonneesRecu => ({
     nomPharmacie,
+    logoUrl,
     numero: vente.numeroFacture || vente.id,
     date: formatDateTime(vente.createdAt),
     lignes: vente.lignes.map((l) => ({ nom: l.medicament.nom, quantite: l.quantite, prixUnitaire: l.prixUnitaire })),
@@ -330,9 +333,13 @@ export default function VenteDetailPage() {
           imprimer ou renvoyer un recu que juste apres l'avoir encaissee). */}
       {showRecu && (
         <div className="fixed inset-0 bg-navy/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-card shadow-lg p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-surface rounded-card shadow-lg p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div>
               <div className="text-center mb-4">
+                {logoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="" className="w-12 h-12 object-contain mx-auto mb-2" />
+                )}
                 <p className="font-bold text-lg text-navy">{nomPharmacie}</p>
                 <p className="text-xs text-gray-400 mt-1">Recu {vente.numeroFacture || vente.id}</p>
                 <p className="text-xs text-gray-400">{formatDateTime(vente.createdAt)}</p>
@@ -400,7 +407,7 @@ export default function VenteDetailPage() {
                     showToast('Fenetre bloquee — autorise les pop-ups pour ce site puis reessaie', 'error')
                   }
                 }}
-                className="w-full bg-mint text-navy px-6 py-2.5 rounded-card font-medium hover:opacity-90 transition-opacity">
+                className="w-full bg-mint text-navy dark:text-[#0D2847] px-6 py-2.5 rounded-card font-medium hover:opacity-90 transition-opacity">
                 📄 Ouvrir le recu (PDF)
               </button>
               <button
@@ -411,7 +418,7 @@ export default function VenteDetailPage() {
                     showToast('Erreur lors de la generation du PDF', 'error')
                   }
                 }}
-                className="w-full bg-white text-navy border border-navy/20 px-6 py-2.5 rounded-card font-medium hover:bg-navy/5 transition-colors">
+                className="w-full bg-surface text-navy border border-navy/20 px-6 py-2.5 rounded-card font-medium hover:bg-navy/5 transition-colors">
                 ⬇️ Telecharger le PDF
               </button>
               <button

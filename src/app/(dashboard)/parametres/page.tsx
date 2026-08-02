@@ -12,6 +12,7 @@ interface Pharmacie {
   email: string | null
   formatRecu: 'A4' | 'THERMIQUE_58' | 'THERMIQUE_80'
   dureeMaxSessionCaisseH: number | null
+  logoUrl: string | null
 }
 
 export default function ParametresPage() {
@@ -23,6 +24,9 @@ export default function ParametresPage() {
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [form, setForm] = useState({ nom: '', adresse: '', telephone: '', email: '', formatRecu: 'A4', dureeMaxSessionCaisseH: '' })
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoErreur, setLogoErreur] = useState('')
 
   useEffect(() => {
     fetch('/api/parametres')
@@ -38,6 +42,7 @@ export default function ParametresPage() {
             formatRecu: json.data.formatRecu || 'A4',
             dureeMaxSessionCaisseH: json.data.dureeMaxSessionCaisseH != null ? String(json.data.dureeMaxSessionCaisseH) : '',
           })
+          setLogoUrl(json.data.logoUrl || null)
         }
         setLoading(false)
       })
@@ -59,6 +64,61 @@ export default function ParametresPage() {
       showToast(json.error || 'Erreur lors de la sauvegarde des parametres', 'error')
     }
     setSaving(false)
+  }
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fichier = e.target.files?.[0]
+    if (!fichier) return
+    setLogoErreur('')
+
+    if (!fichier.type.startsWith('image/')) {
+      setLogoErreur('Le fichier doit être une image (PNG, JPG...)')
+      return
+    }
+    if (fichier.size > 500 * 1024) {
+      setLogoErreur('Image trop volumineuse (max 500 Ko) — essaie une image plus légère')
+      return
+    }
+
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(fichier)
+    })
+
+    setLogoUploading(true)
+    const res = await fetch('/api/parametres', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logoUrl: dataUrl }),
+    })
+    if (res.ok) {
+      setLogoUrl(dataUrl)
+      showToast('Logo mis à jour', 'success')
+    } else {
+      const json = await res.json().catch(() => ({}))
+      setLogoErreur(json.error || 'Erreur lors de l\'envoi du logo')
+    }
+    setLogoUploading(false)
+    // Permet de re-uploader le meme fichier s'il y a eu une erreur
+    e.target.value = ''
+  }
+
+  const supprimerLogo = async () => {
+    setLogoUploading(true)
+    const res = await fetch('/api/parametres', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logoUrl: null }),
+    })
+    if (res.ok) {
+      setLogoUrl(null)
+      showToast('Logo retiré', 'success')
+    } else {
+      showToast('Erreur lors de la suppression du logo', 'error')
+    }
+    setLogoUploading(false)
   }
 
   if (loading) {
@@ -112,6 +172,58 @@ export default function ParametresPage() {
           </Button>
         </form>
         </fieldset>
+      </Card>
+
+      {/* Logo — affiche sur les recus et exports PDF. Stocke en base64
+          directement en base (pas de stockage externe type Vercel Blob
+          pour l'instant) : plus simple, pas de config supplementaire a
+          faire cote Vercel pour un logo de petite taille. */}
+      <Card className="mb-6">
+        <h2 className="font-semibold text-navy mb-1">Logo de la pharmacie</h2>
+        <p className="text-xs text-gray-400 mb-4">
+          Affiché en haut des reçus de vente et des exports PDF. Format PNG ou JPG, 500 Ko max.
+        </p>
+        {!estAdmin && (
+          <div className="bg-warning-bg text-warning-text text-sm rounded-card px-4 py-3 mb-4">
+            Réservé aux administrateurs.
+          </div>
+        )}
+        <div className="flex items-center gap-5">
+          <div className="w-20 h-20 rounded-card border border-gray-200 flex items-center justify-center overflow-hidden bg-app-bg flex-shrink-0">
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt="Logo pharmacie" className="w-full h-full object-contain" />
+            ) : (
+              <span className="text-2xl">💊</span>
+            )}
+          </div>
+          {estAdmin && (
+            <div className="flex flex-col gap-2">
+              <label className="inline-block">
+                <span className="cursor-pointer text-sm font-medium text-navy border border-gray-300 rounded-card px-4 py-2 hover:bg-app-bg transition-colors inline-block">
+                  {logoUploading ? 'Envoi...' : logoUrl ? 'Changer le logo' : 'Ajouter un logo'}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoChange}
+                  disabled={logoUploading}
+                  className="hidden"
+                />
+              </label>
+              {logoUrl && (
+                <button
+                  onClick={supprimerLogo}
+                  disabled={logoUploading}
+                  className="text-xs text-danger hover:underline text-left disabled:opacity-50"
+                >
+                  Retirer le logo
+                </button>
+              )}
+              {logoErreur && <p className="text-danger text-xs">{logoErreur}</p>}
+            </div>
+          )}
+        </div>
       </Card>
 
       {/* Format de recu — separe du bloc admin ci-dessus : modifiable par

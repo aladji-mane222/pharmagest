@@ -1,4 +1,3 @@
-// CIBLE: src/lib/recu.tsx (ATTENTION: remplace src/lib/recu.ts — supprime l'ancien .ts, il devient .tsx)
 import { pdf } from '@react-pdf/renderer'
 import RecuPDF from '@/components/ventes/RecuPDF'
 export interface LigneRecu {
@@ -14,6 +13,7 @@ export interface PaiementRecu {
 
 export interface DonneesRecu {
   nomPharmacie: string
+  logoUrl?: string | null
   numero: string
   date: string
   lignes: LigneRecu[]

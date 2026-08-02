@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -59,6 +58,7 @@ export default function VentesPage() {
   const [nouveauClientSaving, setNouveauClientSaving] = useState(false)
   const [remise, setRemise] = useState(0)
   const [nomPharmacie, setNomPharmacie] = useState('Ma Pharmacie')
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [formatRecu, setFormatRecu] = useState<'A4' | 'THERMIQUE_58' | 'THERMIQUE_80'>('A4')
   const [sessionCaisse, setSessionCaisse] = useState<boolean | null>(null)
 
@@ -107,6 +107,7 @@ export default function VentesPage() {
       .then((json) => {
         const nom = json.data?.nom ?? json.data?.pharmacie?.nom
         if (nom) setNomPharmacie(nom)
+        setLogoUrl(json.data?.logoUrl ?? json.data?.pharmacie?.logoUrl ?? null)
         const format = json.data?.formatRecu ?? json.data?.pharmacie?.formatRecu
         if (format) setFormatRecu(format)
       })
@@ -361,6 +362,7 @@ export default function VentesPage() {
 
   const donneesRecuPourImpression = (): DonneesRecu => ({
     nomPharmacie,
+    logoUrl,
     numero: recu?.numero || '',
     date: new Date().toLocaleString('fr-FR'),
     lignes: (recu?.lignes || []).map((l) => ({ nom: l.nom, quantite: l.quantite, prixUnitaire: l.prixUnitaire })),
@@ -392,7 +394,7 @@ export default function VentesPage() {
 
       {recu && (
         <div className="fixed inset-0 bg-navy/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-card shadow-lg p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-surface rounded-card shadow-lg p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="text-center mb-4">
               <div className="w-14 h-14 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-3">
                 <span className="text-2xl">✅</span>
@@ -401,6 +403,10 @@ export default function VentesPage() {
             </div>
             <div>
               <div className="text-center mb-4">
+                {logoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="" className="w-12 h-12 object-contain mx-auto mb-2" />
+                )}
                 <p className="font-bold text-lg text-navy">{nomPharmacie}</p>
                 <p className="text-xs text-gray-400 mt-1">Recu {recu.numero}</p>
                 <p className="text-xs text-gray-400">{new Date().toLocaleString('fr-FR')}</p>
@@ -508,7 +514,7 @@ export default function VentesPage() {
               onKeyDown={surEntreeRecherche}
               className="w-full px-4 py-3 border border-gray-200 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint text-lg" />
             {medicaments.length > 0 && (
-              <div className="absolute top-full left-0 right-0 bg-white border border-gray-100 rounded-card shadow-md z-10 mt-1 overflow-hidden">
+              <div className="absolute top-full left-0 right-0 bg-surface border border-gray-100 rounded-card shadow-md z-10 mt-1 overflow-hidden">
                 {medicaments.map((med) => (
                   <button
                     key={med.id}
@@ -545,7 +551,7 @@ export default function VentesPage() {
                             ajouterAuPanier({ id: eq.id, nom: eq.nom, codeBarre: null, prixVente: eq.prixVente, stockTotal: eq.stockTotal, unite: eq.unite })
                             setRuptureSelectionnee(null)
                           }}
-                          className="w-full text-left px-3 py-2 bg-white rounded-lg text-sm hover:bg-blue-100 flex justify-between"
+                          className="w-full text-left px-3 py-2 bg-surface rounded-lg text-sm hover:bg-blue-100 flex justify-between"
                         >
                           <span>{eq.nom}</span>
                           <span className="text-gray-400">Stock {eq.stockTotal}</span>
@@ -671,7 +677,7 @@ export default function VentesPage() {
           {nouveauClientOuvert && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => !nouveauClientSaving && setNouveauClientOuvert(false)} />
-              <div className="relative bg-white rounded-xl shadow-lg w-full max-w-sm p-6">
+              <div className="relative bg-surface rounded-xl shadow-lg w-full max-w-sm p-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Nouveau client rapide</h3>
                 <div className="space-y-3 mb-4">
                   <input

@@ -1,4 +1,4 @@
-import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer'
 import { DonneesRecu, MODE_LABELS_RECU } from '@/lib/recu'
 
 // ── Conversion mm -> points (1mm = 2.83465pt), unite native de react-pdf ──────
@@ -24,6 +24,7 @@ const MM = 2.83465
 // comportement du pilote cote imprimante.
 function hauteurEstimeePt(d: DonneesRecu): number {
   const ENTETE = 62          // nom pharmacie + numero + date
+  const LOGO = d.logoUrl ? 50 : 0   // espace supplementaire si logo affiche
   const SEPARATEUR = 12
   const PAR_ARTICLE = 26     // nom + ligne quantite/prix, par article
   const LIGNE_TOTAL = 16
@@ -33,6 +34,7 @@ function hauteurEstimeePt(d: DonneesRecu): number {
 
   const hauteur =
     ENTETE +
+    LOGO +
     SEPARATEUR +
     d.lignes.length * PAR_ARTICLE +
     SEPARATEUR +
@@ -79,6 +81,13 @@ export default function RecuPDF({ donnees: d }: { donnees: DonneesRecu }) {
       color: '#111111',
     },
     centre: { textAlign: 'center' },
+    logo: {
+      width: estThermique ? 36 : 56,
+      height: estThermique ? 36 : 56,
+      objectFit: 'contain',
+      marginBottom: estThermique ? 4 : 8,
+      alignSelf: 'center',
+    },
     nomPharmacie: {
       fontFamily: 'Helvetica-Bold',
       fontSize: estThermique ? 10 : 16,
@@ -98,7 +107,9 @@ export default function RecuPDF({ donnees: d }: { donnees: DonneesRecu }) {
       fontSize: estThermique ? 9 : 13,
     },
     lignePaiement: { flexDirection: 'row', justifyContent: 'space-between', color: '#555555' },
-    ligneCredit: { flexDirection: 'row', justifyContent: 'space-between', color: '#C0392B', fontFamily: 'Helvetica-Bold' },
+    ligneCredit: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', color: '#C0392B', fontFamily: 'Helvetica-Bold' },
+    ligneCreditLabel: { flex: 1, marginRight: 8 },
+    ligneCreditMontant: { flexShrink: 0 },
     merci: { textAlign: 'center', color: '#999999', fontSize: estThermique ? 7 : 9, marginTop: estThermique ? 8 : 16 },
   })
 
@@ -106,6 +117,7 @@ export default function RecuPDF({ donnees: d }: { donnees: DonneesRecu }) {
     <Document title={`Recu ${d.numero}`} author="PharmaGest">
       <Page size={tailleRecu(d)} style={s.page}>
         <View style={s.centre}>
+          {d.logoUrl && <Image src={d.logoUrl} style={s.logo} />}
           <Text style={s.nomPharmacie}>{d.nomPharmacie}</Text>
           <Text style={s.meta}>Recu {d.numero}</Text>
           <Text style={s.meta}>{d.date}</Text>
@@ -146,8 +158,8 @@ export default function RecuPDF({ donnees: d }: { donnees: DonneesRecu }) {
 
         {d.resteADu > 0 && (
           <View style={s.ligneCredit}>
-            <Text>Reste a payer (credit{d.clientNom ? ` — ${d.clientNom}` : ''})</Text>
-            <Text>{fmt(d.resteADu)}</Text>
+            <Text style={s.ligneCreditLabel}>Reste a payer (credit{d.clientNom ? ` — ${d.clientNom}` : ''})</Text>
+            <Text style={s.ligneCreditMontant}>{fmt(d.resteADu)}</Text>
           </View>
         )}
 
