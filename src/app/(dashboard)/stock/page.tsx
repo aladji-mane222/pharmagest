@@ -154,7 +154,7 @@ export default function StockPage() {
         </Card>
         <Card padding="sm">
           <p className="text-sm text-gray-500">Péremptions proches</p>
-          <p className="text-2xl font-bold text-yellow-500">{peremptionProche.length}</p>
+          <p className="text-2xl font-bold text-warning">{peremptionProche.length}</p>
         </Card>
         <Card padding="sm">
           <p className="text-sm text-gray-500">Produits dormants</p>
@@ -197,13 +197,13 @@ export default function StockPage() {
             </Card>
           )}
           {peremptionProche.length > 0 && (
-            <Card padding="sm" className="bg-yellow-50 border-yellow-200">
-              <h3 className="text-sm font-semibold text-yellow-700 mb-2">🟡 Péremptions proches ({peremptionProche.length})</h3>
+            <Card padding="sm" className="bg-warning-bg border-warning/20">
+              <h3 className="text-sm font-semibold text-warning-text mb-2">🟡 Péremptions proches ({peremptionProche.length})</h3>
               <ul className="space-y-1 max-h-40 overflow-y-auto">
                 {peremptionProche.map((m) => (
                   <li key={m.id}>
-                    <button onClick={() => setSelected(m)} className="text-sm text-yellow-800 hover:underline text-left">
-                      {m.nom} <span className="text-yellow-600">({m.lotsCritiques} lot{m.lotsCritiques > 1 ? 's' : ''})</span>
+                    <button onClick={() => setSelected(m)} className="text-sm text-warning-text hover:underline text-left">
+                      {m.nom} <span className="text-warning-text">({m.lotsCritiques} lot{m.lotsCritiques > 1 ? 's' : ''})</span>
                     </button>
                   </li>
                 ))}

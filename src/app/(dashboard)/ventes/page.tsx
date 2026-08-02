@@ -426,12 +426,12 @@ export default function VentesPage() {
               </div>
               <div className="space-y-1 text-sm border-t pt-2">
                 {recu.remise > 0 && (
-                  <div className="flex justify-between text-orange-500">
+                  <div className="flex justify-between text-warning">
                     <span>Remise</span>
                     <span>-{formatMontant(recu.remise)}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-bold text-green-600">
+                <div className="flex justify-between font-bold text-success">
                   <span>Total</span>
                   <span>{formatMontant(recu.montantTotal)}</span>
                 </div>
@@ -448,7 +448,7 @@ export default function VentesPage() {
                   </div>
                 )}
                 {recu.resteADu > 0 && (
-                  <div className="flex justify-between text-red-600 font-medium">
+                  <div className="flex justify-between text-danger font-medium">
                     <span>Reste a payer (credit{recu.clientNom ? ` — ${recu.clientNom}` : ''})</span>
                     <span>{formatMontant(recu.resteADu)}</span>
                   </div>
@@ -533,16 +533,16 @@ export default function VentesPage() {
               </div>
             )}
             {ruptureSelectionnee && (
-              <div className="absolute top-full left-0 right-0 bg-blue-50 border border-blue-200 rounded-card shadow-md z-10 mt-1 p-4">
+              <div className="absolute top-full left-0 right-0 bg-info-bg border border-info/20 rounded-card shadow-md z-10 mt-1 p-4">
                 <div className="flex justify-between items-start mb-2">
-                  <p className="text-sm font-medium text-blue-800">
+                  <p className="text-sm font-medium text-info-text">
                     {ruptureSelectionnee.nom} — en rupture
                   </p>
-                  <button onClick={() => setRuptureSelectionnee(null)} className="text-blue-400 hover:text-blue-600 text-sm">✕</button>
+                  <button onClick={() => setRuptureSelectionnee(null)} className="text-info/70 hover:text-info-text text-sm">✕</button>
                 </div>
                 {equivalentsRupture.length > 0 ? (
                   <>
-                    <p className="text-xs text-blue-600 mb-2">Équivalent(s) disponible(s) (même DCI) :</p>
+                    <p className="text-xs text-info-text mb-2">Équivalent(s) disponible(s) (même DCI) :</p>
                     <div className="space-y-1">
                       {equivalentsRupture.map((eq) => (
                         <button
@@ -551,7 +551,7 @@ export default function VentesPage() {
                             ajouterAuPanier({ id: eq.id, nom: eq.nom, codeBarre: null, prixVente: eq.prixVente, stockTotal: eq.stockTotal, unite: eq.unite })
                             setRuptureSelectionnee(null)
                           }}
-                          className="w-full text-left px-3 py-2 bg-surface rounded-lg text-sm hover:bg-blue-100 flex justify-between"
+                          className="w-full text-left px-3 py-2 bg-surface rounded-lg text-sm hover:bg-info-bg flex justify-between"
                         >
                           <span>{eq.nom}</span>
                           <span className="text-gray-400">Stock {eq.stockTotal}</span>
@@ -560,7 +560,7 @@ export default function VentesPage() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs text-blue-500">Aucun équivalent connu (DCI non renseigné ou aucune alternative en stock).</p>
+                  <p className="text-xs text-info">Aucun équivalent connu (DCI non renseigné ou aucune alternative en stock).</p>
                 )}
               </div>
             )}
@@ -586,12 +586,12 @@ export default function VentesPage() {
                     return (
                     <tr
                       key={ligne.medicamentId}
-                      className={`border-b last:border-0 ${enErreur ? 'bg-red-50' : ''}`}
+                      className={`border-b last:border-0 ${enErreur ? 'bg-danger-bg' : ''}`}
                     >
                       <td className="px-4 py-3 font-medium">
                         {ligne.nom}
                         {enErreur && (
-                          <span className="block text-xs text-red-500 font-normal">
+                          <span className="block text-xs text-danger font-normal">
                             Stock insuffisant — reduis la quantite
                           </span>
                         )}
@@ -621,7 +621,7 @@ export default function VentesPage() {
                       <td className="px-4 py-3 text-right font-medium">{formatMontant(ligne.prixUnitaire * ligne.quantite)}</td>
                       <td className="px-4 py-3 text-center">
                         <button onClick={() => modifierQuantite(ligne.medicamentId, 0)}
-                          className="text-red-400 hover:text-red-600">✕</button>
+                          className="text-danger/70 hover:text-danger">✕</button>
                       </td>
                     </tr>
                     )
@@ -643,14 +643,14 @@ export default function VentesPage() {
               </div>
             )}
             {remise > 0 && (
-              <div className="flex justify-between text-sm text-orange-500 mb-1">
+              <div className="flex justify-between text-sm text-warning mb-1">
                 <span>Remise</span>
                 <span>-{formatMontant(remise)}</span>
               </div>
             )}
             <div className="flex justify-between text-lg font-bold mb-4">
               <span>Total</span>
-              <span className="text-green-600">{formatMontant(totalNet)}</span>
+              <span className="text-success">{formatMontant(totalNet)}</span>
             </div>
           </div>
 
@@ -660,7 +660,7 @@ export default function VentesPage() {
               <button
                 type="button"
                 onClick={() => setNouveauClientOuvert(true)}
-                className="text-xs text-green-600 hover:underline"
+                className="text-xs text-success hover:underline"
               >
                 + Nouveau
               </button>
@@ -708,7 +708,7 @@ export default function VentesPage() {
                   <button
                     onClick={creerClientRapide}
                     disabled={nouveauClientSaving}
-                    className="px-4 py-2 rounded-lg text-sm bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                    className="px-4 py-2 rounded-lg text-sm bg-success text-white hover:bg-success disabled:opacity-50"
                   >
                     {nouveauClientSaving ? 'Creation...' : 'Creer et selectionner'}
                   </button>
@@ -744,7 +744,7 @@ export default function VentesPage() {
                   {paiements.length > 1 && (
                     <button
                       onClick={() => retirerLignePaiement(p.id)}
-                      className="text-red-400 hover:text-red-600 px-1"
+                      className="text-danger/70 hover:text-danger px-1"
                       title="Retirer ce mode de paiement"
                     >
                       ✕
@@ -755,7 +755,7 @@ export default function VentesPage() {
             </div>
             <button
               onClick={ajouterLignePaiement}
-              className="text-sm text-green-600 hover:text-green-700 font-medium mt-2"
+              className="text-sm text-success hover:text-success font-medium mt-2"
             >
               + Ajouter un mode de paiement
             </button>
@@ -780,25 +780,25 @@ export default function VentesPage() {
           </div>
 
           {nonEspecesDepasseLeTotal && (
-            <div className="bg-red-50 text-red-600 text-sm rounded-lg p-3">
+            <div className="bg-danger-bg text-danger text-sm rounded-lg p-3">
               Le mobile money/carte saisi depasse le total — un trop-percu ne peut etre
               rendu qu&apos;en especes, corrigez les montants.
             </div>
           )}
 
           {!nonEspecesDepasseLeTotal && monnaie > 0 && (
-            <div className="bg-green-50 rounded-lg p-3 text-center">
+            <div className="bg-success-bg rounded-lg p-3 text-center">
               <p className="text-sm text-gray-500">Monnaie a rendre</p>
-              <p className="text-2xl font-bold text-green-600">{formatMontant(monnaie)}</p>
+              <p className="text-2xl font-bold text-success">{formatMontant(monnaie)}</p>
             </div>
           )}
 
           {!nonEspecesDepasseLeTotal && resteADu > 0 && (
-            <div className={`rounded-lg p-3 text-center ${clientId ? 'bg-orange-50' : 'bg-red-50'}`}>
+            <div className={`rounded-lg p-3 text-center ${clientId ? 'bg-warning-bg' : 'bg-danger-bg'}`}>
               <p className="text-sm text-gray-500">
                 Reste a mettre en credit {clientId ? '' : '— selectionnez un client ci-dessus'}
               </p>
-              <p className={`text-2xl font-bold ${clientId ? 'text-orange-600' : 'text-red-600'}`}>
+              <p className={`text-2xl font-bold ${clientId ? 'text-warning-text' : 'text-danger'}`}>
                 {formatMontant(resteADu)}
               </p>
             </div>

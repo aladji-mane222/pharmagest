@@ -68,9 +68,9 @@ const SECTIONS_EXPORT_SUPPLEMENTAIRES: Record<string, SectionExportOption[]> = {
 }
 
 const STATUT_COULEURS: Record<string, string> = {
-  Rupture:    'bg-red-100 text-red-700',
-  'Stock bas': 'bg-orange-100 text-orange-700',
-  Dormant:    'bg-blue-100 text-info-text',
+  Rupture:    'bg-danger-bg text-danger',
+  'Stock bas': 'bg-warning-bg text-warning-text',
+  Dormant:    'bg-info-bg text-info-text',
   Normal:     'bg-gray-100 text-gray-500',
 }
 
@@ -323,7 +323,7 @@ export default function RapportsPage() {
             onClick={() => setOnglet(s.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               onglet === s.key
-                ? 'border-green-600 text-green-700'
+                ? 'border-success text-success'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -447,19 +447,19 @@ export default function RapportsPage() {
             <div>
               <h2 className="font-semibold text-gray-700 mb-6 text-lg">Rapport Bénéfice Net</h2>
               <div className="grid grid-cols-4 gap-4 mb-4">
-                <div className="bg-green-50 rounded-xl p-5 text-center">
+                <div className="bg-success-bg rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Chiffre d'affaires</p>
                   <p className="text-2xl font-bold text-success">{formatMontant(data.ca as number)}</p>
                 </div>
-                <div className="bg-yellow-50 rounded-xl p-5 text-center">
+                <div className="bg-warning-bg rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">CMV</p>
                   <p className="text-2xl font-bold text-warning">{formatMontant(data.cmv as number)}</p>
                 </div>
-                <div className="bg-red-50 rounded-xl p-5 text-center">
+                <div className="bg-danger-bg rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Dépenses</p>
                   <p className="text-2xl font-bold text-danger">{formatMontant(data.totalDepenses as number)}</p>
                 </div>
-                <div className={`rounded-xl p-5 text-center ${(data.beneficeNet as number) >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
+                <div className={`rounded-xl p-5 text-center ${(data.beneficeNet as number) >= 0 ? 'bg-info-bg' : 'bg-warning-bg'}`}>
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Bénéfice net</p>
                   <p className={`text-2xl font-bold ${(data.beneficeNet as number) >= 0 ? 'text-info-text' : 'text-warning-text'}`}>
                     {formatMontant(data.beneficeNet as number)}
@@ -495,7 +495,7 @@ export default function RapportsPage() {
                     }
                     const positif = comp.evolutionPourcentage >= 0
                     return (
-                      <p className={`text-sm mt-2 font-bold px-3 py-1.5 rounded-card inline-block ${positif ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                      <p className={`text-sm mt-2 font-bold px-3 py-1.5 rounded-card inline-block ${positif ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
                         {positif ? '▲' : '▼'} {Math.abs(comp.evolutionPourcentage)}% vs période précédente ({formatMontant(comp.totalPeriodePrecedente)})
                       </p>
                     )
@@ -721,7 +721,7 @@ export default function RapportsPage() {
                   const row = (data.parTranche as { tranche: string; nbClients: number; montant: number }[])
                     .find((t) => t.tranche === tr)
                   const labels: Record<string, string> = { '0-30': '0-30 jours', '31-60': '31-60 jours', '60+': '60+ jours', inconnue: 'Origine inconnue' }
-                  const couleurs: Record<string, string> = { '0-30': 'bg-yellow-50 text-yellow-700', '31-60': 'bg-orange-50 text-orange-700', '60+': 'bg-red-50 text-red-700', inconnue: 'bg-gray-50 text-gray-500' }
+                  const couleurs: Record<string, string> = { '0-30': 'bg-warning-bg text-warning-text', '31-60': 'bg-warning-bg text-warning-text', '60+': 'bg-danger-bg text-danger', inconnue: 'bg-gray-50 text-gray-500' }
                   if (!row) return null
                   return (
                     <div key={tr} className={`rounded-xl p-4 text-center ${couleurs[tr]}`}>
@@ -766,15 +766,15 @@ export default function RapportsPage() {
               <h2 className="font-semibold text-gray-700 mb-6 text-lg">Rapport des Commandes</h2>
 
               <div className="grid grid-cols-4 gap-4 mb-6">
-                <div className="bg-blue-50 rounded-xl p-5 text-center">
+                <div className="bg-info-bg rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Total commandé</p>
                   <p className="text-2xl font-bold text-info-text">{formatMontant(data.montantTotalCommande as number)}</p>
                 </div>
-                <div className="bg-green-50 rounded-xl p-5 text-center">
+                <div className="bg-success-bg rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Total reçu</p>
                   <p className="text-2xl font-bold text-success">{formatMontant(data.montantTotalRecu as number)}</p>
                 </div>
-                <div className="bg-orange-50 rounded-xl p-5 text-center">
+                <div className="bg-warning-bg rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">
                     Fiabilité livraison <span title="Tous fournisseurs confondus sur la période choisie. Pour la fiabilité par fournisseur individuel, voir /fournisseurs.">(?)</span>
                   </p>
@@ -787,7 +787,7 @@ export default function RapportsPage() {
                     {LABELS_FIABILITE[(data.fiabilite as { niveau: string }).niveau]}
                   </p>
                 </div>
-                <div className="bg-red-50 rounded-xl p-5 text-center">
+                <div className="bg-danger-bg rounded-xl p-5 text-center">
                   <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Écarts détectés</p>
                   <p className="text-2xl font-bold text-danger">{(data.ecarts as { nombre: number }).nombre}</p>
                   <p className="text-xs text-gray-400 mt-1">
@@ -824,10 +824,10 @@ export default function RapportsPage() {
                           <span className="inline-flex items-center gap-1">
                             {c.statut}
                             {c.enRetard === true && (
-                              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">En retard</span>
+                              <span className="text-xs bg-danger-bg text-danger px-2 py-0.5 rounded-full">En retard</span>
                             )}
                             {c.enRetard === false && (
-                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">À temps</span>
+                              <span className="text-xs bg-success-bg text-success px-2 py-0.5 rounded-full">À temps</span>
                             )}
                           </span>
                         </td>

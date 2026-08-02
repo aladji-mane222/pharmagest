@@ -1,4 +1,3 @@
-// CIBLE: src/app/(dashboard)/caisse/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -190,7 +189,7 @@ export default function CaissePage() {
               <div className="bg-app-bg rounded-card p-3 mb-4 space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Total encaissé (tous modes)</span>
-                  <span className="font-semibold text-green-600">{formatMontant(totalEncaisse)}</span>
+                  <span className="font-semibold text-success">{formatMontant(totalEncaisse)}</span>
                 </div>
                 {parMode.length > 0 && (
                   <div className="pl-3 space-y-0.5 border-l-2 border-gray-200 ml-1">
@@ -210,7 +209,7 @@ export default function CaissePage() {
                 )}
                 <div className="flex justify-between pt-1">
                   <span className="text-gray-500">Total attendu en especes</span>
-                  <span className="font-semibold text-blue-600">{formatMontant(totalAttendu)}</span>
+                  <span className="font-semibold text-info-text">{formatMontant(totalAttendu)}</span>
                 </div>
                 <p className="text-xs text-gray-400">
                   Ouverture + especes recues (ventes et remboursements credit) — le mobile money
@@ -316,7 +315,7 @@ export default function CaissePage() {
                     })()}
                   </p>
                   {s.montantCloture != null && (
-                    <p className="text-blue-600 font-medium">{formatMontant(s.montantCloture)}</p>
+                    <p className="text-info-text font-medium">{formatMontant(s.montantCloture)}</p>
                   )}
                 </li>
               ))}

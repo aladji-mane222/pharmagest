@@ -424,7 +424,7 @@ export default function AuditPage() {
                             <td className="px-3 py-2">{e.medicamentNom || 'Médicament'}</td>
                             <td className="px-3 py-2 text-right">{e.commande}</td>
                             <td className="px-3 py-2 text-right">{e.recue}</td>
-                            <td className={`px-3 py-2 text-right font-medium ${diff < 0 ? 'text-orange-500' : 'text-blue-500'}`}>
+                            <td className={`px-3 py-2 text-right font-medium ${diff < 0 ? 'text-warning' : 'text-info'}`}>
                               {diff > 0 ? `+${diff}` : diff}
                             </td>
                           </tr>
@@ -489,7 +489,7 @@ export default function AuditPage() {
                   <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{formatDateTime(log.createdAt)}</td>
                   <td className="px-6 py-4">
                     <span
-                      className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium cursor-default"
+                      className="px-2 py-1 bg-info-bg text-info-text rounded text-xs font-medium cursor-default"
                       title={DESCRIPTIONS_ACTIONS[log.action]}
                     >
                       {LABELS_ACTIONS[log.action] ?? log.action}
@@ -499,7 +499,7 @@ export default function AuditPage() {
                   <td className="px-6 py-4">
                     <button
                       onClick={() => ouvrirDetail(log)}
-                      className="text-green-600 hover:underline text-sm"
+                      className="text-success hover:underline text-sm"
                     >
                       Détail
                     </button>

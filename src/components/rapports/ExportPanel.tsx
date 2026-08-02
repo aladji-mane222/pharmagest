@@ -41,7 +41,7 @@ export default function ExportPanel({
     <div className="relative inline-block">
       <button
         onClick={() => setOuvert((o) => !o)}
-        className="text-xs text-gray-500 hover:text-blue-600 hover:underline"
+        className="text-xs text-gray-500 hover:text-info-text hover:underline"
       >
         Exporter ▾
       </button>
@@ -66,7 +66,7 @@ export default function ExportPanel({
             <button
               onClick={() => { onExporterExcel(clesChoisies()); setOuvert(false) }}
               disabled={cochees.size === 0}
-              className="flex-1 text-xs bg-blue-50 text-blue-700 rounded-md py-2 hover:bg-blue-100 disabled:opacity-40"
+              className="flex-1 text-xs bg-info-bg text-info-text rounded-md py-2 hover:bg-info-bg disabled:opacity-40"
             >
               Excel
             </button>
@@ -80,7 +80,7 @@ export default function ExportPanel({
             <button
               onClick={() => { onExporterPDF(clesChoisies()); setOuvert(false) }}
               disabled={cochees.size === 0 || generatingPDF}
-              className="flex-1 text-xs bg-red-50 text-red-700 rounded-md py-2 hover:bg-red-100 disabled:opacity-40"
+              className="flex-1 text-xs bg-danger-bg text-danger rounded-md py-2 hover:bg-danger-bg disabled:opacity-40"
             >
               {generatingPDF ? '...' : 'PDF'}
             </button>

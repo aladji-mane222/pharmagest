@@ -1,3 +1,5 @@
+// CIBLE: src/app/(auth)/login/page.tsx
+
 'use client'
 
 import { useState } from 'react'
@@ -40,7 +42,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full bg-surface rounded-xl shadow-lg p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-green-600">PharmaGest</h1>
+          <h1 className="text-3xl font-bold text-success">PharmaGest</h1>
           <p className="text-gray-500 mt-2">Pilotée par vous, où que vous soyez</p>
         </div>
 
@@ -74,13 +76,13 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <p className="text-red-500 text-sm text-center">{error}</p>
+            <p className="text-danger text-sm text-center">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium transition-colors"
+            className="w-full bg-success text-white py-2 px-4 rounded-lg hover:bg-success disabled:opacity-50 font-medium transition-colors"
           >
             {loading ? 'Connexion...' : 'Se connecter'}
           </button>

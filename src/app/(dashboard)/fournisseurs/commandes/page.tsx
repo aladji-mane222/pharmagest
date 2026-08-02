@@ -605,18 +605,18 @@ function CommandesPageInner() {
       const retard = joursDeRetard(cmd.dateLivraisonPrevue, new Date(cmd.dateReception))
       if (retard > TOLERANCE_RETARD_JOURS) {
         return (
-          <span className="px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs">
+          <span className="px-2 py-1 bg-danger-bg text-danger rounded-full text-xs">
             Reçue en retard ({retard}j)
           </span>
         )
       }
-      return <span className="px-2 py-1 bg-green-100 text-green-600 rounded-full text-xs">Reçue à temps</span>
+      return <span className="px-2 py-1 bg-success-bg text-success rounded-full text-xs">Reçue à temps</span>
     }
     if (cmd.statut === 'ENVOYEE') {
       const retard = joursDeRetard(cmd.dateLivraisonPrevue, new Date())
       if (retard > TOLERANCE_RETARD_JOURS) {
         return (
-          <span className="px-2 py-1 bg-orange-100 text-orange-600 rounded-full text-xs">
+          <span className="px-2 py-1 bg-warning-bg text-warning-text rounded-full text-xs">
             En retard ({retard}j)
           </span>
         )
@@ -630,7 +630,7 @@ function CommandesPageInner() {
   }
 
   const couleurStock = (actuel: number) =>
-    actuel === 0 ? 'text-red-600 font-semibold' : 'text-orange-600 font-semibold'
+    actuel === 0 ? 'text-danger font-semibold' : 'text-warning-text font-semibold'
 
   const montantFormulaire = lignes.reduce((sum, l) => {
     const q = parseInt(l.quantite) || 0
@@ -702,7 +702,7 @@ function CommandesPageInner() {
               setFiltreDateDebut('')
               setFiltreDateFin('')
             }}
-            className="text-green-600 hover:underline"
+            className="text-success hover:underline"
           >
             Réinitialiser ×
           </button>
@@ -711,9 +711,9 @@ function CommandesPageInner() {
 
       {/* Panneau filtre + export */}
       {filtreOuvert && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-6">
-          <h2 className="text-base font-semibold text-blue-800 mb-1">Filtrer les commandes</h2>
-          <p className="text-sm text-blue-700 mb-4">
+        <div className="bg-info-bg border border-info/20 rounded-xl p-6 mb-6">
+          <h2 className="text-base font-semibold text-info-text mb-1">Filtrer les commandes</h2>
+          <p className="text-sm text-info-text mb-4">
             S'applique à la liste ci-dessous ET aux exports. Sans filtre, seules les 20 commandes les plus récentes sont affichées.
           </p>
           <div className="flex flex-wrap items-end gap-4 mb-4">
@@ -766,21 +766,21 @@ function CommandesPageInner() {
             <button
               onClick={() => lancerExport('excel')}
               disabled={exportEnCours}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 bg-info text-white rounded-lg text-sm hover:bg-info disabled:opacity-50"
             >
               {exportEnCours ? 'Export en cours...' : '📊 Exporter en Excel'}
             </button>
             <button
               onClick={() => lancerExport('csv')}
               disabled={exportEnCours}
-              className="px-4 py-2 bg-surface border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50 disabled:opacity-50"
+              className="px-4 py-2 bg-surface border border-info/30 text-info-text rounded-lg text-sm hover:bg-info-bg disabled:opacity-50"
             >
               {exportEnCours ? 'Export en cours...' : '📄 Exporter en CSV'}
             </button>
             <button
               onClick={() => lancerExport('pdf')}
               disabled={exportEnCours}
-              className="px-4 py-2 bg-surface border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50 disabled:opacity-50"
+              className="px-4 py-2 bg-surface border border-info/30 text-info-text rounded-lg text-sm hover:bg-info-bg disabled:opacity-50"
             >
               {exportEnCours ? 'Export en cours...' : '🧾 Exporter en PDF'}
             </button>
@@ -790,14 +790,14 @@ function CommandesPageInner() {
 
       {/* Panneau suggestions */}
       {showSuggestions && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-6">
+        <div className="bg-warning-bg border border-warning/20 rounded-xl p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h2 className="text-base font-semibold text-amber-800">
+              <h2 className="text-base font-semibold text-warning-text">
                 Médicaments en rupture ou sous seuil d'alerte
               </h2>
               {!loadingSugg && (
-                <p className="text-xs text-amber-600 mt-0.5">
+                <p className="text-xs text-warning-text mt-0.5">
                   {suggestions.length > 0
                     ? `${suggestions.length} médicament${suggestions.length > 1 ? 's' : ''} à commander`
                     : 'Aucun médicament sous seuil'}
@@ -808,30 +808,30 @@ function CommandesPageInner() {
               {suggestions.length > 0 && (
                 <button
                   onClick={utiliserSuggestions}
-                  className="px-3 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700">
+                  className="px-3 py-1.5 bg-warning text-white text-sm rounded-lg hover:bg-warning">
                   Utiliser ces suggestions →
                 </button>
               )}
               <button onClick={() => setShowSuggestions(false)}
-                className="text-amber-600 hover:text-amber-800 text-sm px-2">
+                className="text-warning-text hover:text-warning-text text-sm px-2">
                 ✕
               </button>
             </div>
           </div>
 
           {loadingSugg ? (
-            <p className="text-sm text-amber-600">Calcul en cours...</p>
+            <p className="text-sm text-warning-text">Calcul en cours...</p>
           ) : suggestions.length === 0 ? (
-            <p className="text-sm text-green-700">✓ Tous les médicaments sont au-dessus de leur seuil minimum.</p>
+            <p className="text-sm text-success">✓ Tous les médicaments sont au-dessus de leur seuil minimum.</p>
           ) : (
-            <div className="bg-surface rounded-lg overflow-hidden border border-amber-200">
+            <div className="bg-surface rounded-lg overflow-hidden border border-warning/20">
               <table className="w-full text-sm">
-                <thead className="bg-amber-100 border-b border-amber-200">
+                <thead className="bg-warning-bg border-b border-warning/20">
                   <tr>
-                    <th className="text-left px-4 py-3 text-amber-800 font-medium">Médicament</th>
-                    <th className="text-center px-4 py-3 text-amber-800 font-medium">Stock actuel</th>
-                    <th className="text-center px-4 py-3 text-amber-800 font-medium">Seuil minimum</th>
-                    <th className="text-center px-4 py-3 text-amber-800 font-medium">Qté à commander</th>
+                    <th className="text-left px-4 py-3 text-warning-text font-medium">Médicament</th>
+                    <th className="text-center px-4 py-3 text-warning-text font-medium">Stock actuel</th>
+                    <th className="text-center px-4 py-3 text-warning-text font-medium">Seuil minimum</th>
+                    <th className="text-center px-4 py-3 text-warning-text font-medium">Qté à commander</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -841,7 +841,7 @@ function CommandesPageInner() {
                       <td className={`px-4 py-3 text-center ${couleurStock(s.stockActuel)}`}>{s.stockActuel}</td>
                       <td className="px-4 py-3 text-center text-gray-600">{s.stockMinimum}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-1 rounded-full">
+                        <span className="bg-info-bg text-info-text text-xs font-semibold px-2 py-1 rounded-full">
                           {s.quantiteSuggeree}
                         </span>
                       </td>
@@ -896,7 +896,7 @@ function CommandesPageInner() {
               <label className="text-sm font-medium text-gray-700">Articles commandés *</label>
               {montantFormulaire > 0 && (
                 <span className="text-sm text-gray-500">
-                  Total estimé : <span className="font-semibold text-green-600">{formatMontant(montantFormulaire)}</span>
+                  Total estimé : <span className="font-semibold text-success">{formatMontant(montantFormulaire)}</span>
                 </span>
               )}
             </div>
@@ -949,7 +949,7 @@ function CommandesPageInner() {
                       <button
                         onClick={() => supprimerLigne(index)}
                         disabled={lignes.length === 1}
-                        className="text-red-400 hover:text-red-600 disabled:opacity-30 text-sm">
+                        className="text-danger/70 hover:text-danger disabled:opacity-30 text-sm">
                         ✕
                       </button>
                     </div>
@@ -960,13 +960,13 @@ function CommandesPageInner() {
 
             <button
               onClick={ajouterLigne}
-              className="mt-2 text-sm text-green-600 hover:text-green-800 font-medium">
+              className="mt-2 text-sm text-success hover:text-success font-medium">
               + Ajouter une ligne
             </button>
           </div>
 
           {erreur && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
+            <div className="bg-danger-bg border border-danger/20 text-danger px-4 py-3 rounded-lg text-sm mb-4">
               {erreur}
             </div>
           )}
@@ -1022,7 +1022,7 @@ function CommandesPageInner() {
                   key={cmd.id}
                   ref={cmd.id === commandeCibleId ? commandeCibleRef : undefined}
                   className={`border-b last:border-0 hover:bg-gray-50 ${
-                    cmd.id === commandeCibleId ? 'bg-amber-50 ring-2 ring-inset ring-amber-300' : ''
+                    cmd.id === commandeCibleId ? 'bg-warning-bg ring-2 ring-inset ring-amber-300' : ''
                   }`}
                 >
                   <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{formatDateTime(cmd.createdAt)}</td>
@@ -1037,19 +1037,19 @@ function CommandesPageInner() {
                     <div className="flex gap-2 justify-center">
                       {cmd.statut === 'BROUILLON' && (
                         <button onClick={() => changerStatut(cmd.id, 'ENVOYEE')}
-                          className="text-blue-600 hover:underline text-xs">
+                          className="text-info-text hover:underline text-xs">
                           Envoyer
                         </button>
                       )}
                       {cmd.statut === 'ENVOYEE' && (
                         <button onClick={() => ouvrirReception(cmd)}
-                          className="text-green-600 hover:underline text-xs">
+                          className="text-success hover:underline text-xs">
                           Réceptionner
                         </button>
                       )}
                       {cmd.statut !== 'ANNULEE' && cmd.statut !== 'RECUE' && (
                         <button onClick={() => changerStatut(cmd.id, 'ANNULEE')}
-                          className="text-red-600 hover:underline text-xs">
+                          className="text-danger hover:underline text-xs">
                           Annuler
                         </button>
                       )}
@@ -1111,7 +1111,7 @@ function CommandesPageInner() {
                           className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                         />
                         {estPeremptionProche(sl.datePeremption) && (
-                          <p className="text-xs text-amber-600 mt-1">
+                          <p className="text-xs text-warning-text mt-1">
                             ⚠ Péremption dans moins de 3 mois
                           </p>
                         )}
@@ -1129,7 +1129,7 @@ function CommandesPageInner() {
                       {l.sousLots.length > 1 && (
                         <button
                           onClick={() => supprimerSousLot(index, sousIndex)}
-                          className="text-red-400 hover:text-red-600 text-sm mt-5"
+                          className="text-danger/70 hover:text-danger text-sm mt-5"
                         >
                           ✕
                         </button>
@@ -1140,18 +1140,18 @@ function CommandesPageInner() {
 
                 <button
                   onClick={() => ajouterSousLot(index)}
-                  className="mt-2 text-xs text-green-600 hover:text-green-800 font-medium"
+                  className="mt-2 text-xs text-success hover:text-success font-medium"
                 >
                   + Ajouter un lot avec une autre date de péremption
                 </button>
 
                 {total < l.quantiteCommandee && (
-                  <p className="text-xs text-orange-500 mt-1">
+                  <p className="text-xs text-warning mt-1">
                     ⚠ Écart : {l.quantiteCommandee - total} unité(s) manquante(s)
                   </p>
                 )}
                 {total > l.quantiteCommandee && (
-                  <p className="text-xs text-blue-500 mt-1">
+                  <p className="text-xs text-info mt-1">
                     ⚠ Écart : {total - l.quantiteCommandee} unité(s) reçue(s) en plus de la commande
                   </p>
                 )}
@@ -1160,7 +1160,7 @@ function CommandesPageInner() {
           })}
 
           {erreurReception && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-danger-bg border border-danger/20 text-danger px-4 py-3 rounded-lg text-sm">
               {erreurReception}
             </div>
           )}
