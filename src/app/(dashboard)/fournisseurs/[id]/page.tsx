@@ -5,8 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatDateTime } from '@/lib/utils'
-import { Modal, useToast } from '@/components/ui'
 import { formaterNumeroFournisseur } from '@/lib/numerotation'
+import { Modal, useToast, Card, Button, Badge, BadgeStatutCommande, Input, EmptyState, Skeleton, SkeletonCard } from '@/components/ui'
 
 interface Commande {
   id: string
@@ -25,20 +25,6 @@ interface Fournisseur {
   delaiLivraison: number | null
   actif: boolean
   commandes: Commande[]
-}
-
-const STATUT_STYLE: Record<string, string> = {
-  BROUILLON: 'bg-gray-100 text-gray-600',
-  ENVOYEE:   'bg-blue-100 text-blue-700',
-  RECUE:     'bg-green-100 text-green-700',
-  ANNULEE:   'bg-red-100 text-red-700',
-}
-
-const STATUT_LABEL: Record<string, string> = {
-  BROUILLON: 'Brouillon',
-  ENVOYEE:   'Envoyée',
-  RECUE:     'Reçue',
-  ANNULEE:   'Annulée',
 }
 
 export default function FournisseurDetailPage() {
@@ -134,50 +120,57 @@ export default function FournisseurDetailPage() {
     }
   }
 
-  if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
+  // Lien retour uniformisé (Phase 5) — meme style que clients/[id] et
+  // medicaments/[id], affiche systematiquement.
+  const lienRetour = (
+    <Link href="/fournisseurs" className="text-sm text-gray-500 hover:text-mint-dark hover:underline mb-4 inline-block">
+      ← Retour aux fournisseurs
+    </Link>
+  )
+
+  if (loading) {
+    return (
+      <div className="p-8 max-w-3xl">
+        {lienRetour}
+        <Skeleton className="h-8 w-64 mb-6" />
+        <SkeletonCard />
+      </div>
+    )
+  }
+
   if (erreur || !fournisseur) {
     return (
       <div className="p-8">
-        <p className="text-danger mb-4">{erreur || 'Fournisseur introuvable'}</p>
-        <Link href="/fournisseurs" className="text-mint-dark hover:underline">← Retour aux fournisseurs</Link>
+        {lienRetour}
+        <p className="text-danger">{erreur || 'Fournisseur introuvable'}</p>
       </div>
     )
   }
 
   return (
     <div className="p-8 max-w-3xl">
-      <Link href="/fournisseurs" className="text-sm text-gray-500 hover:underline mb-4 inline-block">
-        ← Retour aux fournisseurs
-      </Link>
+      {lienRetour}
 
       <div className="flex justify-between items-start mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+          <h1 className="text-2xl font-semibold text-navy flex items-center gap-2">
             {fournisseur.nom}
             {formaterNumeroFournisseur(fournisseur.numeroFournisseur) && (
               <span className="text-sm text-gray-400 font-normal">{formaterNumeroFournisseur(fournisseur.numeroFournisseur)}</span>
             )}
-            {!fournisseur.actif && (
-              <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500 font-normal">Archivé</span>
-            )}
+            {!fournisseur.actif && <Badge variant="neutral">Archivé</Badge>}
           </h1>
         </div>
         {isAdmin && fournisseur.actif && (
           <div className="flex gap-2">
             {!modeEdition && (
-              <button
-                onClick={() => setModeEdition(true)}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200"
-              >
+              <Button variant="secondary" size="sm" onClick={() => setModeEdition(true)}>
                 Modifier
-              </button>
+              </Button>
             )}
-            <button
-              onClick={() => setConfirmArchiver(true)}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-red-50 text-danger hover:bg-red-100"
-            >
+            <Button variant="danger" size="sm" onClick={() => setConfirmArchiver(true)}>
               Archiver
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -193,102 +186,77 @@ export default function FournisseurDetailPage() {
         loading={archiving}
       />
 
-      <div className="bg-white rounded-card shadow p-6 mb-6">
+      <Card className="mb-6">
         {modeEdition ? (
           <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Nom *</label>
-              <input
-                type="text"
-                value={form.nom}
-                onChange={(e) => setForm({ ...form, nom: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Contact</label>
-              <input
-                type="text"
-                value={form.contact}
-                onChange={(e) => setForm({ ...form, contact: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-            </div>
+            <Input
+              label="Nom"
+              value={form.nom}
+              onChange={(e) => setForm({ ...form, nom: e.target.value })}
+            />
+            <Input
+              label="Contact"
+              value={form.contact}
+              onChange={(e) => setForm({ ...form, contact: e.target.value })}
+            />
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Téléphone</label>
-                <input
-                  type="text"
-                  value={form.telephone}
-                  onChange={(e) => setForm({ ...form, telephone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
-                <input
-                  type="text"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Délai de livraison habituel (jours)</label>
-              <input
-                type="number"
-                value={form.delaiLivraison}
-                onChange={(e) => setForm({ ...form, delaiLivraison: e.target.value })}
-                className="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              <Input
+                label="Téléphone"
+                value={form.telephone}
+                onChange={(e) => setForm({ ...form, telephone: e.target.value })}
+              />
+              <Input
+                label="Email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </div>
+            <Input
+              label="Délai de livraison habituel (jours)"
+              type="number"
+              value={form.delaiLivraison}
+              onChange={(e) => setForm({ ...form, delaiLivraison: e.target.value })}
+              className="w-40"
+            />
             <div className="flex gap-3 pt-2">
-              <button
-                onClick={enregistrer}
-                disabled={saving}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
-              >
-                {saving ? 'Enregistrement...' : 'Enregistrer'}
-              </button>
-              <button
-                onClick={() => { setModeEdition(false); charger() }}
-                className="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100"
-              >
+              <Button variant="primary" onClick={enregistrer} loading={saving}>
+                Enregistrer
+              </Button>
+              <Button variant="secondary" onClick={() => { setModeEdition(false); charger() }}>
                 Annuler
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-gray-500 mb-1">Contact</p>
-              <p className="text-gray-800">{fournisseur.contact || '—'}</p>
+              <p className="text-navy">{fournisseur.contact || '—'}</p>
             </div>
             <div>
               <p className="text-gray-500 mb-1">Téléphone</p>
-              <p className="text-gray-800">{fournisseur.telephone || '—'}</p>
+              <p className="text-navy">{fournisseur.telephone || '—'}</p>
             </div>
             <div>
               <p className="text-gray-500 mb-1">Email</p>
-              <p className="text-gray-800">{fournisseur.email || '—'}</p>
+              <p className="text-navy">{fournisseur.email || '—'}</p>
             </div>
             <div>
               <p className="text-gray-500 mb-1">Délai de livraison habituel</p>
-              <p className="text-gray-800">{fournisseur.delaiLivraison ? `${fournisseur.delaiLivraison} jour(s)` : '—'}</p>
+              <p className="text-navy">{fournisseur.delaiLivraison ? `${fournisseur.delaiLivraison} jour(s)` : '—'}</p>
             </div>
           </div>
         )}
-      </div>
+      </Card>
 
-      <div className="bg-white rounded-card shadow p-6">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Commandes récentes</h2>
+      <Card>
+        <h2 className="text-lg font-semibold text-navy mb-4">Commandes récentes</h2>
         {fournisseur.commandes.length === 0 ? (
-          <p className="text-sm text-gray-400">Aucune commande pour ce fournisseur pour l&apos;instant.</p>
+          <EmptyState icon="📦" title="Aucune commande pour l'instant" />
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b">
+              <tr className="border-b border-gray-100">
                 <th className="text-left py-2 text-gray-500 font-medium">Date</th>
                 <th className="text-left py-2 text-gray-500 font-medium">Statut</th>
                 <th className="text-right py-2 text-gray-500 font-medium">Montant</th>
@@ -296,14 +264,12 @@ export default function FournisseurDetailPage() {
             </thead>
             <tbody>
               {fournisseur.commandes.map((c) => (
-                <tr key={c.id} className="border-b last:border-0">
+                <tr key={c.id} className="border-b border-gray-100 last:border-0">
                   <td className="py-2 text-gray-600">{formatDateTime(c.createdAt)}</td>
                   <td className="py-2">
-                    <span className={`text-xs px-2 py-0.5 rounded ${STATUT_STYLE[c.statut] || 'bg-gray-100 text-gray-600'}`}>
-                      {STATUT_LABEL[c.statut] || c.statut}
-                    </span>
+                    <BadgeStatutCommande statut={c.statut} />
                   </td>
-                  <td className="py-2 text-right text-gray-800">{c.montantTotal.toLocaleString('fr-FR')} GNF</td>
+                  <td className="py-2 text-right text-navy">{c.montantTotal.toLocaleString('fr-FR')} GNF</td>
                 </tr>
               ))}
             </tbody>
@@ -315,7 +281,7 @@ export default function FournisseurDetailPage() {
         >
           Voir toutes les commandes →
         </Link>
-      </div>
+      </Card>
     </div>
   )
 }

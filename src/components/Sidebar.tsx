@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
@@ -75,7 +76,7 @@ const menuGroups: MenuGroup[] = [
     // Parametres reste visible pour un CAISSIER (Phase 4, 23/07/2026) —
     // il peut changer le format de recu, l'API bloque tout le reste en
     // lecture seule pour lui (voir /api/parametres PATCH)
-    label: 'GESTION',
+    label: 'COMPTE',
     items: [
       { href: '/parametres', label: 'Paramètres', icon: '⚙️' },
       { href: '/aide',       label: 'Aide',        icon: '❓' },
@@ -100,6 +101,17 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { data: session, status } = useSession()
   const { theme, toggleTheme } = useTheme()
+  // Le serveur ne connait jamais le theme (pas d'acces a localStorage
+  // cote SSR) et rend donc toujours comme si theme='light' — le client,
+  // lui, le sait deja des le premier rendu grace au script anti-flash.
+  // Afficher l'icone/texte dependant du theme avant que ce decalage ne
+  // soit resolu cause une erreur d'hydratation React (repere le
+  // 02/08/2026 : "Server: 🌙 Client: ☀️"). On attend le montage cote
+  // client (un effet ne s'execute jamais pendant le rendu serveur) avant
+  // d'afficher la vraie valeur, avec un rendu neutre identique
+  // serveur/client entre-temps.
+  const [monte, setMonte] = useState(false)
+  useEffect(() => { setMonte(true) }, [])
   // Tant que la session charge, on ne SAIT PAS encore si c'est un
   // CAISSIER — traiter ce cas comme "restreint par defaut" plutot que
   // "autorise par defaut" evite le flash des liens Personnel/Rapports
@@ -234,8 +246,8 @@ export default function Sidebar() {
           onMouseEnter={e => (e.currentTarget.style.color = '#ffffff')}
           onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.40)')}
         >
-          <span>{theme === 'dark' ? '☀️' : '🌙'}</span>
-          {theme === 'dark' ? 'Thème clair' : 'Thème sombre'}
+          <span>{monte ? (theme === 'dark' ? '☀️' : '🌙') : '🌙'}</span>
+          {monte ? (theme === 'dark' ? 'Thème clair' : 'Thème sombre') : 'Thème sombre'}
         </button>
 
         <button
