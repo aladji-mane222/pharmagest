@@ -225,7 +225,10 @@ export async function GET(request: Request) {
           type: 'BACKUP_ECHEC',
           titre: 'Échec de sauvegarde répété',
           message: `La sauvegarde de ${pharmacie.nom} a échoué ${nbEchecRecents} fois en 48h`,
-          lien: '/superadmin',
+          // lien unique par pharmacie — meme correctif que cron/alertes,
+          // sans ca 2 pharmacies en echec de backup en meme temps se
+          // bloqueraient mutuellement via la dedup.
+          lien: `/superadmin?pharmacie=${pharmacie.id}`,
         })
       }
 

@@ -116,7 +116,12 @@ export async function GET(request: Request) {
             type: 'SESSION_CAISSE_LONGUE',
             titre: 'Session de caisse ouverte trop longtemps',
             message: `La session de ${s.user.nom} est ouverte depuis plus de ${pharmacie.dureeMaxSessionCaisseH}h`,
-            lien: '/caisse',
+            // lien inclut l'id de session : sans ca, 2 sessions longues
+            // distinctes le meme jour se bloqueraient mutuellement via la
+            // dedup (qui compare userId+type+lien) — seule la premiere
+            // aurait notifie l'admin, la seconde aurait ete supprimee a
+            // tort. Trouve en audit le 30/07/2026.
+            lien: `/caisse?session=${s.id}`,
           })
         }
       }
@@ -135,7 +140,10 @@ export async function GET(request: Request) {
         type: 'PERMISSION_EXPIRE_BIENTOT',
         titre: 'Un de tes droits expire bientôt',
         message: `Ton droit "${p.type}" expire le ${p.expireLe!.toLocaleDateString('fr-FR')}`,
-        lien: '/profil',
+        // meme raison que SESSION_CAISSE_LONGUE ci-dessus : lien unique
+        // par permission pour ne pas que 2 droits expirant la meme
+        // semaine se masquent mutuellement.
+        lien: `/profil?permission=${p.id}`,
       })
     }
 
@@ -154,7 +162,10 @@ export async function GET(request: Request) {
       type: 'LICENCE_EXPIRE_BIENTOT',
       titre: 'Licence bientôt expirée',
       message: `La licence de ${p.nom} expire le ${p.licenceExpire!.toLocaleDateString('fr-FR')}`,
-      lien: '/superadmin',
+      // lien inclut l'id de pharmacie : meme correctif que plus haut,
+      // sans ca 2 pharmacies dont la licence expire la meme periode se
+      // bloqueraient mutuellement via la dedup.
+      lien: `/superadmin?pharmacie=${p.id}`,
     })
   }
 
