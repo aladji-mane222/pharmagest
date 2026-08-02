@@ -125,7 +125,7 @@ export default function DepensesPage() {
           <select
             value={categorieFiltre}
             onChange={(e) => setCategorieFiltre(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint bg-white text-gray-700"
+            className="px-4 py-2 border border-gray-300 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint bg-surface text-gray-700"
           >
             <option value="">Toutes categories</option>
             {CATEGORIES_STANDARD.map((cat) => (

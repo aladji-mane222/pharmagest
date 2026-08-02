@@ -178,7 +178,7 @@ function AutocompleteMedicament({
         className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
       />
       {ouvert && resultats.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-surface border border-gray-200 rounded-lg shadow-lg">
           {resultats.map((m) => (
             <button
               key={m.id}
@@ -199,7 +199,7 @@ function AutocompleteMedicament({
         </div>
       )}
       {ouvert && texte.trim().length > 0 && resultats.length === 0 && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-sm text-gray-400">
+        <div className="absolute z-20 mt-1 w-full bg-surface border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-sm text-gray-400">
           Aucun médicament trouvé
         </div>
       )}
@@ -773,14 +773,14 @@ function CommandesPageInner() {
             <button
               onClick={() => lancerExport('csv')}
               disabled={exportEnCours}
-              className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50 disabled:opacity-50"
+              className="px-4 py-2 bg-surface border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50 disabled:opacity-50"
             >
               {exportEnCours ? 'Export en cours...' : '📄 Exporter en CSV'}
             </button>
             <button
               onClick={() => lancerExport('pdf')}
               disabled={exportEnCours}
-              className="px-4 py-2 bg-white border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50 disabled:opacity-50"
+              className="px-4 py-2 bg-surface border border-blue-300 text-blue-700 rounded-lg text-sm hover:bg-blue-50 disabled:opacity-50"
             >
               {exportEnCours ? 'Export en cours...' : '🧾 Exporter en PDF'}
             </button>
@@ -824,7 +824,7 @@ function CommandesPageInner() {
           ) : suggestions.length === 0 ? (
             <p className="text-sm text-green-700">✓ Tous les médicaments sont au-dessus de leur seuil minimum.</p>
           ) : (
-            <div className="bg-white rounded-lg overflow-hidden border border-amber-200">
+            <div className="bg-surface rounded-lg overflow-hidden border border-amber-200">
               <table className="w-full text-sm">
                 <thead className="bg-amber-100 border-b border-amber-200">
                   <tr>
@@ -856,7 +856,7 @@ function CommandesPageInner() {
 
       {/* Formulaire nouvelle commande */}
       {showForm && (
-        <div className="bg-white rounded-xl shadow p-6 mb-6">
+        <div className="bg-surface rounded-xl shadow p-6 mb-6">
           <h2 className="font-semibold text-gray-700 mb-4">Nouvelle commande</h2>
 
           {/* Fournisseur */}
@@ -974,13 +974,18 @@ function CommandesPageInner() {
           <div className="flex gap-3">
             <button
               onClick={creerCommande}
-              disabled={saving}
-              className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium">
+              disabled={saving || lignes.every((l) => !l.medicamentId || !l.quantite || !l.prixUnitaire)}
+              title={
+                lignes.every((l) => !l.medicamentId || !l.quantite || !l.prixUnitaire)
+                  ? 'Ajoute au moins une ligne complète (médicament, quantité, prix) avant de créer la commande'
+                  : undefined
+              }
+              className="bg-mint text-navy dark:text-[#0D2847] px-6 py-2 rounded-card hover:bg-mint-dark disabled:opacity-40 disabled:cursor-not-allowed font-medium">
               {saving ? 'Création...' : 'Créer la commande'}
             </button>
             <button
               onClick={() => { setShowForm(false); setErreur(null); setLignes([{ medicamentId: '', quantite: '1', prixUnitaire: '' }]) }}
-              className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-200">
+              className="bg-surface text-navy border border-navy/20 px-6 py-2 rounded-card hover:bg-app-bg">
               Annuler
             </button>
           </div>

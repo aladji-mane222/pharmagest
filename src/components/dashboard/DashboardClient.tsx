@@ -45,24 +45,24 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow p-6 border-l-4 border-green-500">
+        <div className="bg-surface rounded-xl shadow p-6 border-l-4 border-green-500">
           <p className="text-sm text-gray-500 font-medium">CA du jour (Live)</p>
           <p className="text-2xl font-bold text-green-600 mt-1">
             {formatMontant(sseData?.caJour ?? initialData.caJour)}
           </p>
           <p className="text-xs text-gray-400 mt-1">{sseData?.nbVentes ?? 0} ventes aujourd'hui</p>
         </div>
-        <div className="bg-white rounded-xl shadow p-6 border-l-4 border-blue-500">
+        <div className="bg-surface rounded-xl shadow p-6 border-l-4 border-blue-500">
           <p className="text-sm text-gray-500 font-medium">CA du mois</p>
           <p className="text-2xl font-bold text-blue-600 mt-1">{formatMontant(initialData.caMois)}</p>
         </div>
-        <div className="bg-white rounded-xl shadow p-6 border-l-4 border-orange-500">
+        <div className="bg-surface rounded-xl shadow p-6 border-l-4 border-orange-500">
           <p className="text-sm text-gray-500 font-medium">Stock bas</p>
           <p className="text-2xl font-bold text-orange-500 mt-1">
             {sseData?.stockBas ?? initialData.stockBas} medicaments
           </p>
         </div>
-        <div className="bg-white rounded-xl shadow p-6 border-l-4 border-red-500">
+        <div className="bg-surface rounded-xl shadow p-6 border-l-4 border-red-500">
           <p className="text-sm text-gray-500 font-medium">Peremptions 90j</p>
           <p className="text-2xl font-bold text-red-500 mt-1">{initialData.peremptions} lots</p>
         </div>

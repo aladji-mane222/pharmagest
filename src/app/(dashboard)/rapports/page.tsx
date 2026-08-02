@@ -9,7 +9,7 @@ import BeneficeEvolutionChart from '@/components/rapports/BeneficeEvolutionChart
 import DepensesCategorieChart from '@/components/rapports/DepensesCategorieChart'
 import ExportPanel, { type SectionExportOption } from '@/components/rapports/ExportPanel'
 import Link from 'next/link'
-import { Card, PageHeader, Button, Select } from '@/components/ui'
+import { PageHeader, Button, Select } from '@/components/ui'
 
 type TypeRapport = 'ventes' | 'stock' | 'benefice' | 'credits' | 'commandes' | 'depenses'
 
@@ -346,7 +346,7 @@ export default function RapportsPage() {
       />
 
       {kpi && (
-        <div className="bg-white rounded-card shadow-sm border border-gray-100 p-6 mb-6">
+        <div className="bg-surface rounded-card shadow-sm border border-gray-100 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-700 text-sm">Ce mois-ci</h2>
             <span className="text-xs text-gray-400">vs mois précédent</span>
@@ -380,7 +380,7 @@ export default function RapportsPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-card shadow-sm border border-gray-100 p-6 mb-6">
+      <div className="bg-surface rounded-card shadow-sm border border-gray-100 p-6 mb-6">
         <div className="grid grid-cols-4 gap-4 items-end">
           <Select label="Type de rapport" value={type} onChange={(e) => setType(e.target.value as TypeRapport)}>
             <option value="benefice">Benefice net</option>
@@ -423,7 +423,7 @@ export default function RapportsPage() {
       </div>
 
       {data && (
-        <div className="bg-white rounded-card shadow-sm border border-gray-100 p-6">
+        <div className="bg-surface rounded-card shadow-sm border border-gray-100 p-6">
           <div className="flex justify-end mb-4">
             {sectionsExportDisponibles.length > 0 ? (
               <ExportPanel

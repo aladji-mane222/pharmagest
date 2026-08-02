@@ -47,7 +47,7 @@ export default function ExportPanel({
       </button>
 
       {ouvert && (
-        <div className="absolute right-0 z-10 mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
+        <div className="absolute right-0 z-10 mt-2 w-72 bg-surface border border-gray-200 rounded-lg shadow-lg p-4">
           <p className="text-xs font-medium text-gray-600 mb-2">Sections à inclure</p>
           <div className="space-y-2 mb-3">
             {sections.map((s) => (

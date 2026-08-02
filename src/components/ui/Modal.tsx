@@ -1,4 +1,3 @@
-
 'use client'
 
 import { ReactNode, useEffect } from 'react'
@@ -88,7 +87,7 @@ export default function Modal({
         onClick={() => !loading && onClose()}
       />
 
-      <div className={`relative bg-white rounded-card shadow-lg w-full ${TAILLES[size]} max-h-[90vh] flex flex-col`}>
+      <div className={`relative bg-surface rounded-card shadow-lg w-full ${TAILLES[size]} max-h-[90vh] flex flex-col`}>
         <div className="flex items-start gap-3 p-6 pb-2 shrink-0">
           {variant === 'danger' && (
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger-bg text-danger text-lg">

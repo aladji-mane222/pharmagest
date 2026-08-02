@@ -15,8 +15,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary:   'bg-mint text-navy hover:bg-mint-dark',
-  secondary: 'bg-white text-navy border border-navy/20 hover:bg-app-bg',
+  // text-navy est theme-reactif (devient clair en sombre) car utilise
+  // partout comme couleur de texte principale — mais ICI le fond reste
+  // mint (vif) dans les deux themes, donc on fige le texte en fonce avec
+  // dark:text-[#0D2847] pour ne pas perdre le contraste en theme sombre.
+  primary:   'bg-mint text-navy dark:text-[#0D2847] hover:bg-mint-dark',
+  secondary: 'bg-surface text-navy border border-navy/20 hover:bg-app-bg',
   danger:    'bg-danger text-white hover:bg-danger/90',
   ghost:     'bg-transparent text-navy hover:bg-navy/5',
 }

@@ -77,7 +77,7 @@ export default async function DashboardPage() {
           </p>
           <a
             href="/dashboard"
-            className="inline-block bg-mint text-navy rounded-card px-4 py-2 text-sm font-medium hover:bg-mint-dark hover:text-white transition-colors"
+            className="inline-block bg-mint text-navy dark:text-[#0D2847] rounded-card px-4 py-2 text-sm font-medium hover:bg-mint-dark hover:text-white transition-colors"
           >
             Réessayer
           </a>

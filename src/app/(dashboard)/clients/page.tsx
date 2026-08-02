@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react'
 import { formatMontant } from '@/lib/utils'
 import ImportModal, { ImportField } from '@/components/ui/ImportModal'
 import { formaterNumeroClient } from '@/lib/numerotation'
-import { useToast, Button, Card, PageHeader, EmptyState, Badge, Input, SkeletonTable } from '@/components/ui'
+import { Modal, useToast, Button, Card, PageHeader, EmptyState, Badge, Input, SkeletonTable } from '@/components/ui'
 
 interface Client {
   id: string
@@ -36,6 +36,8 @@ export default function ClientsPage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ nom: '', telephone: '', email: '', plafondCredit: '50000' })
   const [importOuvert, setImportOuvert] = useState(false)
+  const [confirmArchiverId, setConfirmArchiverId] = useState<string | null>(null)
+  const [archivingId, setArchivingId] = useState<string | null>(null)
   const { showToast } = useToast()
 
   const chargerClients = () => {
@@ -50,7 +52,23 @@ export default function ClientsPage() {
   useEffect(() => {
     const timer = setTimeout(chargerClients, 300)
     return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search])
+
+  const doArchiver = async () => {
+    if (!confirmArchiverId) return
+    setArchivingId(confirmArchiverId)
+    const res = await fetch(`/api/clients/${confirmArchiverId}`, { method: 'DELETE' })
+    if (res.ok) {
+      setClients(clients.filter((c) => c.id !== confirmArchiverId))
+      showToast('Client archivé', 'success')
+    } else {
+      const json = await res.json().catch(() => ({}))
+      showToast(json.error || 'Erreur lors de l\'archivage', 'error')
+    }
+    setArchivingId(null)
+    setConfirmArchiverId(null)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -208,12 +226,22 @@ export default function ClientsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Link
-                        href={`/clients/${c.id}`}
-                        className="text-mint-dark hover:underline text-xs font-medium whitespace-nowrap"
-                      >
-                        Voir fiche →
-                      </Link>
+                      <div className="flex justify-end items-center gap-3">
+                        {isAdmin && c.soldeCredit === 0 && (
+                          <button
+                            onClick={() => setConfirmArchiverId(c.id)}
+                            className="text-xs font-medium text-danger hover:underline whitespace-nowrap"
+                          >
+                            Archiver
+                          </button>
+                        )}
+                        <Link
+                          href={`/clients/${c.id}`}
+                          className="text-mint-dark hover:underline text-xs font-medium whitespace-nowrap"
+                        >
+                          Voir fiche →
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -222,6 +250,17 @@ export default function ClientsPage() {
           </table>
         )}
       </Card>
+
+      <Modal
+        open={!!confirmArchiverId}
+        onClose={() => setConfirmArchiverId(null)}
+        onConfirm={doArchiver}
+        title="Archiver ce client ?"
+        description="Il ne sera plus visible dans la liste active. Cette action est réversible en base si besoin."
+        variant="danger"
+        confirmLabel="Archiver"
+        loading={!!archivingId}
+      />
     </div>
   )
 }

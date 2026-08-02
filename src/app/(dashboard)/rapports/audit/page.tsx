@@ -326,7 +326,7 @@ export default function AuditPage() {
       />
 
       {/* Barre de filtres */}
-      <div className="bg-white rounded-card shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap items-end gap-4">
+      <div className="bg-surface rounded-card shadow-sm border border-gray-100 p-4 mb-6 flex flex-wrap items-end gap-4">
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Action</label>
           <select
@@ -375,7 +375,7 @@ export default function AuditPage() {
       {/* Modal détail */}
       {selected && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] flex flex-col">
+          <div className="bg-surface rounded-xl w-full max-w-lg max-h-[85vh] flex flex-col">
             <div className="flex justify-between items-center p-6 pb-2 shrink-0">
               <h2 className="text-lg font-bold">{LABELS_ACTIONS[selected.action] ?? selected.action}</h2>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>

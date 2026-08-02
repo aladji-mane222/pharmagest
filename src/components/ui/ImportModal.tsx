@@ -309,7 +309,7 @@ export default function ImportModal({
     >
       <div className="absolute inset-0 bg-navy/40" onClick={() => !chargement && fermer()} />
 
-      <div className="relative bg-white rounded-card shadow-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-surface rounded-card shadow-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 id="import-modal-title" className="text-lg font-semibold text-navy">{title}</h2>
           <button onClick={fermer} className="text-gray-400 hover:text-gray-600 text-xl leading-none" aria-label="Fermer">×</button>

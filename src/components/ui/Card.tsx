@@ -16,7 +16,7 @@ const paddingClasses = {
 
 /**
  * Conteneur standard PharmaGest — fond blanc, rayon 14px, ombre légère.
- * Remplace les <div className="bg-white rounded-xl shadow ..."> dupliqués
+ * Remplace les <div className="bg-surface rounded-xl shadow ..."> dupliqués
  * un peu différemment sur chaque page.
  */
 export default function Card({
@@ -29,7 +29,7 @@ export default function Card({
   return (
     <div
       className={cn(
-        'bg-white rounded-card shadow-sm border border-gray-100',
+        'bg-surface rounded-card shadow-sm border border-gray-100',
         hover && 'transition-shadow hover:shadow-md',
         paddingClasses[padding],
         className

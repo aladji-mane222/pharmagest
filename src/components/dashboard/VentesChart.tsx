@@ -21,7 +21,7 @@ export default function VentesChart() {
   if (donnees.length === 0) return null
 
   return (
-    <div className="bg-white rounded-xl shadow p-6 mb-6">
+    <div className="bg-surface rounded-xl shadow p-6 mb-6">
       <h2 className="font-semibold text-gray-700 mb-4">CA des 7 derniers jours</h2>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={donnees}>

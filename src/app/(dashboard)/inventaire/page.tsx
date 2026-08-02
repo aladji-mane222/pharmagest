@@ -342,7 +342,7 @@ export default function InventairePage() {
                             placeholder="Motif obligatoire…"
                             className={`w-full px-3 py-1 border rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 text-sm ${
                               motifManquant
-                                ? 'border-danger bg-white ring-1 ring-danger/30'
+                                ? 'border-danger bg-surface ring-1 ring-danger/30'
                                 : 'border-gray-300'
                             }`}
                           />

@@ -2,7 +2,7 @@ import { InputHTMLAttributes, SelectHTMLAttributes, forwardRef, ReactNode } from
 import { cn } from './cn'
 
 const fieldBaseClasses =
-  'w-full rounded-card border px-3 py-2.5 text-sm text-navy transition-colors ' +
+  'w-full rounded-card border px-3 py-2.5 text-sm text-navy bg-surface transition-colors ' +
   'focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint ' +
   'disabled:bg-gray-50 disabled:text-gray-400'
 
@@ -75,7 +75,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     <FieldWrapper label={label} error={error} hint={hint} required={required}>
       <select
         ref={ref}
-        className={cn(fieldBaseClasses, 'bg-white', error ? 'border-danger' : 'border-gray-200', className)}
+        className={cn(fieldBaseClasses, 'bg-surface', error ? 'border-danger' : 'border-gray-200', className)}
         {...rest}
       >
         {children}
