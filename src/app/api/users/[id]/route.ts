@@ -23,6 +23,15 @@ export async function PATCH(
   })
   if (!user) return apiError('Utilisateur non trouve', 404)
 
+  // Un ADMIN ne peut jamais modifier un SUPER_ADMIN (changer son role,
+  // le desactiver, reinitialiser son mot de passe...) — meme si la
+  // liste /personnel ne l'affiche plus, on bloque aussi cote API par
+  // securite au cas ou l'id serait connu/devine. Seul un autre
+  // SUPER_ADMIN peut modifier un SUPER_ADMIN. Corrige le 31/07/2026.
+  if (user.role === 'SUPER_ADMIN' && session.user.role !== 'SUPER_ADMIN') {
+    return apiError('Acces refuse', 403)
+  }
+
   // Empêcher de se désactiver soi-même
   if (params.id === session.user.id) {
     return apiError('Vous ne pouvez pas modifier votre propre compte ici', 400)

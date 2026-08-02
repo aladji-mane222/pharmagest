@@ -1,9 +1,11 @@
+// CIBLE: src/app/(dashboard)/personnel/page.tsx
+
 'use client'
 
 import { useEffect, useState, Fragment } from 'react'
 import { useSession } from 'next-auth/react'
 import { formatDateTime } from '@/lib/utils'
-import { useToast, Card, PageHeader, Button, Input, Select, Badge, EmptyState, SkeletonTable } from '@/components/ui'
+import { Modal, useToast, Card, PageHeader, Button, Input, Select, Badge, EmptyState, SkeletonTable } from '@/components/ui'
 
 interface User {
   id: string
@@ -59,6 +61,12 @@ export default function PersonnelPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState({ nom: '', role: '' })
   const [editSaving, setEditSaving] = useState(false)
+
+  // Réinitialisation de mot de passe (admin -> autre compte)
+  const [resetPourUser, setResetPourUser] = useState<User | null>(null)
+  const [nouveauMdp, setNouveauMdp] = useState('')
+  const [resetSaving, setResetSaving] = useState(false)
+  const [resetErreur, setResetErreur] = useState('')
 
   // Panneau permissions supplémentaires
   const [permissionsOuvertPour, setPermissionsOuvertPour] = useState<string | null>(null)
@@ -135,6 +143,31 @@ export default function PersonnelPage() {
     } else {
       showToast(json.error ?? 'Erreur lors de la mise à jour', 'error')
     }
+  }
+
+  // ── Réinitialisation de mot de passe ──
+  const reinitialiserMotDePasse = async () => {
+    if (!resetPourUser) return
+    setResetErreur('')
+    if (nouveauMdp.length < 6) {
+      setResetErreur('Le nouveau mot de passe doit contenir au moins 6 caractères')
+      return
+    }
+    setResetSaving(true)
+    const res = await fetch(`/api/users/${resetPourUser.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nouveauMotDePasse: nouveauMdp }),
+    })
+    const json = await res.json()
+    if (res.ok) {
+      showToast(`Mot de passe de ${resetPourUser.nom} réinitialisé`, 'success')
+      setResetPourUser(null)
+      setNouveauMdp('')
+    } else {
+      setResetErreur(json.error ?? 'Erreur lors de la réinitialisation')
+    }
+    setResetSaving(false)
   }
 
   // ── Permissions supplémentaires ──
@@ -319,15 +352,16 @@ export default function PersonnelPage() {
         {users.length === 0 ? (
           <EmptyState icon="👤" title="Aucun compte" />
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-app-bg border-b border-gray-100">
               <tr>
-                <th className="text-left px-6 py-3 text-gray-600">Nom</th>
-                <th className="text-left px-6 py-3 text-gray-600">Email</th>
-                <th className="text-left px-6 py-3 text-gray-600">Rôle</th>
-                <th className="text-left px-6 py-3 text-gray-600">Créé le</th>
-                <th className="text-center px-6 py-3 text-gray-600">Statut</th>
-                <th className="text-right px-6 py-3 text-gray-600">Actions</th>
+                <th className="text-left px-6 py-3 text-gray-600 whitespace-nowrap">Nom</th>
+                <th className="text-left px-6 py-3 text-gray-600 whitespace-nowrap">Email</th>
+                <th className="text-left px-6 py-3 text-gray-600 whitespace-nowrap">Rôle</th>
+                <th className="text-left px-6 py-3 text-gray-600 whitespace-nowrap">Créé le</th>
+                <th className="text-center px-6 py-3 text-gray-600 whitespace-nowrap">Statut</th>
+                <th className="text-right px-6 py-3 text-gray-600 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -394,7 +428,7 @@ export default function PersonnelPage() {
                       {isMoi ? (
                         <span className="text-xs text-gray-300 italic">—</span>
                       ) : isEditing ? (
-                        <div className="flex justify-end gap-2">
+                        <div className="flex flex-wrap justify-end gap-2">
                           <Button variant="primary" size="sm" onClick={() => saveEdit(u.id)} loading={editSaving}>
                             Sauvegarder
                           </Button>
@@ -403,7 +437,7 @@ export default function PersonnelPage() {
                           </Button>
                         </div>
                       ) : (
-                        <div className="flex justify-end gap-2">
+                        <div className="flex flex-wrap justify-end gap-2">
                           {u.role === 'CAISSIER' && u.actif && (
                             <Button
                               variant={permissionsOuvertes ? 'primary' : 'secondary'}
@@ -415,6 +449,9 @@ export default function PersonnelPage() {
                           )}
                           <Button variant="secondary" size="sm" onClick={() => startEdit(u)}>
                             Modifier
+                          </Button>
+                          <Button variant="secondary" size="sm" onClick={() => { setResetPourUser(u); setNouveauMdp(''); setResetErreur('') }}>
+                            Mot de passe
                           </Button>
                           <Button variant={u.actif ? 'danger' : 'secondary'} size="sm" onClick={() => toggleActif(u)}>
                             {u.actif ? 'Désactiver' : 'Réactiver'}
@@ -500,8 +537,29 @@ export default function PersonnelPage() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
+
+      <Modal
+        open={!!resetPourUser}
+        onClose={() => setResetPourUser(null)}
+        onConfirm={reinitialiserMotDePasse}
+        title={`Réinitialiser le mot de passe de ${resetPourUser?.nom ?? ''}`}
+        description="Le nouveau mot de passe prend effet immédiatement — pense à le communiquer à la personne concernée."
+        variant="default"
+        confirmLabel="Réinitialiser"
+        loading={resetSaving}
+      >
+        <Input
+          label="Nouveau mot de passe"
+          type="password"
+          value={nouveauMdp}
+          onChange={(e) => setNouveauMdp(e.target.value)}
+          placeholder="Minimum 6 caractères"
+        />
+        {resetErreur && <p className="text-danger text-sm mt-2">{resetErreur}</p>}
+      </Modal>
     </div>
   )
 }

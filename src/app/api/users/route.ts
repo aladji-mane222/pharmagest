@@ -12,7 +12,12 @@ export async function GET() {
   if (session.user.role === 'CAISSIER') return apiError('Acces refuse', 403)
 
   const users = await prisma.user.findMany({
-    where: { pharmacieId: session.user.pharmacieId },
+    // SUPER_ADMIN exclu : ce n'est pas un membre du personnel de CETTE
+    // pharmacie, meme si son compte technique y est rattache (contrainte
+    // de schema — voir memoire du projet). Un ADMIN ne doit ni le voir
+    // ni pouvoir le modifier ici. Corrige le 31/07/2026 suite a un vrai
+    // signalement : un admin pouvait modifier/desactiver un SUPER_ADMIN.
+    where: { pharmacieId: session.user.pharmacieId, role: { not: 'SUPER_ADMIN' } },
     select: { id: true, nom: true, email: true, role: true, actif: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
   })
