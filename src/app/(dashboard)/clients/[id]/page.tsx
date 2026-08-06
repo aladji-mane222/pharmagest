@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -331,8 +330,14 @@ export default function ClientDetailPage() {
         </Card>
       </div>
 
-      {/* Section remboursement */}
-      {isAdmin && client.actif && client.soldeCredit > 0 && (
+      {/* Section remboursement — ouverte a CAISSIER et ADMIN (decision
+          Phase 5, RECAP-COMPLET.md : "le caissier est souvent seul sur
+          place, doit pouvoir voir les credits, faire les relances et les
+          remboursements"). Corrige le 06/08/2026 : cette section etait
+          restee gatee isAdmin depuis le code d'origine (Session C,
+          30/06/2026), la decision Phase 5 n'ayant debloque que le
+          middleware de /credits, pas ce formulaire. */}
+      {client.actif && client.soldeCredit > 0 && (
         <Card className="mb-6">
           <h2 className="font-semibold text-navy mb-4">Enregistrer un remboursement</h2>
           <div className="grid grid-cols-3 gap-4">
