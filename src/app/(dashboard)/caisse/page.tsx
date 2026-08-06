@@ -156,10 +156,10 @@ export default function CaissePage() {
   if (loading) return <div className="p-8 text-gray-400">Chargement...</div>
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <PageHeader title="Caisse" description="Ouverture, cloture et suivi des sessions" />
 
-      <div className="grid grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
 
         {/* ── Session actuelle ── */}
         <Card>
@@ -218,7 +218,7 @@ export default function CaissePage() {
               </div>
 
               {/* Clôture */}
-              <div className="flex gap-3 mb-3">
+              <div className="flex flex-col sm:flex-row gap-3 mb-3">
                 <input
                   type="number"
                   placeholder="Montant compté en caisse"
@@ -227,7 +227,7 @@ export default function CaissePage() {
                   onWheel={(e) => (e.target as HTMLInputElement).blur()}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
-                <Button variant="danger" onClick={() => setConfirmFermer(true)} loading={saving}>
+                <Button variant="danger" onClick={() => setConfirmFermer(true)} loading={saving} className="sm:w-auto w-full">
                   Fermer
                 </Button>
               </div>
@@ -263,7 +263,7 @@ export default function CaissePage() {
               <div className="flex items-center gap-2 mb-4">
                 <Badge variant="neutral">Aucune session ouverte</Badge>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="number"
                   placeholder="Montant d'ouverture"
@@ -272,7 +272,7 @@ export default function CaissePage() {
                   onWheel={(e) => (e.target as HTMLInputElement).blur()}
                   className="flex-1 px-4 py-2 border border-gray-200 rounded-card focus:outline-none focus:ring-2 focus:ring-mint/50 focus:border-mint"
                 />
-                <Button variant="primary" onClick={ouvrirSession} loading={saving}>
+                <Button variant="primary" onClick={ouvrirSession} loading={saving} className="sm:w-auto w-full">
                   Ouvrir
                 </Button>
               </div>
