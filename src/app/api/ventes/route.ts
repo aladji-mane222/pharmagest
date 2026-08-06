@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { verifierSessionCaisseLongue } from '@/lib/session-caisse-longue'
 import { Prisma, ModePaiement } from '@prisma/client'
 import { apiError, apiSuccess } from '@/lib/utils'
 import { decrementerLotFifo } from '@/lib/fifo'
@@ -336,6 +337,18 @@ export async function POST(request: Request) {
     userId,
     pharmacieId,
   })
+
+  // Declencheur reactif (Phase 6BIS-A.2, 06/08/2026) : verifie tout de
+  // suite si LA session caisse utilisee pour cette vente depasse le seuil
+  // configure, plutot que d'attendre le cron du lendemain 7h. Enveloppe
+  // dans un try/catch dedie : une erreur ici (ex: notification en echec)
+  // ne doit jamais faire echouer une vente deja enregistree en base — le
+  // caissier doit repartir avec sa vente validee dans tous les cas.
+  try {
+    await verifierSessionCaisseLongue(sessionCaisse.id)
+  } catch (err) {
+    console.error('Verification session caisse longue (declencheur vente) echouee:', err)
+  }
 
   if (clientId && statut === 'PARTIELLE') {
     const resteADoit = montantTotal - montantPayeFloat

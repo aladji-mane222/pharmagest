@@ -3,6 +3,7 @@ import { apiError, apiSuccess } from '@/lib/utils'
 import { envoyerEmail, templateAlertStock } from '@/lib/email'
 import { envoyerRelancesCredit, TypeRelance } from '@/lib/cron/relances'
 import { notifierSiPasDejaEnAttente, notifierSuperAdminsSiPasDejaEnAttente } from '@/lib/notifications'
+import { verifierSessionsCaisseLonguesPharmacie } from '@/lib/session-caisse-longue'
 
 export async function GET(request: Request) {
   // ── Auth CRON_SECRET (pas de session NextAuth — cron Vercel automatique) ──
@@ -104,28 +105,12 @@ export async function GET(request: Request) {
     }
 
     // ── 6. Sessions de caisse restées ouvertes trop longtemps ────────────────
-    if (pharmacie.dureeMaxSessionCaisseH) {
-      const seuil = new Date(now.getTime() - pharmacie.dureeMaxSessionCaisseH * 60 * 60 * 1000)
-      const sessionsLongues = await prisma.sessionCaisse.findMany({
-        where: { pharmacieId: pharmacie.id, dateCloture: null, actif: true, dateOuverture: { lte: seuil } },
-        include: { user: { select: { nom: true } } },
-      })
-      for (const s of sessionsLongues) {
-        for (const admin of adminsPharmacie) {
-          await notifierSiPasDejaEnAttente(admin.id, {
-            type: 'SESSION_CAISSE_LONGUE',
-            titre: 'Session de caisse ouverte trop longtemps',
-            message: `La session de ${s.user.nom} est ouverte depuis plus de ${pharmacie.dureeMaxSessionCaisseH}h`,
-            // lien inclut l'id de session : sans ca, 2 sessions longues
-            // distinctes le meme jour se bloqueraient mutuellement via la
-            // dedup (qui compare userId+type+lien) — seule la premiere
-            // aurait notifie l'admin, la seconde aurait ete supprimee a
-            // tort. Trouve en audit le 30/07/2026.
-            lien: `/caisse?session=${s.id}`,
-          })
-        }
-      }
-    }
+    // Filet de securite quotidien : depuis le 06/08/2026, chaque nouvelle
+    // vente declenche deja cette meme verification en reactif (voir
+    // src/app/api/ventes/route.ts) — ce passage cron couvre le cas d'une
+    // session longue sans aucune nouvelle vente entre-temps (caissier qui a
+    // oublie de fermer et ne vend plus rien).
+    await verifierSessionsCaisseLonguesPharmacie(pharmacie.id)
 
     // ── 7. Permissions supplementaires expirant sous 3 jours ─────────────────
     const dans3Jours = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
