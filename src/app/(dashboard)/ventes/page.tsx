@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { formatMontant } from '@/lib/utils'
 import { useToast, Button, Card, Badge, PageHeader, EmptyState, Modal } from '@/components/ui'
@@ -25,6 +26,8 @@ interface LignePanier {
 
 export default function VentesPage() {
   const { showToast } = useToast()
+  const { data: sessionData } = useSession()
+  const userId = sessionData?.user?.id
   const [medicaments, setMedicaments] = useState<Medicament[]>([])
   const [search, setSearch] = useState('')
   // Equivalents generiques via DCI (Phase 3.4ter), affiches quand on
@@ -61,6 +64,11 @@ export default function VentesPage() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [formatRecu, setFormatRecu] = useState<'A4' | 'THERMIQUE_58' | 'THERMIQUE_80'>('A4')
   const [sessionCaisse, setSessionCaisse] = useState<boolean | null>(null)
+  // Panier persistant (Phase 6BIS-A.4, 06/08/2026) — panierRestaure evite
+  // que l'effet de sauvegarde n'ecrase le localStorage avec un panier vide
+  // avant que la restauration (async, attend userId via useSession) ait eu
+  // le temps de s'executer.
+  const [panierRestaure, setPanierRestaure] = useState(false)
 
   const chargerClients = () => {
     fetch('/api/clients')
@@ -118,6 +126,53 @@ export default function VentesPage() {
       .then((json) => setSessionCaisse(!!json.data?.sessionActive))
       .catch(() => setSessionCaisse(false))
   }, [])
+
+  // Restauration du panier (une seule fois, des que userId est connu) —
+  // survit a une navigation accidentelle ou un rechargement de page.
+  useEffect(() => {
+    if (!userId || panierRestaure) return
+    try {
+      const brut = localStorage.getItem(`pharmagest_panier_${userId}`)
+      if (brut) {
+        const sauvegarde = JSON.parse(brut) as { panier?: LignePanier[]; clientId?: string; remise?: number }
+        if (Array.isArray(sauvegarde.panier) && sauvegarde.panier.length > 0) {
+          setPanier(sauvegarde.panier)
+          if (sauvegarde.clientId) setClientId(sauvegarde.clientId)
+          if (sauvegarde.remise) setRemise(sauvegarde.remise)
+          showToast(
+            'Panier precedent restaure — verifie que ta session caisse est toujours ouverte avant de valider',
+            'info'
+          )
+        }
+      }
+    } catch {
+      // localStorage indisponible (navigation privee, quota...) ou JSON
+      // corrompu — pas grave, on repart simplement d'un panier vide.
+    } finally {
+      setPanierRestaure(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
+
+  // Sauvegarde du panier a chaque changement, une fois la restauration
+  // initiale faite (sinon on ecraserait le panier sauvegarde par un panier
+  // vide pendant la fraction de seconde ou userId n'est pas encore connu).
+  useEffect(() => {
+    if (!userId || !panierRestaure) return
+    try {
+      if (panier.length === 0) {
+        localStorage.removeItem(`pharmagest_panier_${userId}`)
+      } else {
+        localStorage.setItem(
+          `pharmagest_panier_${userId}`,
+          JSON.stringify({ panier, clientId, remise })
+        )
+      }
+    } catch {
+      // quota depasse ou storage indisponible — pas bloquant, le panier
+      // reste utilisable normalement en memoire pour la session en cours.
+    }
+  }, [panier, clientId, remise, userId, panierRestaure])
 
   useEffect(() => {
     searchInputRef.current?.focus()
@@ -258,6 +313,31 @@ export default function VentesPage() {
       showToast(`Il reste ${formatMontant(resteADu)} non couvert — selectionne un client pour le mettre sur son compte credit`, 'error')
       return
     }
+
+    // Re-verification juste avant validation (Phase 6BIS-A.4, 06/08/2026) —
+    // ne pas se fier uniquement au check fait au chargement de la page : un
+    // panier restaure depuis localStorage peut rester ouvert longtemps, et
+    // la session caisse a tres bien pu etre fermee entre-temps (par un
+    // admin, ou par le caissier lui-meme sur un autre onglet). Sans ce
+    // re-check, l'echec ne serait decouvert qu'a l'echec silencieux de la
+    // requete POST /api/ventes, avec un message moins clair.
+    try {
+      const resCaisse = await fetch('/api/caisse')
+      const jsonCaisse = await resCaisse.json()
+      const sessionEncoreOuverte = !!jsonCaisse.data?.sessionActive
+      setSessionCaisse(sessionEncoreOuverte)
+      if (!sessionEncoreOuverte) {
+        showToast(
+          'La session caisse a ete fermee entre-temps — rouvre une session avant de valider cette vente',
+          'error'
+        )
+        return
+      }
+    } catch {
+      showToast('Impossible de verifier la session caisse — verifie ta connexion et reessaie', 'error')
+      return
+    }
+
     setSaving(true)
     setLignesEnErreur([])
 
@@ -380,7 +460,7 @@ export default function VentesPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <PageHeader title="Point de vente" description="Recherche, panier et encaissement" />
 
       {sessionCaisse === false && (
@@ -505,8 +585,8 @@ export default function VentesPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-4">
           <div className="relative">
             <input type="text" placeholder="Rechercher un medicament ou scanner un code-barres..."
               ref={searchInputRef}
@@ -570,7 +650,8 @@ export default function VentesPage() {
             {panier.length === 0 ? (
               <EmptyState icon="🛒" title="Panier vide" description="Recherchez un medicament pour commencer une vente." />
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[480px]">
                 <thead className="bg-app-bg border-b border-gray-100">
                   <tr>
                     <th className="text-left px-4 py-3 text-navy/70 font-medium">Medicament</th>
@@ -628,11 +709,12 @@ export default function VentesPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             )}
           </Card>
         </div>
 
-        <Card className="space-y-4 h-fit sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+        <Card className="space-y-4 h-fit lg:sticky lg:top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
           <h2 className="font-semibold text-navy text-lg">Paiement</h2>
 
           <div className="border-t pt-4">
@@ -809,10 +891,14 @@ export default function VentesPage() {
             size="lg"
             onClick={validerVente}
             loading={saving}
-            disabled={panier.length === 0 || sessionCaisse === false}
+            disabled={panier.length === 0 || sessionCaisse !== true}
             className="w-full"
           >
-            {sessionCaisse === false ? 'Session caisse requise' : 'Valider la vente'}
+            {sessionCaisse === null
+              ? 'Verification de la session...'
+              : sessionCaisse === false
+                ? 'Session caisse requise'
+                : 'Valider la vente'}
           </Button>
         </Card>
       </div>
