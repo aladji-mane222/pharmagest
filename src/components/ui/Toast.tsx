@@ -20,7 +20,12 @@ const ToastContext = createContext<ToastContextValue | null>(null)
 const variantClasses: Record<ToastVariant, string> = {
   success: 'bg-success text-white',
   error:   'bg-danger text-white',
-  info:    'bg-navy text-white',
+  // bg-navy s'inverse en mode sombre (concu comme couleur de TEXTE, voir
+  // globals.css) — utilise comme fond plein ici, il devenait presque
+  // blanc sur texte blanc en theme sombre, rendant le toast invisible.
+  // Trouve le 06/08/2026. bg-info garde une valeur DEFAULT vive dans les
+  // deux themes (comme success/danger ci-dessus), donc reste lisible.
+  info:    'bg-info text-white',
 }
 
 /**
